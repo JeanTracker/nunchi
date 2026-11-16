@@ -1,6 +1,9 @@
 {
   "name": "nunchi",
   "version": "0.1.0",
-  "description": "눈치: 세션 옆 패널에 목표 흐름, 대화 정리, 남은 요청을 보여 준다 (관제 분석 결과를 읽기만 함, R17)",
+  "description": "Side panel beside a Claude Code session: what the agent is asking, the goal so far, and your open requests. Reads nunchi analysis results; does not analyze.",
+  "author": {
+    "name": "JeanTracker"
+  },
   "types": "./types/index.d.ts"
 }

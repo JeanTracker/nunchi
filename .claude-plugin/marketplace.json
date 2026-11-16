@@ -1,0 +1,16 @@
+{
+  "name": "nunchi",
+  "owner": {
+    "name": "JeanTracker"
+  },
+  "metadata": {
+    "description": "nunchi: read the room across your Claude Code sessions"
+  },
+  "plugins": [
+    {
+      "name": "nunchi",
+      "source": "./mod/nunchi",
+      "description": "Side panel beside a Claude Code session: what the agent is asking, the goal so far, and your open requests"
+    }
+  ]
+}

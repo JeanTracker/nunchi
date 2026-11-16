@@ -22,10 +22,19 @@ shows a diff and asks before it touches `~/.claude/settings.json`.
 
 Then run `nunchi` in an iTerm2 pane.
 
+To also get the side panel inside Claude Code sessions, install the plugin from inside Claude Code:
+
+```
+/plugin install nunchi --marketplace JeanTracker/nunchi
+```
+
+The plugin only displays results. Analysis needs the hooks that `install.sh` registers.
+
 ## Uninstall
 
 ```sh
 ~/.local/share/nunchi/install.sh --uninstall
+claude plugin uninstall nunchi@nunchi && claude plugin marketplace remove nunchi
 ```
 
 Full install, usage and uninstall guide: [docs/GUIDE.md](docs/GUIDE.md)

@@ -92,27 +92,40 @@ there is work and stops by itself when done. Although it lives under `~/.claude/
 it is not a skill: it has no instructions for the model, so it adds no tokens to the
 conversation.
 
-Verified with Claude Code 2.1.322. The plugin folder is `mod/nunchi` in the repository
-(`~/.local/share/nunchi/mod/nunchi` for a curl install).
+Verified with Claude Code 2.1.322. The repository is also a plugin marketplace
+(`.claude-plugin/marketplace.json`); the plugin itself is `mod/nunchi`.
 
-**Attach it always (recommended).** When a session opens, Claude Code automatically
-loads plugins under `~/.claude/skills` (the place for your own plugins, not only skills).
-Copy the repository's mod folder there and a plain `claude` picks it up. Copy rather than
-link: a link breaks when you move or delete the clone. The mod only reads analysis files
-in `~/.claude-control`, so the copy works on its own. The catch is that you must copy
-again when the repository's mod changes (`install.sh` does not do this copy).
+**Install (recommended).** Run this inside Claude Code. It adds the marketplace and
+installs the plugin in one step:
 
-```sh
-mkdir -p ~/.claude/skills
-rm -rf ~/.claude/skills/nunchi                                    # when copying again
-cp -R ~/.local/share/nunchi/mod/nunchi ~/.claude/skills/nunchi    # or mod/nunchi in your clone
-claude plugin list                                                # look for nunchi@skills-dir · loaded
+```
+/plugin install nunchi --marketplace JeanTracker/nunchi
 ```
 
-**Attach it once.** To attach it to a single session without copying, pass it as an
-option. For a session that is already open, close it and reopen it with `--resume`. If a
-copy is also installed, the folder given by the option wins and the copy is not loaded
-(only one plugin per name). Use this to test a mod you are editing.
+From a terminal, the same in two steps:
+
+```sh
+claude plugin marketplace add JeanTracker/nunchi
+claude plugin install nunchi@nunchi
+claude plugin list                                   # look for nunchi@nunchi · enabled
+```
+
+Claude Code keeps its own copy of the plugin, so moving or deleting your clone of the
+repository does not affect it. New sessions pick it up; in an open session run
+`/reload-plugins`. The plugin does not register the hooks or install the analyzer, so
+`install.sh` is still needed for analysis. While the repository is private, adding the
+marketplace needs git access to it.
+
+**Update.** `claude plugin marketplace update nunchi`, then
+`claude plugin update nunchi@nunchi`, and restart the session.
+
+If you copied the mod into `~/.claude/skills/nunchi` earlier, delete that copy
+(`rm -rf ~/.claude/skills/nunchi`). The installed plugin takes precedence and the copy
+is reported as "already taken" and not loaded.
+
+**Attach it once.** To attach a folder to a single session without installing, pass it
+as an option. For a session that is already open, close it and reopen it with `--resume`.
+Use this to test a mod you are editing.
 
 ```sh
 claude --plugin-dir ~/.local/share/nunchi/mod/nunchi
@@ -137,14 +150,16 @@ with `mod_width_ratio` in `~/.claude-control/config.json`. While waiting it show
 (`--plugin-dir`) to the command line when it opens a session. The nunchi mod has a
 different name, the events they listen to do not overlap (the amask mod only receives
 turn ends and draws nothing), and the nunchi hooks live in `~/.claude/settings.json`, so
-both are called. Whether you copy the mod or pass `--plugin-dir`, it works under amask
-unchanged. If you pass `--settings` yourself, as in `claude --settings …`, amask turns
+both are called. Whether you install the plugin or pass `--plugin-dir`, it works under
+amask unchanged. If you pass `--settings` yourself, as in `claude --settings …`, amask turns
 its own hooks and mod off (that is amask's behavior; nunchi is not affected).
 
-**Detaching.** Delete the copy. Open sessions run without the mod after a restart.
+**Detaching.** Uninstall the plugin and remove the marketplace. Open sessions run
+without the mod after a restart.
 
 ```sh
-rm -rf ~/.claude/skills/nunchi
+claude plugin uninstall nunchi@nunchi
+claude plugin marketplace remove nunchi
 ```
 
 ## Screen and keys
@@ -264,7 +279,7 @@ rm -rf ~/.claude-control
 ```
 
 Open Claude Code sessions run without the hooks after a restart. `install.sh --uninstall`
-does not remove a copied mod; delete it with `rm -rf ~/.claude/skills/nunchi`.
+does not remove the plugin; uninstall it as described in "Detaching" above.
 
 If you deleted the folder first and the hooks are left behind, reinstall to the same
 location and run `--uninstall` to remove them cleanly. If you installed elsewhere, delete

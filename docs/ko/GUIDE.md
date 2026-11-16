@@ -61,18 +61,29 @@ nunchi
 
 mod는 Claude Code 세션 화면 옆에 눈치 패널을 띄우는 플러그인입니다. 지금 에이전트가 나에게 묻는 것, 지금까지의 목표와 정한 것, 내 요청 중 남은 것을 보여 줍니다. mod는 분석하지 않고 분석 결과를 읽기만 합니다. 분석은 응답이 끝날 때 훅이 깨우는 백그라운드 분석기가 하므로, nunchi(관제) 화면을 켜지 않아도 됩니다. 분석기는 할 일이 있을 때만 돌고 끝나면 스스로 멈춥니다. 이름이 `~/.claude/skills` 폴더에 들어가지만 스킬은 아닙니다. 모델이 읽는 지시문이 없어서 대화에 더해지는 토큰도 없습니다.
 
-Claude Code 2.1.322에서 확인했습니다. 플러그인 폴더는 저장소의 `mod/nunchi`입니다(curl로 설치했다면 `~/.local/share/nunchi/mod/nunchi`).
+Claude Code 2.1.322에서 확인했습니다. 저장소 자체가 플러그인 마켓플레이스(`.claude-plugin/marketplace.json`)이고, 플러그인은 `mod/nunchi`입니다.
 
-**늘 붙이기 (권장).** Claude Code는 세션을 열 때 `~/.claude/skills` 아래 플러그인을 자동으로 읽습니다(스킬이 아니라 직접 만든 플러그인을 두는 자리). 저장소의 mod 폴더를 여기에 복사해 두면 그냥 `claude`로 열어도 붙습니다. 링크로 걸면 받아 둔 폴더를 옮기거나 지울 때 깨지므로 복사합니다. mod는 `~/.claude-control`의 분석 파일만 읽어서 복사본만으로 동작합니다. 대신 저장소의 mod가 바뀌면 다시 복사해야 합니다(`install.sh`는 이 복사를 하지 않습니다).
+**설치 (권장).** Claude Code 안에서 실행합니다. 마켓플레이스 등록과 플러그인 설치가 한 번에 됩니다.
 
-```sh
-mkdir -p ~/.claude/skills
-rm -rf ~/.claude/skills/nunchi                                    # 다시 복사할 때
-cp -R ~/.local/share/nunchi/mod/nunchi ~/.claude/skills/nunchi    # 받아 둔 저장소라면 그 경로의 mod/nunchi
-claude plugin list                                                # nunchi@skills-dir · loaded 가 보이면 됩니다
+```
+/plugin install nunchi --marketplace JeanTracker/nunchi
 ```
 
-**한 번만 붙이기.** 복사 없이 그 세션에만 붙이려면 옵션으로 줍니다. 이미 열린 세션은 닫고 `--resume`으로 다시 열 때 붙입니다. 복사해 둔 상태에서 이 옵션을 주면 옵션으로 준 폴더가 쓰이고 복사본은 붙지 않습니다(같은 이름은 하나만 붙음). 고치는 중인 mod를 시험할 때 씁니다.
+터미널에서는 두 단계로 같은 일을 합니다.
+
+```sh
+claude plugin marketplace add JeanTracker/nunchi
+claude plugin install nunchi@nunchi
+claude plugin list                                   # nunchi@nunchi · enabled 가 보이면 됩니다
+```
+
+Claude Code가 플러그인을 따로 받아 두므로, 받아 둔 저장소 폴더를 옮기거나 지워도 영향이 없습니다. 새 세션부터 붙고, 열려 있는 세션에서는 `/reload-plugins`를 칩니다. 플러그인은 훅을 등록하거나 분석기를 설치하지 않으므로 분석에는 여전히 `install.sh`가 필요합니다. 저장소가 비공개인 동안에는 마켓플레이스를 받을 때 그 저장소에 대한 git 권한이 있어야 합니다.
+
+**갱신.** `claude plugin marketplace update nunchi` 다음 `claude plugin update nunchi@nunchi`를 하고 세션을 다시 시작합니다.
+
+예전에 `~/.claude/skills/nunchi`로 복사해 두었다면 그 복사본은 지우세요(`rm -rf ~/.claude/skills/nunchi`). 설치된 플러그인이 앞서므로 복사본은 "이름이 이미 있음"으로 붙지 않습니다.
+
+**한 번만 붙이기.** 설치 없이 그 세션에만 폴더를 붙이려면 옵션으로 줍니다. 이미 열린 세션은 닫고 `--resume`으로 다시 열 때 붙입니다. 고치는 중인 mod를 시험할 때 씁니다.
 
 ```sh
 claude --plugin-dir ~/.local/share/nunchi/mod/nunchi
@@ -83,12 +94,13 @@ claude --resume <세션 ID> --plugin-dir ~/.local/share/nunchi/mod/nunchi
 
 창이 넓을 때(110칸 이상) 오른쪽에 패널이, 좁을 때는 입력창 위에 한 줄이 뜹니다. 패널 폭은 창의 40%이고 `~/.claude-control/config.json`의 `mod_width_ratio`로 바꿉니다. 분석을 기다리는 중이면 "분석 대기...", 도는 중이면 "분석 중...", 실패하면 "분석 실패 · 이유"가 보입니다.
 
-**amask와 함께 쓰기.** amask는 세션을 열 때 자기 훅(`--settings`)과 자기 mod(`--plugin-dir`)를 명령줄에 덧붙입니다. 눈치 mod와 이름이 다르고, 붙잡는 이벤트도 겹치지 않으며(amask mod는 턴 끝만 받고 화면을 그리지 않음), 눈치 훅은 `~/.claude/settings.json`에 있어 함께 불립니다. 그래서 링크로 붙이든 `--plugin-dir`로 붙이든 amask 아래에서 그대로 씁니다. 다만 `claude --settings …`처럼 직접 `--settings`를 주면 amask가 자기 훅과 mod를 끕니다(amask의 동작이며 눈치는 영향받지 않음).
+**amask와 함께 쓰기.** amask는 세션을 열 때 자기 훅(`--settings`)과 자기 mod(`--plugin-dir`)를 명령줄에 덧붙입니다. 눈치 mod와 이름이 다르고, 붙잡는 이벤트도 겹치지 않으며(amask mod는 턴 끝만 받고 화면을 그리지 않음), 눈치 훅은 `~/.claude/settings.json`에 있어 함께 불립니다. 그래서 플러그인으로 설치하든 `--plugin-dir`로 붙이든 amask 아래에서 그대로 씁니다. 다만 `claude --settings …`처럼 직접 `--settings`를 주면 amask가 자기 훅과 mod를 끕니다(amask의 동작이며 눈치는 영향받지 않음).
 
-**떼기.** 복사본을 지우면 됩니다. 열려 있던 세션은 다시 시작하면 mod 없이 돕니다.
+**떼기.** 플러그인을 지우고 마켓플레이스를 뺍니다. 열려 있던 세션은 다시 시작하면 mod 없이 돕니다.
 
 ```sh
-rm -rf ~/.claude/skills/nunchi
+claude plugin uninstall nunchi@nunchi
+claude plugin marketplace remove nunchi
 ```
 
 ## 화면과 키
@@ -160,6 +172,6 @@ curl -fsSL https://raw.githubusercontent.com/JeanTracker/nunchi/main/install.sh 
 rm -rf ~/.claude-control
 ```
 
-열려 있던 Claude Code 세션은 다시 시작하면 훅 없이 돕니다. mod를 복사해 두었다면 `install.sh --uninstall`은 지우지 않으니 `rm -rf ~/.claude/skills/nunchi`로 따로 지우세요.
+열려 있던 Claude Code 세션은 다시 시작하면 훅 없이 돕니다. `install.sh --uninstall`은 플러그인을 지우지 않으니 위 "떼기"대로 따로 지우세요.
 
 폴더를 먼저 지워 버려서 훅이 남았다면, 같은 위치에 다시 설치한 뒤 `--uninstall`을 실행하면 깨끗하게 빠집니다. 다른 위치에 설치했다면 settings.json에서 `hooks/emit.py`와 `hooks/statusline.py`가 들어간 항목을 직접 지워야 합니다.
