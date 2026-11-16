@@ -13,6 +13,8 @@ export type View = {
   asks: Ask[]            // 에이전트가 묻는 것 (열린 것, 최근 물은 것부터)
   askCount: number
   blanketClosed: number  // 통째 승인으로 닫힌 것 수
+  digest: string         // 처음부터 이 턴까지 흐름 한 덩어리 정리 (분석기 추정, 요구 이력 57)
+  digestTurn: number     // 그 정리가 어느 턴까지인지
   goal: string           // 지금 목표
   goalTurn: number
   decisions: string[]    // 정한 것 (결정 턴 이름, 최근 3개)
@@ -25,6 +27,8 @@ export type View = {
   tick: number           // '분석 중...' 점을 바꾸려고 1초마다 올린다
   on: boolean            // 이 세션에서 /nunchi로 눈치를 켰는지 (세션 폴더의 want, 요구 이력 53)
   error: string          // 분석 실패 이유 한 줄
+  control: boolean       // 관제가 켜져 있는지 (<관제 홈>/control.json, 요구 이력 56)
+  behind: number         // 분석이 본 마지막 응답 뒤에 끝난 응답 수 (events.jsonl의 Stop, 요구 이력 65)
 }
 
 declare module 'claude-code' {

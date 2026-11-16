@@ -11,10 +11,10 @@ import type { View, Left } from '../types'
 const PANE = 'nunchi'
 const EMPTY: View = {
   basis: 0, total: 0, latest: 0, state: 'none', asks: [], askCount: 0, blanketClosed: 0,
-  goal: '', goalTurn: 0, decisions: [], recent: '', left: [], leftCount: 0, ratio: 0.4, tick: 0,
-  terms: [], termsMore: 0, on: false, error: '',
+  digest: '', digestTurn: 0, goal: '', goalTurn: 0, decisions: [], recent: '', left: [], leftCount: 0, ratio: 0.4, tick: 0,
+  terms: [], termsMore: 0, on: false, error: '', control: false, behind: 0,
 }
-const view = atom({ plugin: 'nunchi', key: 'view' } as const, EMPTY, { shape: 'view-5' })
+const view = atom({ plugin: 'nunchi', key: 'view' } as const, EMPTY, { shape: 'view-8' })
 
 const SHOWN = 3
 const MAX_RATIO = 0.45   // Claude Code가 옆 패널에 허락하는 폭
@@ -26,10 +26,47 @@ async function controlHome($: EngineInterface): Promise<string> {
   return (await $.env.get('CONTROL_TUI_HOME')) || ((await $.env.get('HOME')) || '') + '/.claude-control'
 }
 
-async function sessionDir($: EngineInterface): Promise<string> {
+async function sessionId($: EngineInterface): Promise<string> {
   // 시험용: NUNCHI_MOD_SESSION을 주면 다른 세션의 분석을 본다 (실제 사용에서는 비워 둔다)
-  const sid = (await $.env.get('NUNCHI_MOD_SESSION')) || (await $.session.id())
-  return (await controlHome($)) + '/sessions/' + sid
+  return (await $.env.get('NUNCHI_MOD_SESSION')) || (await $.session.id())
+}
+
+async function sessionDir($: EngineInterface): Promise<string> {
+  return (await controlHome($)) + '/sessions/' + (await sessionId($))
+}
+
+// 관제 패널을 앞으로 가져온다 (관제 control_tui/adapters/iterm2_adapter.py FOCUS_SCRIPT와 같음. mod 복사본이 저장소를 못 볼 수 있어 여기에 둔다)
+const FOCUS_SCRIPT = `on run argv
+  set targetId to item 1 of argv
+  tell application "iTerm2"
+    repeat with w in windows
+      repeat with t in tabs of w
+        repeat with s in sessions of t
+          if (id of s) is targetId then
+            select w
+            tell t to select
+            tell s to select
+            activate
+            return "ok"
+          end if
+        end repeat
+      end repeat
+    end repeat
+  end tell
+  return "missing"
+end run`
+
+/** 관제로 (요구 이력 56, BUILD_PLAN §4.8): 이 세션으로 와 달라는 요청(goto)을 남기고 관제 패널을 앞으로 */
+export async function goControl($: EngineInterface): Promise<string> {
+  const home = await controlHome($)
+  const ctl = await readJson($, home + '/control.json')
+  if (!ctl?.iterm_session_id) return '관제가 꺼져 있습니다. 다른 패널에서 nunchi로 켜세요.'
+  const alive = await $.process.run(['kill', '-0', String(ctl.pid ?? '')]).catch(() => null)
+  if (!alive || alive.exitCode !== 0) return '관제가 꺼져 있습니다. 다른 패널에서 nunchi로 켜세요.'
+  await $.fs.write(home + '/goto', JSON.stringify({ session: await sessionId($), at: (await $.clock.now()) / 1000 }) + '\n')
+  const r = await $.process.run(['osascript', '-e', FOCUS_SCRIPT, String(ctl.iterm_session_id)]).catch(() => null)
+  if (!r || r.exitCode !== 0 || !String(r.stdout).includes('ok')) return '관제 패널을 찾지 못했습니다. ⌘숫자로 옮겨 가세요.'
+  return ''
 }
 
 async function readJson($: EngineInterface, path: string): Promise<any> {
@@ -68,11 +105,14 @@ export function buildView(analysis: any, status: any, tick: number, ratio: numbe
   for (const r of flow.requests ?? []) {
     if (r.state === 'open') left.push({ mark: '○', summary: one(r.summary), note: '', turn: r.from_turn ?? 0 })
     else if (r.state === 'deferred') left.push({ mark: '⊘', summary: one(r.summary), note: '못 했거나 미룸', turn: r.from_turn ?? 0 })
+    else if (r.state === 'in_progress') left.push({ mark: '◐', summary: one(r.summary), note: '진행 중', turn: r.by_turn ?? r.from_turn ?? 0 })   // 요구 이력 66
   }
   // 도구 실패(△)는 보이지 않는다: 도구 사용은 모으지도 보이지도 않는다 (요구 이력 48)
   const decisions = steps.filter((s: any) => s.label === '확정').slice(-SHOWN)
     .map((s: any) => one(s.title || s.decision || s.summary, 80))
   const last = steps.length ? steps[steps.length - 1] : null
+  // 처음부터 이 턴까지 한 덩어리 정리: 분석기가 턴마다 써 둔 digest 중 마지막 것 (요구 이력 57, 추정)
+  const digested = (flow.steps ?? []).filter((s: any) => s.digest).pop()
   return {
     ...base,
     basis,
@@ -81,6 +121,8 @@ export function buildView(analysis: any, status: any, tick: number, ratio: numbe
     asks,
     askCount: open.length,
     blanketClosed: (flow.asks ?? []).filter((a: any) => a.state === 'answered' && a.by_blanket).length,
+    digest: digested && digested.index > 1 ? one(digested.digest, 240) : '',
+    digestTurn: digested?.index ?? 0,
     goal: one(flow.current_goal?.text ?? analysis.current_goal ?? ''),
     goalTurn: flow.current_goal?.turn ?? 0,
     decisions,
@@ -90,51 +132,112 @@ export function buildView(analysis: any, status: any, tick: number, ratio: numbe
   }
 }
 
-/** 칸 수(한글 2칸)로 자른다. 대화 정리는 턴마다 한 줄 (SCREEN §11) */
-function cut(text: string, cols: number): string {
-  let used = 0
-  let out = ''
-  for (const ch of text) {
-    const w = /[\u1100-\u115f\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe4f\uff00-\uff60\uffe0-\uffe6]/.test(ch) ? 2 : 1
-    if (used + w > cols - 1) return out + '…'
-    out += ch
-    used += w
+// 넓게 그려지는 기호(… → ◆ ● ① ⚠ 등) 바로 뒤에 글자가 붙으면 한 칸 띄운다 (요구 이력 58).
+// iTerm이 영문 외 글자를 Noto Sans CJK KR로 그리면 이 기호들이 한 칸의 약 1.7배로 그려져 뒤 글자를 덮는다.
+// 범위는 관제의 control_tui/glyphs.py WIDE_RANGES와 같다. 괘선(─ │ ┊ └)은 터미널이 직접 그려 넣지 않는다.
+const WIDE = /[\u00a7\u00a9\u00b1\u00b6\u00bc-\u00be\u00d7\u00f7\u2010\u2014-\u2016\u2020\u2021\u2025-\u2027\u2030\u2035\u203b\u2042\u2047-\u2049\u2051\u2100-\u214f\u2190-\u23ff\u2460-\u24ff\u25a0-\u27bf]/
+export function gap(text: string): string {
+  return text.replace(new RegExp(WIDE.source + '(?=[^\\s])', 'g'), m => m + ' ')
+}
+
+// 글 속 링크 (요구 이력 60): 맨 주소(https://…)와 마크다운 [이름](주소). 줄을 감싸거나 잘라도 조각마다 원래 주소를 들고 간다.
+export type Piece = { t: string; href?: string }
+const URL_RE = /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[A-Za-z0-9\-._~:\/?#@!$&*+,;=%]+)/g   // 맨 주소는 ASCII 주소 글자만 (뒤 한글 조사·백틱이 붙지 않게)
+export function pieces(text: string): Piece[] {
+  const out: Piece[] = []
+  let at = 0
+  for (const m of text.matchAll(URL_RE)) {
+    let url: string = m[2] ?? m[3] ?? ""
+    let label: string = m[1] ?? url
+    if (!m[2]) {   // 맨 주소 끝의 문장 부호는 주소가 아니다
+      const trail = /[.,;:!?*]+$/.exec(url)
+      if (trail) { url = url.slice(0, -trail[0].length); label = url }
+    }
+    if (m.index! > at) out.push({ t: gap(text.slice(at, m.index)) })
+    out.push({ t: label, href: url })
+    at = m.index! + (m[2] ? m[0].length : url.length)
   }
+  if (at < text.length) out.push({ t: gap(text.slice(at)) })
   return out
+}
+const flat = (line: Piece[]) => line.map(p => p.t).join('')
+function push(line: Piece[], t: string, href?: string) {
+  const last = line[line.length - 1]
+  if (last && last.href === href) last.t += t
+  else line.push(href ? { t, href } : { t })
+}
+
+/** 칸 수(한글 2칸)로 자른다. 대화 정리는 턴마다 한 줄 (SCREEN §11) */
+function cutParts(text: string, cols: number): Piece[] {
+  const line: Piece[] = []
+  let used = 0
+  for (const p of pieces(text)) {
+    for (const ch of p.t) {
+      const w = /[\u1100-\u115f\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe4f\uff00-\uff60\uffe0-\uffe6]/.test(ch) ? 2 : 1
+      if (used + w > cols - 1) { push(line, '…'); return line }
+      push(line, ch, p.href)
+      used += w
+    }
+  }
+  return line
+}
+function cut(text: string, cols: number): string {
+  return flat(cutParts(text, cols))
 }
 
 /** 칸 수(한글 2칸)에 맞춰 여러 줄로 감싼다. 넘치면 마지막 줄 끝을 …로 (요구 이력 50) */
-function wrap(text: string, cols: number, maxLines: number): string[] {
+function wrapParts(text: string, cols: number, maxLines: number): Piece[][] {
   const wide = (ch: string) => /[\u1100-\u115f\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe4f\uff00-\uff60\uffe0-\uffe6\u2714]/.test(ch) ? 2 : 1
-  const lines: string[] = []
-  let cur = ''
+  const words: Piece[] = []   // 링크는 한 낱말 (빈칸이 없다)
+  for (const p of pieces(text)) {
+    if (p.href) words.push(p)
+    else for (const w of p.t.split(/(\s+)/)) if (w) words.push({ t: w })
+  }
+  const lines: Piece[][] = []
+  let cur: Piece[] = []
   let used = 0
-  for (const word of text.split(/(\s+)/)) {
-    const w = [...word].reduce((n, ch) => n + wide(ch), 0)
-    if (used + w > cols && cur.trim()) {
-      lines.push(cur.trimEnd())
-      cur = ''
-      used = 0
-      if (/^\s+$/.test(word)) continue
+  const blank = () => !flat(cur).trim()
+  const close = () => {
+    const last = cur[cur.length - 1]
+    if (last && !last.href) last.t = last.t.trimEnd()
+    lines.push(cur.filter(p => p.t)); cur = []; used = 0
+  }
+  for (const word of words) {
+    const w = [...word.t].reduce((n, ch) => n + wide(ch), 0)
+    if (used + w > cols && !blank()) {
+      close()
+      if (/^\s+$/.test(word.t)) continue
     }
-    if (w > cols) {   // 한 낱말이 한 줄보다 길면 글자 단위로 자른다
-      for (const ch of word) {
-        if (used + wide(ch) > cols) { lines.push(cur); cur = ''; used = 0 }
-        cur += ch
+    if (w > cols) {   // 한 낱말이 한 줄보다 길면 글자 단위로 자른다 (링크 조각은 같은 주소)
+      for (const ch of word.t) {
+        if (used + wide(ch) > cols) { lines.push(cur); cur = []; used = 0 }
+        push(cur, ch, word.href)
         used += wide(ch)
       }
       continue
     }
-    cur += word
+    push(cur, word.t, word.href)
     used += w
   }
-  if (cur.trim()) lines.push(cur.trimEnd())
+  if (!blank()) close()
   if (lines.length > maxLines) {
     const kept = lines.slice(0, maxLines)
-    kept[maxLines - 1] = cut(kept[maxLines - 1] + ' …', cols)
+    const last = kept[maxLines - 1] ?? []
+    const room = cols - 2
+    const trimmed: Piece[] = []
+    let n = 0
+    for (const p of last) for (const ch of p.t) {
+      if (n + wide(ch) > room - 1) break
+      push(trimmed, ch, p.href); n += wide(ch)
+    }
+    push(trimmed, ' …')
+    kept[maxLines - 1] = trimmed
     return kept
   }
   return lines
+}
+function wrap(text: string, cols: number, maxLines: number): string[] {
+  return wrapParts(text, cols, maxLines).map(flat)
 }
 
 function dots(tick: number, state = 'running'): string {
@@ -146,15 +249,41 @@ async function openPane($: EngineInterface) {
   return $.ui.open({ id: PANE, title: '눈치' })
 }
 
+// 분석이 본 마지막 응답 뒤에 끝난 응답 수 (요구 이력 65). 훅이 모든 세션의 Stop을 events.jsonl에 남긴다.
+// 한 턴 안에서 이어 끝난 응답도 센다(그것도 아직 분석에 없는 내용, 요구 이력 64).
+// 파일에는 도구 기록도 쌓여 일하는 동안 매초 커지므로, 처음·이 세션 응답이 끝난 뒤 잠깐·분석 기준이 바뀔 때만 읽는다.
+const RECOUNT_MS = 5000      // 응답이 끝난 뒤 훅이 Stop을 적을 때까지 기다리는 동안 다시 센다
+let countedSince: string | null = null
+let recountUntil = 0
+let behindCount = 0
+export function answerEnded(now: number) { recountUntil = now + RECOUNT_MS }
+export async function answersAfter($: EngineInterface, dir: string, since: string): Promise<number> {
+  const now = await $.clock.now()
+  if (since === countedSince && now > recountUntil) return behindCount
+  countedSince = since
+  try {
+    const stops = String(await $.fs.read(dir + '/events.jsonl')).split('\n').filter(l => l.includes('"Stop"')).map(l => {
+      try { const e = JSON.parse(l); return e.event === 'Stop' ? String(e.ts ?? '') : '' } catch { return '' }
+    })
+    behindCount = since ? stops.filter(ts => ts && ts > since).length : 0
+  } catch {
+    behindCount = 0
+  }
+  return behindCount
+}
+
 async function refresh($: EngineInterface) {
   const dir = await sessionDir($)
-  const [analysis, status, config, gloss, want] = await Promise.all([
+  const home = await controlHome($)
+  const [analysis, status, config, gloss, want, ctl] = await Promise.all([
     readJson($, dir + '/analysis.json'), readJson($, dir + '/analysis_status.json'),
-    readJson($, (await controlHome($)) + '/config.json'), readJson($, dir + '/glossary.json'),
-    readJson($, dir + '/want'),
+    readJson($, home + '/config.json'), readJson($, dir + '/glossary.json'),
+    readJson($, dir + '/want'), readJson($, home + '/control.json'),
   ])
   const ratio = Math.min(MAX_RATIO, Math.max(0.2, Number(config?.mod_width_ratio) || 0.4))
-  await update($, view, old => buildView(analysis, status, (old?.tick ?? 0) + 1, ratio, gloss, want !== null))
+  const behind = await answersAfter($, dir, String(analysis?.source_ts ?? ''))
+  await update($, view, old => ({ ...buildView(analysis, status, (old?.tick ?? 0) + 1, ratio, gloss, want !== null),
+    control: !!ctl?.iterm_session_id, behind }))
   if (!opened && enabled(await read($, view))) void openPane($)   // 켠 세션이나 관제가 분석한 세션만 저절로 연다
 }
 
@@ -163,6 +292,11 @@ export const register: Register = on => {
     await $.command.register({ name: 'nunchi', description: '눈치 켜기: 이 세션을 분석하고 패널을 연다 (관제 없이도)' })
     await refresh($)
     $.clock.every(1000, () => { void refresh($) })   // 분석 파일이 바뀌면 다시 그린다. '분석 중' 점도 1초마다
+    return next(e)
+  })
+
+  on('turn.complete', async ($, e, next) => {
+    if (!(e as any).agentId) answerEnded(await $.clock.now())   // 이 세션 응답이 끝남: 밀린 응답 수를 다시 센다 (하위 에이전트 끝은 빼고)
     return next(e)
   })
 
@@ -179,9 +313,18 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Text } = $.ui.resolve(e)
+    const { Box, Text, Button, Link } = $.ui.resolve(e)
+    // 조각을 글자와 링크로 (요구 이력 60): 터미널은 OSC 8 링크로 그려 클릭하면 열린다
+    const ln = (line: Piece[]) => line.map(p => p.href ? <Link href={p.href}>{p.t}</Link> : p.t)
     const v = await read($, view)
     const cols = Math.max(20, e.props.bodyColumns ?? 50)
+    const toControl = async () => {
+      const problem = await goControl($)
+      if (problem) $.ui.toast(problem)
+    }
+    const tail = v.control
+      ? <Box flexDirection="row"><Button key="control" hotkey="1" onPress={() => { void toControl() }}>관제로</Button><Text dimColor>  또는 ⌘숫자</Text></Box>
+      : <Text dimColor>관제 꺼짐 · nunchi로 켜기</Text>
     paneDrawnAt = await $.clock.now()
     // viewport는 패널을 뺀 나머지 폭이라(실측 2026-11-12: 200칸 창에서 141), 창 전체 = 나머지 + 패널 + 경계로 본다
     const whole = (e.viewport?.columns ?? 0) + (e.props.placement === 'dock' ? cols + 2 : 0)
@@ -209,45 +352,51 @@ export const register: Register = on => {
         <Text>
           <Text bold>눈치</Text>
           <Text dimColor> · #{v.basis} 기준</Text>
+          {v.behind > 0 && !busy ? <Text color="yellow"> · 응답 {v.behind}개 밀림</Text> : null}
           {rebuilding ? <Text color="yellow">  {v.basis <= 1 ? '흐름 처음부터 만드는 중' : '밀린 턴 반영 중'} #{v.latest}/#{v.total} {dots(v.tick)}</Text>
             : busy ? <Text color="yellow">  {dots(v.tick, v.state)}</Text>
-            : v.state === 'failed' ? <Text color="red">  분석 실패 · {v.error}</Text> : null}
+            : v.state === 'failed' ? <Text color="red">  분석 실패 · {v.error}</Text>
+            : !v.on ? <Text color="yellow">  자동 분석 꺼짐 · /nunchi로 켜기</Text> : null}
         </Text>
         <Text> </Text>
         <Text><Text bold>에이전트가 묻는 것 </Text><Text color={v.askCount ? 'yellow' : 'green'}>{v.askCount ? String(v.askCount) : '없음'}</Text></Text>
         {v.asks.map(a => (
           <Box flexDirection="column">
-            <Text><Text color="yellow" bold> {a.n} </Text>{cut(a.summary, cols - 12)}<Text dimColor> #{a.turn}{a.stale ? '부터 답 없음' : ''}{a.partial ? ' · 일부 답함' : ''}</Text></Text>
-            <Text dimColor>   “{cut(a.quote, cols - 6)}”</Text>
+            <Text><Text color="yellow" bold> {a.n} </Text>{ln(cutParts(a.summary, cols - 12))}<Text dimColor> #{a.turn}{a.stale ? '부터 답 없음' : ''}{a.partial ? ' · 일부 답함' : ''}</Text></Text>
+            <Text dimColor>   “{ln(cutParts(a.quote, cols - 6))}”</Text>
           </Box>
         ))}
-        {v.askCount > v.asks.length ? <Text dimColor>   … {v.askCount - v.asks.length}개 더 · 관제에서</Text> : null}
+        {v.askCount > v.asks.length ? <Text dimColor>   … {v.askCount - v.asks.length}개 더 · 관제 k</Text> : null}
         {v.blanketClosed ? <Text dimColor>   통째 승인으로 닫은 것 {v.blanketClosed}</Text> : null}
         <Text> </Text>
         <Text bold>지금까지</Text>
-        <Text><Text dimColor> 목표</Text><Text dimColor>{v.goalTurn ? `  #${v.goalTurn}부터` : ''}</Text></Text>
-        {wrap(v.goal, cols - 4, 3).map(line => <Text>   {line}</Text>)}
+        {v.digest ? <Text dimColor> 흐름  #1–#{v.digestTurn}</Text> : null}
+        {v.digest ? wrapParts(v.digest, cols - 4, 3).map(line => <Text dimColor>   {ln(line)}</Text>) : null}
+        <Text><Text dimColor>{v.digest ? ' 지금 목표' : ' 목표'}</Text><Text dimColor>{v.goalTurn ? `  #${v.goalTurn}부터` : ''}</Text></Text>
+        {wrapParts(v.goal, cols - 4, 3).map(line => <Text>   {ln(line)}</Text>)}
         {v.decisions.length ? <Text dimColor> 정한 것</Text> : null}
-        {v.decisions.map(d => wrap('✔ ' + d, cols - 9, 2).map((line, k) => <Text>   {k ? '  ' : ''}{line}</Text>))}
+        {v.decisions.map(d => wrapParts('✔ ' + d, cols - 9, 2).map((line, k) => <Text>   {k ? '  ' : ''}{ln(line)}</Text>))}
         {v.recent ? <Text dimColor> 방금</Text> : null}
-        {v.recent ? wrap(v.recent, cols - 4, 3).map(line => <Text>   {line}</Text>) : null}
+        {v.recent ? wrapParts(v.recent, cols - 4, 3).map(line => <Text>   {ln(line)}</Text>) : null}
         <Text> </Text>
         <Text><Text bold>남은 것 </Text><Text color={v.leftCount ? 'yellow' : 'green'}>{v.leftCount ? String(v.leftCount) : '없음'}</Text><Text dimColor> 내 요청 중</Text></Text>
         {v.left.map(x => (
-          <Text><Text color="yellow"> {x.mark} </Text>{cut(x.summary + (x.note ? ' — ' + x.note : ''), cols - 8)}<Text dimColor> #{x.turn}</Text></Text>
+          <Text><Text color="yellow"> {x.mark} </Text>{ln(cutParts(x.summary + (x.note ? ' — ' + x.note : ''), cols - 8))}<Text dimColor> #{x.turn}</Text></Text>
         ))}
+        {v.leftCount > v.left.length ? <Text dimColor>   … {v.leftCount - v.left.length}개 더 · 관제 c</Text> : null}
         {v.terms.length ? <Text> </Text> : null}
         {v.terms.length ? <Text><Text bold>번호 풀이</Text><Text dimColor>  이번 응답 · 문서 원문</Text></Text> : null}
         {v.terms.map(x => (
           <Box flexDirection="column">
             <Text color="yellow"> {x.id}</Text>
             {(x.means.length ? x.means.slice(0, 2) : ['문서에 없음']).map((m, k) =>
-              wrap((x.means.length > 1 ? '①②'[k] + ' ' : '') + m, cols - 4, 2).map(line =>
-                <Text dimColor={!x.means.length}>   {line}</Text>))}
+              wrapParts((x.means.length > 1 ? '①②'[k] + ' ' : '') + m, cols - 4, 2).map(line =>
+                <Text dimColor={!x.means.length}>   {ln(line)}</Text>))}
           </Box>
         ))}
-        {v.termsMore ? <Text dimColor>   … {v.termsMore}개 더 · 관제에서</Text> : null}
-        <Text dimColor>자세히는 관제</Text>
+        {v.termsMore ? <Text dimColor>   … {v.termsMore}개 더</Text> : null}
+        <Text> </Text>
+        {tail}
       </Box>
     )
   })
@@ -272,6 +421,7 @@ export const register: Register = on => {
         <Text color={v.askCount ? 'yellow' : 'green'}> · 묻는 것 {v.askCount}</Text>
         <Text color={v.leftCount ? 'yellow' : 'green'}> · 남은 것 {v.leftCount}</Text>
         {busy ? <Text color="yellow"> · {dots(v.tick, v.state)}</Text> : <Text dimColor> · #{v.basis} 기준</Text>}
+        {!busy && !v.on ? <Text color="yellow"> · 분석 꺼짐</Text> : null}
       </Text>
     )
   })
