@@ -1,0 +1,23 @@
+[project]
+name = "control-tui"
+version = "0.0.1"
+description = "여러 Claude Code 세션을 한 화면에서 보고 지시하는 관제 TUI"
+requires-python = ">=3.11"
+dependencies = [
+  "textual>=8.2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=9.2", "pytest-asyncio>=1.0"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["control_tui"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"

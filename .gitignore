@@ -1,0 +1,22 @@
+# Secrets
+.env
+.env.*
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# macOS
+.DS_Store
+
+# Local working notes (kept out of the repository)
+CLAUDE.md
+CLAUDE.local.md
+review/
+docs/BUILD_PLAN.md
+docs/REQUIREMENTS.md
+docs/SCREEN.md
