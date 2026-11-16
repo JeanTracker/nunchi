@@ -170,3 +170,38 @@ def test_drain_takes_the_session_chosen_in_the_control_first(tmp_path):
     a1 = analyzer.read_analysis(home / "sessions" / "s1")
     a2 = analyzer.read_analysis(home / "sessions" / "s2")
     assert a1 and a2 and a2["analyzed_at"] < a1["analyzed_at"]        # 고른 세션이 먼저 끝났다
+
+
+# ---------- /nunchi off (요구 이력 62) ----------
+
+@pytest.mark.parametrize("config", [{}, {"analyze_scope": "all"}])
+def test_stop_does_not_queue_a_session_turned_off(tmp_path, config):
+    home = tmp_path / "home"
+    (home / "sessions" / "s9").mkdir(parents=True)
+    (home / "config.json").write_text(json.dumps(config))
+    (home / "sessions" / "s9" / "want").write_text('{"on": false}')
+    emit(home, "Stop")
+    assert worker.pending(home) == []                                   # 설정이 all이어도 끈 세션은 넣지 않는다
+
+
+def test_want_without_on_still_means_on(tmp_path):
+    home = tmp_path / "home"
+    (home / "sessions" / "s9").mkdir(parents=True)
+    (home / "sessions" / "s9" / "want").write_text('{"at": "x", "by": "nunchi"}')   # 옛 표시
+    assert worker.want_state(home, "s9") is True and worker.want_state(home, "none") is None
+    emit(home, "Stop")
+    assert len(worker.pending(home)) == 1
+
+
+def test_drain_drops_hook_requests_of_a_turned_off_session_but_not_control_ones(tmp_path):
+    home, tr1, stop = make_session(tmp_path, n=1, sid="s1")
+    _, tr2, _ = make_session(tmp_path, n=1, sid="s2")
+    for sid in ("s1", "s2"):
+        (home / "sessions" / sid / "want").write_text('{"on": false}')
+    worker.enqueue(home, "s1", str(tr1), stop)                                       # 훅이 넣은 것
+    worker.QueueAnalyzer(home, spawner=lambda c: None).request("s2", home / "sessions" / "s2", str(tr2), stop)   # 관제가 고른 것
+    assert {i["session_id"]: i["by"] for i in worker.pending(home)} == {"s1": "hook", "s2": "control"}
+    worker.drain(home, runner=lambda p: LEDGER, flow_runner=flow_answer, poll=0.05, reply_wait=0, max_seconds=20)
+    assert analyzer.read_analysis(home / "sessions" / "s1") is None                 # 끈 세션은 분석하지 않는다
+    assert analyzer.read_analysis(home / "sessions" / "s2")                           # 관제에서 직접 고른 것은 분석
+    assert worker.pending(home) == []

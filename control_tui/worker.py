@@ -56,15 +56,27 @@ def queue_dir(home: Path) -> Path:
     return Path(home) / QUEUE
 
 
-def enqueue(home: Path, session_id: str, transcript_path: str, source_ts: str, force: bool = False) -> Path:
-    """분석 요청을 남긴다. 이미 있으면 더 최신 응답 시각으로 합치고, force는 한 번이라도 있으면 남긴다."""
+def enqueue(home: Path, session_id: str, transcript_path: str, source_ts: str, force: bool = False,
+            by: str = "hook") -> Path:
+    """분석 요청을 남긴다. 이미 있으면 더 최신 응답 시각으로 합치고, force는 한 번이라도 있으면 남긴다.
+    by는 누가 넣었나(hook·control). 관제가 한 번이라도 넣었으면 control로 남긴다(꺼진 세션도 관제 요청은 분석, 요구 이력 62)."""
     path = queue_dir(home) / f"{session_id}.json"
     old = _read(path)
     if old.get("source_ts", "") > source_ts:
         source_ts, transcript_path = old["source_ts"], old.get("transcript_path") or transcript_path
     _write(path, {"session_id": session_id, "transcript_path": transcript_path, "source_ts": source_ts,
-                  "force": bool(force or old.get("force")), "queued_at": old.get("queued_at") or _now()})
+                  "force": bool(force or old.get("force")), "queued_at": old.get("queued_at") or _now(),
+                  "by": "control" if "control" in (by, old.get("by")) else by})
     return path
+
+
+def want_state(home: Path, session_id: str):
+    """세션에서 /nunchi로 켜고 끈 표시 (요구 이력 53·62). 켬 True, 끔 False, 표시 없음 None.
+    on이 없는 옛 표시는 켬으로 본다."""
+    path = Path(home) / "sessions" / session_id / "want"
+    if not path.exists():
+        return None
+    return _read(path).get("on", True) is not False
 
 
 def pending(home: Path) -> list:
@@ -228,6 +240,9 @@ def drain(home: Path, runner=None, flow_runner=None, poll: float = POLL_SECONDS,
             items = sorted(pending(home), key=lambda i: i["session_id"] != prio)
             for item in items:
                 sid = item["session_id"]
+                if sid not in mine and item.get("by") != "control" and want_state(home, sid) is False:
+                    _drop(item)   # /nunchi off로 끈 세션: 훅이 넣은 요청은 버린다 (돌던 분석은 끝까지 감)
+                    continue
                 if sid not in mine:
                     if not claim(home, sid):
                         continue
@@ -362,7 +377,7 @@ class QueueAnalyzer:
             if queued.get("source_ts") == source_ts:
                 self._wake()   # 이미 줄에 있다. 분석기가 죽었으면 다시 띄운다
                 return False
-        enqueue(self.home, session_id, transcript_path, source_ts, force=force)
+        enqueue(self.home, session_id, transcript_path, source_ts, force=force, by="control")
         if force:
             self._last_wake = 0.0
         self._wake()

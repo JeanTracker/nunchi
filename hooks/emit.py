@@ -71,9 +71,21 @@ def save_compact_copy(record: dict) -> None:
     shutil.copyfile(src, session_dir / f"compact-{n}.jsonl")
 
 
+def _want_state(path: Path):
+    """/nunchi 표시: 켬 True, 끔 False, 없음 None (control_tui.worker.want_state와 같음. 모든 응답마다 불리므로 분석 코드를 읽어 들이지 않는다)."""
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return True
+    return not (isinstance(data, dict) and data.get("on") is False)
+
+
 def request_analysis(record: dict) -> None:
     """응답이 끝나면(Stop) 분석 대상 세션의 분석을 대기열에 넣고 분석기를 깨운다 (요구 이력 52·53, BUILD_PLAN §4.7).
     대상: 세션에서 /nunchi로 켠 세션(세션 폴더의 want), 또는 설정 analyze_scope가 all. off·manual이면 하지 않는다.
+    /nunchi off로 끈 세션(want의 on이 false)은 넣지 않는다.
     분석은 하지 않고 바로 끝난다. 분석기는 떼어 낸 백그라운드 프로세스로 돈다."""
     if record.get("event") != "Stop" or os.environ.get("CONTROL_TUI_ANALYZE", "1") == "0":
         return
@@ -86,8 +98,9 @@ def request_analysis(record: dict) -> None:
         cfg = {}
     if cfg.get("analyze_scope", "selected") == "off" or cfg.get("analyze_when", "auto") == "manual":
         return
-    if cfg.get("analyze_scope") != "all" and not (home / "sessions" / sid / "want").exists():
-        return
+    want = _want_state(home / "sessions" / sid / "want")
+    if want is False or (want is None and cfg.get("analyze_scope") != "all"):
+        return   # /nunchi off로 끈 세션은 설정이 all이어도 넣지 않는다 (요구 이력 62)
     if not record.get("transcript_path"):
         return
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
