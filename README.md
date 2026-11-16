@@ -11,30 +11,33 @@ the next instruction without leaving the screen.
 
 ## Install
 
-macOS, iTerm2, Python 3.11+ and git are required.
+macOS, iTerm2 and git are required.
+
+nunchi has two parts. The Claude Code plugin records your sessions, analyzes them in the
+background and adds a side panel inside each session. Install it first, from inside
+Claude Code:
+
+```
+/plugin install nunchi --marketplace JeanTracker/nunchi
+```
+
+The control screen (`nunchi` command, Python 3.11+) is installed by a script:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/JeanTracker/nunchi/main/install.sh | sh
 ```
 
 While the repository is private, clone it and run `./install.sh` instead. The installer
-shows a diff and asks before it touches `~/.claude/settings.json`.
+shows a diff and asks before it touches `~/.claude/settings.json`, where it removes hooks
+left by earlier versions and wraps the status line.
 
 Then run `nunchi` in an iTerm2 pane.
-
-To also get the side panel inside Claude Code sessions, install the plugin from inside Claude Code:
-
-```
-/plugin install nunchi --marketplace JeanTracker/nunchi
-```
-
-The plugin only displays results. Analysis needs the hooks that `install.sh` registers.
 
 ## Uninstall
 
 ```sh
-~/.local/share/nunchi/install.sh --uninstall
 claude plugin uninstall nunchi@nunchi && claude plugin marketplace remove nunchi
+~/.local/share/nunchi/install.sh --uninstall
 ```
 
 Full install, usage and uninstall guide: [docs/GUIDE.md](docs/GUIDE.md)

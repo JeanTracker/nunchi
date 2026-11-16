@@ -194,6 +194,41 @@ def test_warns_when_another_folder_registered_hooks(tmp_path):
     assert "다른 폴더에서 등록한 관제 훅" in res.stderr
 
 
+def test_plugin_mode_drops_hooks_of_every_folder_and_keeps_others(tmp_path):
+    """플러그인이 훅을 맡으면 settings.json의 관제 훅은 어느 폴더 것이든 뺀다 (요구 이력 63)."""
+    s = tmp_path / "settings.json"
+    s.write_text(json.dumps({"model": "x", "statusLine": {"type": "command", "command": "echo old"}}),
+                 encoding="utf-8")
+    run(INSTALL, args=["--settings", str(s), "--apply"])        # 이 폴더의 옛 설치
+    data = json.loads(s.read_text(encoding="utf-8"))
+    data["hooks"]["Stop"].append({"hooks": [
+        {"type": "command", "command": "/x/python /elsewhere/nunchi/hooks/emit.py"},
+        {"type": "command", "command": "say done"}]})
+    s.write_text(json.dumps(data), encoding="utf-8")
+
+    res = run(INSTALL, args=["--settings", str(s), "--plugin", "--apply"])
+    assert res.returncode == 0, res.stderr
+    assert "/elsewhere/nunchi/hooks/emit.py" in res.stderr       # 다른 폴더 것도 뺀다고 알린다
+    after = json.loads(s.read_text(encoding="utf-8"))
+    assert "emit.py" not in json.dumps(after["hooks"])
+    assert after["hooks"] == {"Stop": [{"hooks": [{"type": "command", "command": "say done"}]}]}
+    assert "statusline.py" in after["statusLine"]["command"]     # 상태 표시줄 감싸기는 둔다
+    assert "echo old" in after["statusLine"]["command"]
+    assert len(list(tmp_path.glob("settings.json.bak-*"))) == 2
+    res = run(INSTALL, args=["--settings", str(s), "--plugin", "--apply"])
+    assert "바뀔 내용이 없습니다" in res.stdout
+
+
+def test_plugin_mode_then_remove_restores_original(tmp_path):
+    original = {"model": "x", "statusLine": {"type": "command", "command": "bash ~/my status.sh"}}
+    s = tmp_path / "settings.json"
+    s.write_text(json.dumps(original), encoding="utf-8")
+    run(INSTALL, args=["--settings", str(s), "--plugin", "--apply"])
+    assert "hooks" not in json.loads(s.read_text(encoding="utf-8"))
+    run(INSTALL, args=["--settings", str(s), "--remove", "--apply"])
+    assert json.loads(s.read_text(encoding="utf-8")) == original
+
+
 # ---------- fake_events.py ----------
 
 def test_fake_normal_scenario_writes_five_events(home):

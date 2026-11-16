@@ -124,3 +124,32 @@ def test_uninstall_stops_before_deleting_when_statusline_was_rewrapped(sandbox):
     assert res.returncode != 0
     assert "statusLine" in res.stderr
     assert (sandbox["home"] / "bin" / "nunchi").is_symlink()   # 멈췄으니 링크도 그대로
+
+
+def test_settings_moves_old_hooks_to_the_plugin_and_keeps_statusline(sandbox):
+    """예전 설치가 넣은 훅은 빼고 상태 표시줄 감싸기만 둔다. 플러그인이 없으면 설치 명령을 보여 준다 (요구 이력 63)."""
+    sh(sandbox, "--hooks", "--yes")
+    res = sh(sandbox, "--settings", "--yes")
+    assert res.returncode == 0, res.stderr
+    data = json.loads(sandbox["settings"].read_text(encoding="utf-8"))
+    assert "hooks" not in data
+    assert "statusline.py" in data["statusLine"]["command"]
+    assert "/plugin install nunchi --marketplace JeanTracker/nunchi" in res.stdout
+
+
+def test_settings_without_tty_or_yes_changes_nothing(sandbox):
+    sh(sandbox, "--hooks", "--yes")
+    before = sandbox["settings"].read_text(encoding="utf-8")
+    res = sh(sandbox, "--settings")
+    assert res.returncode == 0
+    assert sandbox["settings"].read_text(encoding="utf-8") == before
+    assert "install.sh --settings" in res.stdout
+
+
+def test_settings_reports_installed_plugin(sandbox):
+    plugins = sandbox["home"] / ".claude" / "plugins"
+    plugins.mkdir()
+    (plugins / "installed_plugins.json").write_text('{"plugins": {"nunchi@nunchi": []}}', encoding="utf-8")
+    res = sh(sandbox, "--settings", "--yes")
+    assert res.returncode == 0, res.stderr
+    assert "nunchi@nunchi: 설치됨" in res.stdout

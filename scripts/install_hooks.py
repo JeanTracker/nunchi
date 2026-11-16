@@ -10,6 +10,10 @@
     python3 scripts/install_hooks.py --settings PATH  # 다른 설정 파일 (테스트용)
     python3 scripts/install_hooks.py --remove         # 우리 훅만 빼는 미리보기 (--apply로 쓰기)
     python3 scripts/install_hooks.py --check          # diff만 보이고, 바뀔 게 있으면 종료 코드 1
+    python3 scripts/install_hooks.py --plugin         # 플러그인이 훅을 맡을 때: 옛 훅(모든 폴더)을 빼고 상태 표시줄만 둔다
+
+훅은 플러그인(저장소 맨 위 hooks/hooks.json)이 등록한다 (요구 이력 63, BUILD_PLAN §4.12).
+settings.json에 훅을 넣는 기본 동작은 플러그인 없이 쓸 때를 위해 남겨 둔다.
 """
 
 import argparse
@@ -51,6 +55,11 @@ def is_ours(command: str) -> bool:
 
 def is_our_statusline(command: str) -> bool:
     return "hooks/statusline.py" in command and str(ROOT) in command
+
+
+def is_settings_emit(command: str) -> bool:
+    """settings.json에 넣은 관제 훅이면 폴더와 관계없이 참. 플러그인 훅(CLAUDE_PLUGIN_ROOT)은 settings.json에 오지 않는다."""
+    return "hooks/emit.py" in command and "CLAUDE_PLUGIN_ROOT" not in command
 
 
 def other_installs(settings: dict) -> list:
@@ -96,8 +105,8 @@ def build_new(settings: dict) -> dict:
     return merge_statusline(merge_hooks(settings))
 
 
-def remove_hooks(settings: dict) -> dict:
-    """우리 훅 항목만 뺀다. 우리 것만 들어 있던 그룹·이벤트·hooks 키는 함께 정리한다."""
+def remove_hooks(settings: dict, match=is_ours) -> dict:
+    """우리 훅 항목만 뺀다(match가 참인 명령). 우리 것만 들어 있던 그룹·이벤트·hooks 키는 함께 정리한다."""
     out = copy.deepcopy(settings)
     hooks = out.get("hooks")
     if not isinstance(hooks, dict):
@@ -112,7 +121,7 @@ def remove_hooks(settings: dict) -> dict:
             if not isinstance(items, list) or not items:
                 kept.append(g)
                 continue
-            rest = [h for h in items if not (isinstance(h, dict) and is_ours(h.get("command", "")))]
+            rest = [h for h in items if not (isinstance(h, dict) and match(h.get("command", "")))]
             if rest:
                 kept.append({**g, "hooks": rest})
         if kept:
@@ -148,6 +157,12 @@ def remove_statusline(settings: dict) -> tuple:
     return out, ""
 
 
+def build_plugin_mode(settings: dict) -> dict:
+    """플러그인이 훅을 맡는다: settings.json의 관제 훅은 어느 폴더 것이든 빼고(두 번 기록 방지), 상태 표시줄 감싸기는 둔다.
+    상태 표시줄은 mod가 컨텍스트 사용률을 기록하게 되면 없앤다 (BUILD_PLAN §4.12)."""
+    return merge_statusline(remove_hooks(settings, match=is_settings_emit))
+
+
 def build_removed(settings: dict) -> tuple:
     return remove_statusline(remove_hooks(settings))
 
@@ -163,6 +178,8 @@ def main() -> int:
     ap.add_argument("--settings", default=str(Path.home() / ".claude" / "settings.json"))
     ap.add_argument("--apply", action="store_true", help="실제로 파일을 쓴다 (백업 후)")
     ap.add_argument("--remove", action="store_true", help="등록 대신 우리 훅과 상태 표시줄을 뺀다")
+    ap.add_argument("--plugin", action="store_true",
+                    help="훅은 플러그인이 맡는다: settings.json의 관제 훅(모든 폴더)을 빼고 상태 표시줄만 둔다")
     ap.add_argument("--check", action="store_true",
                     help="diff만 보이고 쓰지 않는다. 바뀔 내용이 있으면 종료 코드 1")
     args = ap.parse_args()
@@ -175,6 +192,11 @@ def main() -> int:
     old = json.loads(old_text)
     if args.remove:
         new, warning = build_removed(old)
+    elif args.plugin:
+        new, warning = build_plugin_mode(old), ""
+        others = other_installs(old)
+        if others:
+            warning = "다른 폴더에서 등록한 관제 훅도 함께 뺍니다 (플러그인 훅과 겹치면 기록이 두 번 남습니다):\n  " + "\n  ".join(others)
     else:
         new, warning = build_new(old), ""
         others = other_installs(old)

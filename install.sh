@@ -1,5 +1,6 @@
 #!/bin/sh
-# nunchi 설치·갱신·삭제 스크립트.
+# nunchi 관제 화면 설치·갱신·삭제 스크립트.
+# 훅과 분석기, 세션 안 패널(mod)은 Claude Code 플러그인이 설치한다 (docs/GUIDE.md).
 #
 #   curl -fsSL https://raw.githubusercontent.com/JeanTracker/nunchi/main/install.sh | sh
 #   ./install.sh                 # 저장소를 직접 받아 둔 경우 (그 폴더에 그대로 설치)
@@ -36,12 +37,14 @@ nunchi 설치 스크립트
   install.sh [옵션]
 
 옵션
-  (없음)         설치 또는 갱신: 내려받기, 파이썬 환경, 명령 연결, PATH, Claude Code 훅
+  (없음)         설치 또는 갱신: 내려받기, 파이썬 환경, 명령 연결, PATH, Claude Code 설정 정리
   --link         $LINK 링크만 다시 만든다
   --path         PATH만 확인하고, 빠져 있으면 셸 설정 파일에 넣는다
-  --hooks        Claude Code 훅만 등록한다 (바뀔 내용을 보여주고 묻는다)
-  --uninstall    삭제: 훅, 링크, 셸 설정 블록, 내려받은 폴더
-  --no-hooks     설치할 때 훅 등록을 건너뛴다
+  --settings     Claude Code 설정만 정리한다: 예전에 넣은 훅을 빼고(훅은 플러그인이 맡음) 상태 표시줄을 감싼다
+  --hooks        플러그인 없이 쓸 때: Claude Code 훅을 settings.json에 넣는다
+                 (플러그인과 함께 두면 기록이 두 번 남는다)
+  --uninstall    삭제: 이 폴더의 훅과 상태 표시줄, 링크, 셸 설정 블록, 내려받은 폴더
+  --no-hooks     설치할 때 Claude Code 설정을 건드리지 않는다
   -y, --yes      묻지 않고 진행한다 (~/.claude/settings.json 변경 포함)
   -h, --help     이 도움말
 
@@ -64,6 +67,7 @@ while [ $# -gt 0 ]; do
     --link) MODE=link ;;
     --path) MODE=path ;;
     --hooks) MODE=hooks ;;
+    --settings) MODE=settings ;;
     --uninstall) MODE=uninstall ;;
     --no-hooks) SKIP_HOOKS=1 ;;
     -y|--yes) ASSUME_YES=1 ;;
@@ -262,11 +266,14 @@ hook_python() {
   else return 1; fi
 }
 
-# $1: 비우면 등록, --remove면 제거
+# $1: 비우면 settings.json에 훅 등록, --plugin이면 옛 훅을 빼고 상태 표시줄만, --remove면 제거
 do_hooks() {
   action=${1:-}
-  if [ -z "$action" ]; then step "Claude Code 훅 등록 ($SETTINGS)"
-  else step "Claude Code 훅 제거 ($SETTINGS)"; fi
+  case $action in
+    "") step "Claude Code 훅 등록 ($SETTINGS)" ;;
+    --plugin) step "Claude Code 설정 정리 ($SETTINGS): 훅은 플러그인이 맡고, 여기는 상태 표시줄만" ;;
+    *) step "Claude Code 훅 제거 ($SETTINGS)" ;;
+  esac
   hp=$(hook_python) || { warn "파이썬이 없어 훅을 처리하지 못했습니다."; return 0; }
   script="$SRC/scripts/install_hooks.py"
   set +e
@@ -282,9 +289,27 @@ do_hooks() {
     printf '%s\n' "$out" | grep -E '^(백업|적용 완료):' | sed 's/^/  /' || true
   else
     say "  바꾸지 않았습니다. 나중에 적용하려면:"
-    if [ -z "$action" ]; then say "    $SRC/install.sh --hooks"
-    else say "    $hp $script $action --apply"; fi
+    case $action in
+      "") say "    $SRC/install.sh --hooks" ;;
+      --plugin) say "    $SRC/install.sh --settings" ;;
+      *) say "    $hp $script $action --apply" ;;
+    esac
     HOOKS_PENDING=1
+  fi
+}
+
+plugin_installed() {
+  f="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/installed_plugins.json"
+  [ -f "$f" ] && grep -q '"nunchi@nunchi"' "$f"
+}
+
+# 플러그인은 ~/.claude를 바꾸므로 이 스크립트가 설치하지 않고 명령만 보여 준다.
+plugin_hint() {
+  if plugin_installed; then
+    say "  플러그인 nunchi@nunchi: 설치됨 (갱신: claude plugin marketplace update nunchi && claude plugin update nunchi@nunchi)"
+  else
+    say "  플러그인이 아직 없습니다. 세션 기록과 분석은 플러그인이 하므로, 없으면 세션이 화면에 나타나지 않습니다."
+    say "  Claude Code 안에서:  /plugin install nunchi --marketplace JeanTracker/nunchi"
   fi
 }
 
@@ -296,14 +321,13 @@ install_all() {
   do_link
   do_path
   if [ "$SKIP_HOOKS" = 1 ]; then
-    step "훅 등록 건너뜀 (--no-hooks). 나중에: $SRC/install.sh --hooks"
-    HOOKS_PENDING=1
+    step "Claude Code 설정 건너뜀 (--no-hooks). 나중에: $SRC/install.sh --settings"
   else
-    do_hooks
+    do_hooks --plugin
   fi
   step "완료"
   say "  iTerm2 패널 하나에서 'nunchi' 를 실행하세요. 사용법: $SRC/docs/GUIDE.md"
-  [ "$HOOKS_PENDING" = 1 ] && say "  훅을 등록하기 전에는 세션이 화면에 나타나지 않습니다."
+  plugin_hint
   say "  이미 열려 있던 Claude Code 세션은 한 번 다시 시작해야 연결됩니다."
   return 0
 }
@@ -389,5 +413,11 @@ case $MODE in
     SRC=$(script_checkout) || SRC=$CLONE_DIR
     [ -f "$SRC/scripts/install_hooks.py" ] || die "$SRC 에 nunchi가 없습니다. 먼저 설치하세요."
     do_hooks ;;
+  settings)
+    HOOKS_PENDING=0
+    SRC=$(script_checkout) || SRC=$CLONE_DIR
+    [ -f "$SRC/scripts/install_hooks.py" ] || die "$SRC 에 nunchi가 없습니다. 먼저 설치하세요."
+    do_hooks --plugin
+    plugin_hint ;;
   uninstall) uninstall_all ;;
 esac
