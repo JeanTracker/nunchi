@@ -36,8 +36,9 @@ claude plugin list                                   # look for nunchi@nunchi ·
 
 The plugin brings three things: the hooks that record each session's events into
 `~/.claude-control`, the background analyzer that the hooks wake when a response ends,
-and the side panel (the mod, described below). It does not change
-`~/.claude/settings.json`, and it adds no tokens to the conversation. Claude Code keeps
+and the side panel (the mod, described below). It adds no hook entries to
+`~/.claude/settings.json` (Claude Code itself records the marketplace and the enabled
+plugin there), and it adds no tokens to the conversation. Claude Code keeps
 its own copy of the whole repository, so moving or deleting your clone does not affect
 it. New sessions pick it up; restart a session that is already open
 (`claude --resume <session ID>`). While the repository is private, adding the
@@ -150,8 +151,9 @@ is reported as "already taken" and not loaded.
 **Attach it once.** To attach a folder to a single session without installing, pass it
 as an option. For a session that is already open, close it and reopen it with `--resume`.
 The repository folder attaches the whole plugin (mod and hooks); `mod/nunchi` attaches
-only the mod, which is what you want while editing the mod with the plugin installed.
-Attaching the whole folder while the plugin is installed records every event twice.
+only the mod. Both carry the name `nunchi`, so with the plugin installed, which copy
+Claude Code loads has not been checked yet; uninstall the plugin first when you test a
+folder this way.
 
 ```sh
 claude --plugin-dir ~/.local/share/nunchi                                       # mod and hooks

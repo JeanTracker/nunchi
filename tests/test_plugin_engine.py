@@ -30,7 +30,7 @@ def run_py(python, code, env=None):
 def test_analyzer_code_loads_without_textual(python, tmp_path):
     (tmp_path / "config.json").write_text(json.dumps({"theme": "dusk", "analyze_workers": 2}))
     code = (f"sys.path.insert(0, {str(ROOT)!r})\n"
-            "import control_tui.worker, control_tui.flow\n"
+            "import control_tui.worker, control_tui.flow, control_tui.glossary, control_tui.transcript\n"
             "from control_tui import settings\n"
             f"st = settings.load({str(tmp_path)!r})\n"
             "print(st.theme, st.analyze_workers)\n")
