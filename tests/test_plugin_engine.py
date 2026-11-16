@@ -58,3 +58,19 @@ def test_stop_hook_queues_analysis_without_textual(python, tmp_path):
     assert out.returncode == 0, out.stderr
     assert not (home / "errors.log").exists(), (home / "errors.log").read_text()
     assert (home / "queue" / "s1.json").exists()
+
+
+# ---------- 플러그인 구성 ----------
+
+def test_plugin_hooks_cover_every_event_once_and_point_at_files_that_exist():
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import install_hooks
+    plugin = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text())
+    hooks = json.loads((ROOT / "hooks" / "hooks.json").read_text())
+    market = json.loads((ROOT / ".claude-plugin" / "marketplace.json").read_text())
+    assert (ROOT / plugin["types"]).is_file()
+    assert [(ROOT / "hooks" / m).resolve().is_file() for m in hooks["modules"]] == [True]
+    assert sorted(hooks["hooks"]) == sorted(install_hooks.EVENTS)
+    for groups in hooks["hooks"].values():
+        assert [h["command"] for g in groups for h in g["hooks"]] == ['python3 "${CLAUDE_PLUGIN_ROOT}/hooks/emit.py"']
+    assert [(p["name"], p["source"]) for p in market["plugins"]] == [(plugin["name"], "./")]

@@ -1,0 +1,9 @@
+{
+  "name": "nunchi",
+  "version": "0.2.0",
+  "description": "Side panel beside a Claude Code session (what the agent is asking, the goal so far, your open requests), plus the hooks that record sessions and wake the background analyzer.",
+  "author": {
+    "name": "JeanTracker"
+  },
+  "types": "./mod/nunchi/types/index.d.ts"
+}
