@@ -13,7 +13,8 @@ import json
 from control_tui.analyzer import RELATIONS
 
 VERSION = 3               # 2: 요청 기록(기억 관점), 3: 에이전트가 묻는 것 (요구 이력 41·45)
-STATES = ("addressed", "open", "deferred", "superseded")   # 다룸, 아직 다루지 않음, 못 했거나 미룸, 뒤 요청이 대신함
+STATES = ("addressed", "open", "deferred", "superseded", "in_progress")   # 다룸, 아직 다루지 않음, 못 했거나 미룸, 뒤 요청이 대신함, 진행 중 (요구 이력 66)
+LEFT_STATES = ("open", "deferred", "in_progress")   # 남은 것
 DIGEST_CUT = 90
 ASKS_SHOWN = 30           # 프롬프트에 넣는 열린 묻는 것 수
 REQUESTS_SHOWN = 80       # 프롬프트에 넣는 지난 요청 수 (대신한 것은 빼고 최근 것부터)
@@ -50,8 +51,18 @@ HEAD = """너는 대화 흐름 기록기다. 사용자가 Claude Code 세션에�
 - requests_new: 새 턴 사용자 글에서 나온 요청만(해 달라는 일, 지켜 달라는 조건). 요청 하나에 할 일이 여럿이면 나눈다.
   넣지 않는 것: 에이전트가 제안하거나 물은 일, '응'·'좋아'·'그대로 둬' 같은 승인·보류 답, 명령이나 시스템이 넣은 지시문. 사용자가 에이전트 제안에 답하며 새로 요구한 내용은 넣는다.
   quote는 새 턴 '요청:' 글에서 글자 그대로 복사한 구절.
-  state: 새 턴 응답이 그 요청을 다뤘다고 말했으면 addressed, 못 했다·나중에·확인 못 했다고 밝혔으면 deferred, 언급이 없으면 open.
-  agent_quote: addressed·deferred면 새 턴 '응답:' 글에서 그 근거를 글자 그대로 복사한 구절.
+  state: 아래 순서로 정한다(앞에서 맞으면 거기서 정한다).
+    1) 응답이 그 일을 아직 끝나지 않았다고 말하면 in_progress(진행 중). 했다고 말한 뒤에 붙은 말까지 본다. 이런 경우다:
+       다른 세션·사람이 하고 있거나 그쪽의 확인·답을 기다림('그 세션에서 확인을 기다리는 중'), MR·PR을 올렸지만 병합 전('병합은 하지 않았습니다'),
+       일부만 함('일부 반영'), 확정 전('해소 예정', '커밋되면 다시 판정', '병합되면 다시 확인').
+       MR·PR로 올린 변경은 병합됐다는 말이 나올 때까지, 그 변경으로 해결한 요청(예: '파일 지워줘', '이렇게 처리해줘')이 모두 in_progress다.
+       에이전트가 직접 고쳤어도 같다. 다만 'MR 만들어줘'·'커밋해줘'처럼 그 단계 자체를 해 달라는 요청은 그 단계를 했으면 addressed다.
+    2) 응답이 그 요청을 다뤘다고 말하면 addressed. 에이전트가 직접 마쳤고 커밋·푸시만 하지 않은 것('커밋했습니다(아직 푸시 안 함)')은 addressed다.
+    3) 못 했다·나중에·확인 못 했다고 밝혔으면 deferred. 4) 언급이 없으면 open.
+    뒤 턴에서 병합·완료를 말하면 in_progress였던 요청을 addressed로 바꾼다.
+  agent_quote: 그 요청에 해당하는 일을 말한 구절이어야 한다. 다른 요청의 구절이나 여러 요청에 두루 쓰이는 말('커밋 전입니다' 등)은 안 된다.
+  pending_quote: in_progress면 아직 끝나지 않았다고 말한 구절(여러 요청이 같은 구절을 써도 된다). 아니면 빈 문자열.
+  agent_quote: addressed·deferred·in_progress면 새 턴 '응답:' 글에서 그 근거를 글자 그대로 복사한 구절.
 - requests_update: 지난 요청 기록 중 이번 턴에서 상태가 바뀐 것만(id 그대로). 바뀌지 않은 것은 넣지 마라.
   뒤 요청이 앞 요청을 바꾸거나 취소했으면 state는 superseded, superseded_by는 새 턴 번호. 나머지 칸은 requests_new와 같다.
 
@@ -69,8 +80,8 @@ JSON 객체 하나만 출력하라. 설명, 코드 블록은 쓰지 마라.
 {"turn": {"index": 0, "label": "", "summary": "사용자가 이 턴에 요청한 것 한 줄", "quote": "", "agent_summary": "에이전트가 이 턴에 한 말 한 줄", "agent_quote": "", "title": "", "decision": ""},
  "topic_shift": false, "goal_change": {"direction": "", "how": "", "quote": ""},
  "current_goal": "", "goal_turn": 0, "goal_quote": "", "first_goal": "", "digest": "",
- "requests_new": [{"summary": "", "quote": "", "state": "open", "agent_quote": ""}],
- "requests_update": [{"id": "R1", "state": "addressed", "agent_quote": "", "superseded_by": 0}],
+ "requests_new": [{"summary": "", "quote": "", "state": "open|addressed|in_progress|deferred", "agent_quote": "", "pending_quote": ""}],
+ "requests_update": [{"id": "R1", "state": "addressed|in_progress|deferred|superseded", "agent_quote": "", "pending_quote": "", "superseded_by": 0}],
  "asks_new": [{"summary": "", "quote": "", "kind": "결정"}], "asks_reask": ["Q1"],
  "asks_update": [{"id": "Q1", "state": "answered", "quote": "", "blanket": false}]}
 """
@@ -101,6 +112,36 @@ def _sim(a, b) -> float:
 def _contains(quote, source) -> bool:
     q = _sq(quote)
     return len(q) >= QUOTE_MIN and q in _sq(source)
+
+
+def response_mark(turn) -> str:
+    """그 턴 응답을 분석할 때의 표시 (요구 이력 64). 같은 턴 응답이 뒤에 길어졌는지 볼 때 쓴다."""
+    import hashlib
+    body = _sq(getattr(turn, "response", "") or "")
+    return f"{len(body)}:{hashlib.sha1(body.encode('utf-8')).hexdigest()[:10]}"
+
+
+def grown(flow, turns: list) -> bool:
+    """마지막으로 분석한 턴의 응답이 그 뒤 길어졌는지 (요구 이력 64).
+    다른 세션의 알림처럼 사람이 치지 않은 입력이 오면 에이전트는 같은 턴 안에서 이어 일한다. 새 턴이 생기지 않으므로
+    그 턴을 다시 분석해야 늘어난 응답(예: 구현을 마쳤다는 보고)이 요청 기록에 들어간다."""
+    steps = (flow or {}).get("steps") or []
+    until = (flow or {}).get("until") or 0
+    if not steps or steps[-1].get("index") != until or not steps[-1].get("resp") or "prev" not in flow:
+        return False
+    t = next((x for x in turns if x.index == until), None)
+    if t is None:
+        return False
+    # 길어졌을 때만. 짧게 읽힌 경우(마지막 글이 아직 안 적힘, 늦게 도는 옛 시각 작업)에 옛 응답으로 덮어쓰지 않게 한다
+    try:
+        return int(response_mark(t).split(":")[0]) > int(str(steps[-1]["resp"]).split(":")[0])
+    except ValueError:
+        return False
+
+
+def rewind(flow) -> dict:
+    """마지막 턴을 적기 전의 흐름 (그 턴을 다시 적으려고)."""
+    return dict(flow["prev"])
 
 
 def fingerprint(turn) -> str:
@@ -227,6 +268,12 @@ def parse_step(text: str, flow, turns: list, t) -> dict:
     return result
 
 
+def _pending(item, state, t) -> str:
+    """진행 중이면 아직 끝나지 않았다는 구절 (요구 이력 66). 응답 원문에 없으면 버린다(상태는 남긴다)."""
+    pq = item.get("pending_quote") or ""
+    return _one(pq, 80) if state == "in_progress" and pq and _contains(pq, t.response) else ""
+
+
 def parse_requests(o, flow, t) -> dict:
     """요청 기록 변경을 검사한다. 원문과 맞지 않는 항목만 버리고 나머지는 남긴다 (요청 41, 기억 관점)."""
     known = {r["id"]: r for r in (flow or {}).get("requests", [])}
@@ -235,22 +282,27 @@ def parse_requests(o, flow, t) -> dict:
         if not isinstance(item, dict):
             dropped += 1
             continue
-        state = item.get("state") if item.get("state") in ("addressed", "open", "deferred") else "open"
+        state = item.get("state") if item.get("state") in ("addressed", "open", "deferred", "in_progress") else "open"
         aq = item.get("agent_quote") or ""
         if not _contains(item.get("quote"), t.request) or (state != "open" and aq and not _contains(aq, t.response)):
             dropped += 1
             continue
-        new.append({"summary": _one(item.get("summary")), "quote": _one(item.get("quote"), 80), "state": state,
-                    "agent_quote": _one(aq, 80) if state != "open" else ""})  # 도구는 보지 않는다 (요청 48)
+        rec = {"summary": _one(item.get("summary")), "quote": _one(item.get("quote"), 80), "state": state,
+               "agent_quote": _one(aq, 80) if state != "open" else ""}  # 도구는 보지 않는다 (요청 48)
+        pq = _pending(item, state, t)
+        if pq:
+            rec["pending_quote"] = pq
+        new.append(rec)
     for item in o.get("requests_update") or []:
         if not isinstance(item, dict) or item.get("id") not in known or item.get("state") not in STATES:
             dropped += 1
             continue
         aq = item.get("agent_quote") or ""
-        if item["state"] in ("addressed", "deferred") and aq and not _contains(aq, t.response):
+        if item["state"] in ("addressed", "deferred", "in_progress") and aq and not _contains(aq, t.response):
             dropped += 1
             continue
         updates.append({"id": item["id"], "state": item["state"], "agent_quote": _one(aq, 80),
+                        "pending_quote": _pending(item, item["state"], t),
                         "superseded_by": t.index if item["state"] == "superseded" else 0})
     return {"new": new, "updates": updates, "dropped": dropped}
 
@@ -307,6 +359,10 @@ def apply_requests(requests: list, change: dict, t) -> list:
         r["state"], r["by_turn"] = u["state"], t.index
         if u.get("agent_quote"):
             r["agent_quote"] = u["agent_quote"]
+        if u.get("pending_quote"):
+            r["pending_quote"] = u["pending_quote"]   # 진행 중인 이유 (요구 이력 66)
+        elif u["state"] != "in_progress":
+            r.pop("pending_quote", None)
         r.pop("tool_failed", None)  # 옛 기록의 도구 실패 표시는 버린다 (요청 48)
         if u["state"] == "superseded":
             r["superseded_by"] = u["superseded_by"]
@@ -376,6 +432,8 @@ def advance(flow, turns: list, t, runner, tries: int = 2) -> dict:
             continue
     if got is None:
         got = _fallback(base, t)
+        got["step"]["fallback"] = True   # 근거 확인에 실패해 대체로 적음 (다시 적을 때 앞 것을 지키려고)
+    got["step"]["resp"] = response_mark(t)   # 이 응답으로 적었다는 표시 (요구 이력 64)
     new = {"version": VERSION, "first_goal": dict(base.get("first_goal") or {}),
            "current_goal": dict(base.get("current_goal") or {}),
            "steps": [dict(s) for s in base.get("steps", [])] + [got["step"]],
@@ -390,12 +448,13 @@ def advance(flow, turns: list, t, runner, tries: int = 2) -> dict:
         new["first_goal"] = got["first_goal"]
     if got.get("current_goal"):
         new["current_goal"] = got["current_goal"]
+    new["prev"] = {k: v for k, v in base.items() if k != "prev"}   # 이 턴을 적기 전 (응답이 길어지면 되돌려 다시 적는다)
     return new
 
 
 def remaining(flow) -> list:
     """남은 것: 아직 다루지 않음, 못 했거나 미룸 (요청 41)."""
-    return [r for r in (flow or {}).get("requests", []) if r.get("state") in ("open", "deferred")]
+    return [r for r in (flow or {}).get("requests", []) if r.get("state") in LEFT_STATES]
 
 
 def shifts(flow) -> list:

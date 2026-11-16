@@ -38,7 +38,12 @@ class SessionView:
     judged: bool = True        # 분석 결과가 있는지. 없으면 ①에 ◌ (판정 전)
     question_id: str = ""      # 질문 대기(question)일 때 그 AskUserQuestion 도구 호출 ID (요청 39)
     questions: list = field(default_factory=list)  # 그 질문 목록 (대화 기록에서 읽음, 훅 기록은 잘린다)
+    prompt_ts: str = ""        # 마지막 사용자 입력 시각 (UserPromptSubmit). 관제로 돌아올 때 고를 세션 (요구 이력 56)
     ended_ts: str = ""         # 종료 시각. SessionEnd 훅, 또는 관제가 패널에서 claude가 사라진 것을 본 시각 (요청 35)
+    name: str = ""             # 세션 제목 (대화 기록의 custom-title 또는 ai-title, 요구 이력 59)
+    group: str = ""            # 프로젝트 폴더 (git 저장소 맨 위, 없으면 cwd)
+    group_label: str = ""      # ① 폴더 줄에 보일 이름
+    subpath: str = ""          # 하위 폴더에서 열었으면 프로젝트 폴더에서 남은 경로
 
     @property
     def title(self) -> str:
@@ -81,6 +86,7 @@ def summarize(session_id: str, events: list) -> SessionView:
             view.question_id = ""
         if name in ("UserPromptSubmit",):
             view.state = "working"
+            view.prompt_ts = ev.get("ts", "")
         elif name == "PreToolUse":
             view.state = "working"
             tid = data.get("tool_use_id") or f"anon-{len(order)}"

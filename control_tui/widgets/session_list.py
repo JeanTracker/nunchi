@@ -20,7 +20,7 @@ STATE_LABEL = {
 NEW_MARK = "  ● 새 응답"  # 확인 안 한 응답 표시
 INDENT = 4                 # "  1  " 번호 칸
 LABEL_WIDTH = 12           # "○ 연결 대기"(11칸)가 잘리지 않도록
-NAME_MIN, NAME_MAX = 6, 22
+NAME_MIN, NAME_MAX = 6, 40   # 세션 제목이 들어가므로 넓힌다 (요구 이력 59)
 SHORT_NEW_MARK = " ●"      # 칸이 좁을 때 "● 새 응답" 대신 쓰는 표시
 FALLBACK_WIDTH = 40        # 아직 화면 크기를 모를 때
 MISSED_SLOT = 4            # " ⚠12" 자리. 항상 비워 두어 누락이 생겨도 줄이 바뀌지 않는다
@@ -93,6 +93,29 @@ class SessionList(Static, can_focus=True):
         name_w = max(NAME_MIN, min(NAME_MAX, base - cell_len(missed_txt) - cell_len(new_txt)))
         return name_w, missed_txt, new_txt
 
+    def _group_line(self, group: str) -> Text:
+        """폴더 줄: 이름, 살아 있는 세션 수, 볼 것(허락·질문·남은 것) 수. 0인 것은 뺀다."""
+        members = [v for v in self.views if getattr(v, "group", "") == group]
+        label = getattr(members[0], "group_label", "") if members else ""
+        live = sum(1 for v in members if v.state != "ended")
+        parts = []
+        if live:
+            parts.append(str(live))
+        asks = sum(1 for v in members if v.state == "permission")
+        if asks:
+            parts.append(f"허락 {asks}")
+        qs = sum(1 for v in members if v.state == "question")
+        if qs:
+            parts.append(f"질문 {qs}")
+        missed = sum(v.missed or 0 for v in members)
+        line = Text()
+        line.append(label or "폴더 모름", style=f"bold {C.p1}" if live else f"bold {C.subtle}")
+        if parts:
+            line.append("  " + " · ".join(parts), style=f"{C.muted}")
+        if missed:
+            line.append(f" · ⚠{missed}", style=f"{C.err}")
+        return line
+
     def refresh_content(self) -> None:
         self.update(self.render_text())
 
@@ -100,7 +123,15 @@ class SessionList(Static, can_focus=True):
         if not self.views:
             return Text("아직 기록된 세션이 없습니다.\n세션을 열면 여기에 나타납니다.", style=f"{C.muted}")
         out = Text()
+        groups = {getattr(v, "group", "") for v in self.views}
+        headed = len(groups) > 1     # 열린 폴더가 하나면 폴더 줄을 두지 않는다 (요구 이력 59)
+        last_group = None
         for i, v in enumerate(self.views, start=1):
+            group = getattr(v, "group", "")
+            if headed and group != last_group:
+                out.append_text(self._group_line(group))
+                out.append("\n")
+            last_group = group
             label, color = STATE_LABEL.get(v.state, (v.state, "text"))
             color = C.get(color)
             is_new = v.state == "responded" and v.session_id not in self.acknowledged
@@ -108,8 +139,19 @@ class SessionList(Static, can_focus=True):
                                                            getattr(v, "judged", True))
             line = Text()
             line.append(f"{i:>2}  ", style=f"{C.subtle}")
-            name = f"{v.title} #{v.session_id[:4]}"  # 같은 폴더 세션을 구별한다
-            line.append(fit(name, name_w), style="bold")
+            # 세션 제목이 앞, ID 앞 4글자는 괄호로 흐리게 (요구 이력 59)
+            ident = f" ({v.session_id[:4]})" if v.session_id else ""
+            title = getattr(v, "name", "") or ("새 세션" if headed else v.title)
+            sub = getattr(v, "subpath", "")
+            if sub:
+                title = f"{sub} · {title}"
+            if not headed and getattr(v, "name", ""):
+                title = f"{v.title} · {title}"     # 폴더 줄이 없으면 폴더 이름을 앞에
+            room = max(1, name_w - cell_len(ident))
+            shown = fit(title, room).rstrip()
+            line.append(shown, style="bold")
+            line.append(ident, style=f"{C.subtle}")
+            line.append(" " * max(0, name_w - cell_len(shown) - cell_len(ident)))
             line.append(" " + fit(label, LABEL_WIDTH), style=color)
             # 지금 도구 이름은 보이지 않는다 (요구 이력 48)
             if missed_txt:

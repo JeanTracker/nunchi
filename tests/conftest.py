@@ -43,3 +43,9 @@ def no_real_clipboard(monkeypatch):
 def no_real_liveness_check(monkeypatch):
     """닫힌 세션 판정은 기본적으로 '확인 못 함'(None)으로 둔다. 판정 테스트는 직접 넣는다."""
     monkeypatch.setattr(panels, "alive_panel_ids", lambda: None)
+
+
+@pytest.fixture(autouse=True)
+def no_real_control_home(monkeypatch, tmp_path_factory):
+    """관제 홈을 주지 않은 테스트가 실제 ~/.claude-control에 control.json·goto를 쓰거나 지우지 않게 한다 (요구 이력 56)."""
+    monkeypatch.setenv("CONTROL_TUI_HOME", str(tmp_path_factory.mktemp("control-home")))

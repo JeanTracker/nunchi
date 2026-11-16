@@ -53,9 +53,37 @@ end run
 """
 
 
+FOCUS_SCRIPT = """
+on run argv
+    set targetId to item 1 of argv
+    tell application "iTerm2"
+        repeat with w in windows
+            repeat with t in tabs of w
+                repeat with s in sessions of t
+                    if (id of s) is targetId then
+                        select w
+                        tell t to select
+                        tell s to select
+                        activate
+                        return "ok"
+                    end if
+                end repeat
+            end repeat
+        end repeat
+    end tell
+    return "missing"
+end run
+"""
+
+
 def _osascript(args: list, script: str = SEND_SCRIPT) -> str:
-    result = subprocess.run(["osascript", "-", *args], input=script,
-                            capture_output=True, text=True, timeout=8)
+    try:
+        result = subprocess.run(["osascript", "-", *args], input=script,
+                                capture_output=True, text=True, timeout=8)
+    except subprocess.TimeoutExpired:
+        raise TerminalError("iTerm이 8초 안에 답하지 않았습니다(창에 대화상자가 떠 있는지 보세요)") from None
+    except OSError as e:   # osascript가 없거나 실행할 수 없음
+        raise TerminalError(f"osascript를 실행하지 못했습니다: {e}") from None
     if result.returncode != 0:
         raise TerminalError(result.stderr.strip() or "osascript 실패")
     return result.stdout.strip()
@@ -77,3 +105,10 @@ class ITerm2Adapter:
         if not target_id:
             raise TerminalError("이 세션은 iTerm 패널과 짝이 없습니다.")
         return _osascript([target_id], SCREEN_SCRIPT)
+
+    def focus(self, target_id: str) -> None:
+        """그 패널의 창·탭·패널을 앞으로 가져온다 (요구 이력 56, SCREEN §8 2026-11-16 실험)."""
+        if not target_id:
+            raise TerminalError("이 세션은 iTerm 패널과 짝이 없습니다.")
+        if _osascript([target_id], FOCUS_SCRIPT) != "ok":
+            raise TerminalError("패널을 찾지 못했습니다. iTerm2에서 패널이 닫혔는지 보세요.")

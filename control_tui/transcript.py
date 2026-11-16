@@ -383,3 +383,43 @@ def totals(turns: list) -> dict:
         "research": sum(t.chars_research for t in turns),
         "work": sum(t.chars_work for t in turns),
     }
+
+
+# 세션 제목 (요구 이력 59). 경로마다 (읽은 위치, 사용자가 바꾼 이름, Claude Code가 정한 제목)
+_TITLES: dict = {}
+
+
+def session_title(path) -> str:
+    """대화 기록의 세션 제목. 사용자가 바꾼 이름(custom-title)이 먼저, 없으면 Claude Code가 정한 제목(ai-title).
+    파일이 크므로 지난번에 읽은 곳 뒤로 새로 붙은 줄만 읽는다."""
+    if not path:
+        return ""
+    key = str(path)
+    offset, custom, ai = _TITLES.get(key, (0, "", ""))
+    try:
+        with open(key, "rb") as f:
+            f.seek(0, 2)
+            size = f.tell()
+            if size < offset:          # 파일이 새로 쓰였으면 처음부터
+                offset, custom, ai = 0, "", ""
+            f.seek(offset)
+            chunk = f.read()
+    except OSError:
+        return custom or ai
+    end = chunk.rfind(b"\n")
+    if end < 0:
+        return custom or ai
+    for raw in chunk[:end].split(b"\n"):
+        if b'-title"' not in raw:
+            continue
+        try:
+            rec = json.loads(raw)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            continue
+        kind = rec.get("type")
+        if kind == "custom-title":
+            custom = clean_line(rec.get("customTitle") or rec.get("title") or "", 80)
+        elif kind == "ai-title":
+            ai = clean_line(rec.get("aiTitle") or rec.get("title") or "", 80)
+    _TITLES[key] = (offset + end + 1, custom, ai)
+    return custom or ai

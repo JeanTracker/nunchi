@@ -20,6 +20,7 @@ from rich.text import Text
 from textual.binding import Binding
 from textual.widgets import Static
 
+from control_tui import flow as flowlib
 from control_tui import glossary
 from control_tui.analyzer import STATUS_LABEL, _similar as similar
 from control_tui.store import SessionView
@@ -37,6 +38,7 @@ FLOW_POINTS = 2         # 목표 흐름에 보이는 전환점 수. 넘으면 �
 COMPACT_HEIGHT = 24     # ② 칸이 이보다 낮으면 목표 흐름을 처음·지금 두 줄로
 SAME_GOAL = 0.8         # 처음·지금 목표가 이만큼 비슷하면 같은 목표로 본다
 CHECK_SHOWN = 3         # 머리에 펼치는 빠진 요청 수
+ASKS_SHOWN = 2          # 머리에 펼치는 에이전트가 묻는 것 수 (요구 이력 56)
 CHANGE_SECONDS = 5.0    # 분석이 바뀐 것을 강조하는 시간
 CHANGE_AFTER_SENT = 30.0  # 답을 보낸 뒤 바뀌었으면 더 오래
 QUESTION_MARKS = ("알려 주세요", "알려주세요", "확인해 주세요", "확인 부탁", "선택해 주세요", "정해 주세요",
@@ -309,6 +311,7 @@ class Conversation(Static, can_focus=True):
         Binding("s", "summary_view", "요약 보기", show=False),
         Binding("c", "checklist", "요청 전체", show=False),
         Binding("g", "flow_all", "흐름 전체", show=False),
+        Binding("k", "ask_all", "묻는 것 전체", show=False),
         Binding("pageup", "page(-1)", "위로", show=False),
         Binding("pagedown", "page(1)", "아래로", show=False),
         Binding("end", "latest", "마지막 대화", show=False),
@@ -342,6 +345,7 @@ class Conversation(Static, can_focus=True):
         self.detail: bool = False      # 응답 상세 화면(보조)
         self.checklist: bool = False   # 누적 요청 전체 (c, 요청 33)
         self.flowall: bool = False     # 목표 흐름 전체 (g, 요청 41)
+        self.askall: bool = False      # 에이전트가 묻는 것 전체 (k, 요구 이력 56)
         self.check_cursor: int = 0     # 요청 전체에서 고른 줄
         self.scroll_top = None             # 대화 흐름 맨 위에 보이는 줄. None이면 기본 위치
         self._session_id = ""
@@ -367,6 +371,7 @@ class Conversation(Static, can_focus=True):
             self.detail = False
             self.checklist = False
             self.flowall = False
+            self.askall = False
             self.scroll_top = None
             self.cursor_group = 0
             self.selected = len(turns) - 1
@@ -400,10 +405,15 @@ class Conversation(Static, can_focus=True):
     def check_action(self, action: str, parameters) -> bool | None:
         """Esc와 ←→는 응답 상세 화면에서만 쓴다. 목록에서는 다른 위젯이 받도록 넘긴다."""
         if action == "close_detail":
-            return self.detail or self.checklist or self.flowall
+            return self.full_view
         if action == "detail_move":
             return self.detail
         return True
+
+    @property
+    def full_view(self) -> bool:
+        """대화 흐름 자리를 다른 화면(상세, 요청 전체, 흐름 전체, 묻는 것 전체)이 차지하는지."""
+        return self.detail or self.checklist or self.flowall or self.askall
 
     def _item_keys(self) -> list:
         return [(kind, key) for kind, key, _s, _n in self._items]
@@ -482,6 +492,7 @@ class Conversation(Static, can_focus=True):
         self.check_cursor = 0
         self.detail = False
         self.flowall = False
+        self.askall = False
         self.scroll_top = 0 if self.checklist else None
         self.refresh_content()
 
@@ -494,10 +505,29 @@ class Conversation(Static, can_focus=True):
         self.flowall = not self.flowall
         self.checklist = False
         self.detail = False
+        self.askall = False
         self.scroll_top = 0 if self.flowall else None
         self.refresh_content()
 
+    def action_ask_all(self) -> None:
+        """k: 에이전트가 묻는 것 전체 (요구 이력 56). mod가 '관제에서'라고 가리키는 내용."""
+        if "asks" not in ((self.analysis or {}).get("flow") or {}):
+            self.askall = False
+            self.app.bell()
+            return
+        self.askall = not self.askall
+        self.checklist = False
+        self.flowall = False
+        self.detail = False
+        self.scroll_top = 0 if self.askall else None
+        self.refresh_content()
+
     def action_close_detail(self) -> None:
+        if self.askall:
+            self.askall = False
+            self.scroll_top = None
+            self.refresh_content()
+            return
         if self.flowall:
             self.flowall = False
             self.scroll_top = None
@@ -583,7 +613,10 @@ class Conversation(Static, can_focus=True):
             head.append("\n아직 대화 기록을 읽지 못했습니다.\n", style=f"{C.muted}")
             return head
 
-        if self.flowall and (self.analysis or {}).get("flow"):
+        if self.askall and (self.analysis or {}).get("flow"):
+            body = self._asks_all(width)
+            self._items, self._latest_start = [], 0
+        elif self.flowall and (self.analysis or {}).get("flow"):
             body = self._flow_all(width)
             self._items, self._latest_start = [], 0
         elif self.checklist and self.analysis:
@@ -603,7 +636,7 @@ class Conversation(Static, can_focus=True):
         room = max(3, self._height() - head_lines - 2)  # 위 표시 1줄 + 아래 표시 1줄
         total = len(body)
         latest_len = total - self._latest_start
-        if self.detail or self.checklist or self.flowall:
+        if self.full_view:
             default = 0
         elif total <= room:
             default = 0
@@ -632,7 +665,7 @@ class Conversation(Static, can_focus=True):
         view = body[offset:offset + view_room]
         out = head
         out.append((f"  ↑ 위로 {offset}줄 (PgUp)" if offset else "  ↑ 처음") + "\n", style=f"{C.subtle}")
-        if total <= view_room and not (self.detail or self.checklist or self.flowall):
+        if total <= view_room and not self.full_view:
             out.append("\n" * (view_room - len(view)))  # 전체가 칸보다 짧으면 아래에 붙인다
         for ln in view:
             out.append_text(ln)
@@ -652,7 +685,7 @@ class Conversation(Static, can_focus=True):
             out.append_text(bar)
             out.append("\n")
         # 키 안내는 맨 아래 줄이 한다 (요청 36). 여기에는 읽기 위치와 다음 할 행동만 둔다
-        if (self.checklist and self.analysis) or self.detail or self.flowall:
+        if (self.checklist and self.analysis) or self.detail or self.flowall or self.askall:
             out.append(f"  ↓ {below}줄 더 (PgDn)" if below else "  ── 끝 ──", style=f"{C.subtle}")
         elif below:
             out.append(f"  ↓ 아래로 {below}줄 더 (PgDn) · 다 읽으면 ③에서 바로 답하기", style=f"{C.subtle}")
@@ -758,12 +791,15 @@ class Conversation(Static, can_focus=True):
                 out.append_text(ln)
                 out.append("\n")
             out.append("\n")
+            for ln in self._asks_head(a, width, stale):   # 에이전트가 묻는 것 (요구 이력 56)
+                out.append_text(ln)
+                out.append("\n")
             out.append_text(self._check_head(a, width, stale))
             out.append("\n")
             if not self.checklist:
                 new_missed = set(self._changes().get("new_missed", []))
                 missed = self._remaining()
-                marks = {"open": "○", "deferred": "⊘", "missed": "✘"}
+                marks = {"open": "○", "deferred": "⊘", "in_progress": "◐", "missed": "✘"}
                 color = C.warn if self._record_mode() else C.err
                 for c in missed[:CHECK_SHOWN]:
                     out.append_text(self._check_line(c, width, marks.get(c.get("status"), "✘"), f"{C.faint}" if stale else f"{color}",
@@ -1056,6 +1092,79 @@ class Conversation(Static, can_focus=True):
             ln.append(q, style=tone or "")
         return ln
 
+    def _ask_line(self, q: dict, width: int, basis: int, style: str, mark: str = "?") -> Text:
+        """한 줄: ? 요약 “응답 원문” #턴(부터 답 없음)(· 일부 답함). mod와 같은 표시 (SCREEN §11)."""
+        last = q.get("last_turn") or q.get("turn") or 0
+        tail = f"#{q.get('turn') or last}"
+        if q.get("state") != "answered" and basis and last < basis - 1:
+            tail += "부터 답 없음"
+        if q.get("state") == "partial":
+            tail += " · 일부 답함"
+        if q.get("state") == "answered" and q.get("by_blanket"):
+            tail += " · 통째 승인"
+        line = Text("  ")
+        line.append(f"{mark} ", style=f"bold {style}")
+        body = q.get("summary", "") + (f" “{q['quote'][:30]}”" if q.get("quote") else "")
+        room = max(10, width - 4 - cell_len(tail) - 2)
+        shown = _one_line(body, room)
+        line.append(shown, style=f"{C.faint}" if style == f"{C.faint}" else "")
+        line.append(" " * max(0, room - cell_len(shown)))
+        line.append("  " + tail, style=f"{C.subtle}")
+        return line
+
+    def _asks_head(self, a: dict, width: int, stale: bool) -> list:
+        """② 머리의 '에이전트가 묻는 것' (요구 이력 56). 묻는 것을 뽑기 전 흐름이면 두지 않는다."""
+        flow = a.get("flow") or {}
+        if "asks" not in flow:
+            return []
+        left = flowlib.open_asks(flow)
+        basis = flow.get("until") or 0
+        head = Text("에이전트가 묻는 것", style=f"{C.faint}" if stale else "bold")
+        if left:
+            head.append(f" {len(left)}", style=f"{C.faint}" if stale else f"bold {C.warn}")
+        else:
+            head.append(" 없음", style=f"{C.faint}" if stale else f"{C.ok}")
+        tail = "   k 닫기" if self.askall else "   k 전체 보기"
+        if cell_len(head.plain) + cell_len(tail) <= width:
+            head.append(tail, style=f"{C.muted}")
+        out = [head]
+        if self._height() < COMPACT_HEIGHT:   # 낮은 화면: 수 한 줄만 (목표 흐름처럼, 마지막 대화 자리를 남긴다)
+            return out
+        if not self.askall:
+            for q in left[:ASKS_SHOWN]:
+                out.append(self._ask_line(q, width, basis, f"{C.faint}" if stale else f"{C.warn}"))
+            if len(left) > ASKS_SHOWN:
+                out.append(Text(f"  … {len(left) - ASKS_SHOWN}개 더 · k", style=f"{C.subtle}"))
+        return out
+
+    def _asks_all(self, width: int) -> list:
+        """k: 묻는 것 전체. 아직 답 없음(최근 것부터) → 일부 답함 → 답함."""
+        flow = (self.analysis or {}).get("flow") or {}
+        asks = flow.get("asks") or []
+        basis = flow.get("until") or 0
+        recent = lambda q: -(q.get("last_turn") or q.get("turn") or 0)
+        groups = (("open", "?", C.warn, "아직 답 없음"), ("partial", "◐", C.warn, "일부 답함"), ("answered", "✔", C.ok, "답함"))
+        lines = [Text("")]
+        for state, mark, color, title in groups:
+            items = sorted([q for q in asks if q.get("state", "open") == state], key=recent)
+            if not items:
+                continue
+            head = Text(f" {title} {len(items)}", style=f"bold {color}")
+            if state == "answered":
+                n = sum(1 for q in items if q.get("by_blanket"))
+                if n:
+                    head.append(f"  통째 승인으로 닫은 것 {n} (답하지 않았을 수 있음)", style=f"{C.subtle}")
+            lines.append(head)
+            for q in items:
+                lines.append(self._ask_line(q, width, basis, color, mark))
+            lines.append(Text(""))
+        if len(lines) == 1:
+            lines.append(Text("  에이전트가 물은 것이 없습니다.", style=f"{C.subtle}"))
+        since = flow.get("asks_from") or 0
+        if since > 1:
+            lines.append(Text(f"  #{since - 1} 이전 응답의 묻는 것은 기록 전", style=f"{C.subtle}"))
+        return lines
+
     def _record_mode(self) -> bool:
         """요청 기록(기억 관점, 요청 41)이 있으면 그것을, 없으면 옛 요청 체크를 보인다."""
         return "requests" in (((self.analysis or {}).get("flow")) or {})
@@ -1067,6 +1176,7 @@ class Conversation(Static, can_focus=True):
             st = r.get("state", "open")
             out.append({"condition": r.get("summary", ""), "from_turn": r.get("from_turn", 0), "status": st,
                         "quote": r.get("quote", ""), "agent_quote": r.get("agent_quote", ""),
+                        "pending_quote": r.get("pending_quote", ""),
                         "superseded_by": r.get("superseded_by", 0), "record": True})
         return out
 
@@ -1078,7 +1188,7 @@ class Conversation(Static, can_focus=True):
     def _remaining(self) -> list:
         """머리에 보이는 것: 옛 방식은 빠짐, 기억 관점은 남은 것(아직 다루지 않음·못 했거나 미룸)."""
         if self._record_mode():
-            return self._ledger("open") + self._ledger("deferred")
+            return self._ledger("open") + self._ledger("deferred") + self._ledger("in_progress")
         return self._ledger("missed")
 
     def _record_head(self, a: dict, width: int, stale: bool) -> Text:
@@ -1140,6 +1250,9 @@ class Conversation(Static, can_focus=True):
                 body += f" “{c['quote'][:24]}”"
             elif st == "deferred":
                 body += " — 에이전트: 못 했거나 미룸" + (f" “{c['agent_quote'][:24]}”" if c.get("agent_quote") else "")
+            elif st == "in_progress":   # 아직 안 끝난 이유가 있으면 그것을, 없으면 한 일을 보인다 (요구 이력 66)
+                why = c.get("pending_quote") or c.get("agent_quote")
+                body += " — 진행 중" + (f" “{why[:24]}”" if why else "")
             elif st == "addressed" and c.get("agent_quote"):
                 body += f" — 에이전트: “{c['agent_quote'][:24]}”"
             elif st == "superseded" and c.get("superseded_by"):
@@ -1161,6 +1274,7 @@ class Conversation(Static, can_focus=True):
                     ("unknown", "?", "warn", "확인 안 됨"), ("superseded", "⊖", "subtle", "뒤 요청이 대신함"))
 
     RECORD_GROUPS = (("open", "○", "warn", "아직 다루지 않음"), ("deferred", "⊘", "warn", "못 했거나 미룸"),
+                     ("in_progress", "◐", "warn", "진행 중"),   # 요구 이력 66
                      ("addressed", "✔", "ok", "다룸"),
                      ("superseded", "⊖", "subtle", "뒤 요청이 대신함"))   # 요청 41: 채점이 아니라 사실
 

@@ -90,3 +90,60 @@ def arrange(views: list, selected_id: str = "", now: str = "",
             continue
         shown.append(v)
     return live + shown
+
+
+# 프로젝트 폴더로 묶기 (요구 이력 59, BUILD_PLAN §4.10)
+_ROOTS: dict = {}
+
+
+def project_root(cwd: str) -> str:
+    """cwd에서 위로 올라가며 .git이 있는 첫 폴더. 없으면 cwd 그대로."""
+    if not cwd:
+        return ""
+    if cwd in _ROOTS:
+        return _ROOTS[cwd]
+    from pathlib import Path
+    start = Path(cwd)
+    root = cwd
+    for p in [start, *start.parents]:
+        try:
+            if (p / ".git").exists():
+                root = str(p)
+                break
+        except OSError:
+            break
+    _ROOTS[cwd] = root
+    return root
+
+
+def group_views(views: list) -> list:
+    """arrange 뒤의 목록을 프로젝트 폴더별로 다시 늘어놓는다. 폴더 순서는 처음 나온 자리, 폴더 안은 원래 순서.
+    세션마다 group(폴더 경로), group_label(보일 이름), subpath(하위 폴더에서 열었으면 남은 경로)를 채운다."""
+    from pathlib import Path
+    order: list = []
+    members: dict = {}
+    for v in views:
+        root = project_root(v.cwd) or v.cwd or ""
+        v.group = root
+        rel = ""
+        if v.cwd and root and v.cwd != root:
+            try:
+                rel = str(Path(v.cwd).relative_to(root))
+            except ValueError:
+                rel = ""
+        v.subpath = rel
+        if root not in members:
+            members[root] = []
+            order.append(root)
+        members[root].append(v)
+    names: dict = {}
+    for root in order:
+        names.setdefault(Path(root).name if root else "", []).append(root)
+    for name, roots in names.items():
+        for root in roots:
+            label = name or "폴더 모름"
+            if len(roots) > 1 and root:
+                label = f"{Path(root).parent.name}/{name}"
+            for v in members[root]:
+                v.group_label = label
+    return [v for root in order for v in members[root]]

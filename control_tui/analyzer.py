@@ -173,7 +173,7 @@ def missed_count(analysis: dict) -> int:
     """① 목록의 수: 요청 기록(기억 관점)이 있으면 남은 것, 없으면 옛 빠짐 (요청 41)."""
     flow = analysis.get("flow") or {}
     if "requests" in flow:
-        return sum(1 for r in flow["requests"] if r.get("state") in ("open", "deferred"))
+        return sum(1 for r in flow["requests"] if r.get("state") in ("open", "deferred", "in_progress"))   # 진행 중도 남은 것 (요구 이력 66)
     return sum(1 for c in analysis.get("ledger", []) if c.get("status") == "missed")
 
 
@@ -456,6 +456,10 @@ class Analyzer:
         rebuilt = not flow.get("steps")
         before = len(flow_mod.shifts(flow))
         left_before = {r["id"] for r in flow_mod.remaining(flow)}
+        kept = None
+        if flow_mod.grown(flow, turns):
+            kept = flow
+            flow = flow_mod.rewind(flow)   # 마지막 턴 응답이 길어졌으면 그 턴을 다시 적는다 (요구 이력 64)
         todo = [t for t in turns if t.index > (flow.get("until") or 0)][:FLOW_STEPS_PER_JOB]
         for t in todo:
             if self._stopped:
@@ -463,6 +467,9 @@ class Analyzer:
             self._flow_turn = t.index
             write_status(session_dir, "running", t.index, since=self._since)
             flow = flow_mod.advance(flow, turns, t, self.flow_runner)
+            if kept is not None and t.index == kept.get("until") and flow["steps"][-1].get("fallback"):
+                flow = kept   # 다시 적기가 대체 단계로 끝났으면 앞서 적은 것을 둔다 (다음 응답 때 다시 해 본다)
+            kept = None
             data = read_analysis(session_dir) or data
             data["flow"] = flow
             if flow.get("current_goal", {}).get("text"):

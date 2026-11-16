@@ -1,7 +1,7 @@
 """터미널 어댑터의 공통 모양 (BUILD_PLAN §5.1).
 
 구현은 패널 ID(UUID)로 대상을 찾는다. 지금은 입력 보내기만 필요하다.
-패널 포커스 이동(원문 보기 "터미널 창" 옵션)은 그 기능을 만들 때 추가한다.
+패널을 앞으로 가져오기(focus)는 관제 p 키가 쓴다 (요구 이력 56).
 """
 
 from typing import Protocol
@@ -18,4 +18,8 @@ class TerminalAdapter(Protocol):
 
     def screen_text(self, target_id: str) -> str:
         """패널에 지금 보이는 글. 읽을 수 없는 어댑터는 이 메서드를 두지 않는다 (요청 39)."""
+        ...
+
+    def focus(self, target_id: str) -> None:
+        """그 패널을 앞으로 가져온다. 못 하는 어댑터는 이 메서드를 두지 않는다 (요구 이력 56)."""
         ...

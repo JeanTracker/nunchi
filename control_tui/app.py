@@ -14,8 +14,10 @@ from textual.binding import Binding
 from textual.containers import Grid, Vertical
 from textual.widgets import Header, Static
 
+import json
 import os
 
+from control_tui.glyphs import SymbolGap
 from control_tui import analyzer as analyzer_mod
 from control_tui import worker as worker_mod
 from control_tui import clipboard as clipboard_mod, completion, config, lifecycle, outbox as outbox_rules, panels, settings as settings_mod, store, transcript
@@ -32,6 +34,10 @@ from control_tui.theme import C
 
 REFRESH_SECONDS = 1.0
 FILE_CACHE_SECONDS = 15.0
+CONTROL_FILE = "control.json"   # 관제 자신의 iTerm 패널과 pid (mod 관제로 버튼이 읽음, 요구 이력 56)
+GOTO_FILE = "goto"              # mod 관제로 버튼이 남기는 {session, at}
+GOTO_MAX_AGE = 30.0             # 이보다 오래된 goto는 버린다 (초)
+SENT_MARGIN = 5.0               # 관제가 보낸 글의 입력 기록으로 보는 범위 (초)
 SHIFT_TAB = "\x1b[Z"  # 터미널이 보내는 Shift+Tab. Claude Code는 이것으로 권한 모드를 바꾼다
 
 # Claude Code 권한 모드 순서 (2.1.319 실행 파일 기준): default, acceptEdits, plan, auto, bypassPermissions, dontAsk
@@ -144,6 +150,8 @@ class ControlApp(App):
                  panel_checker=None, skill_home: Path | None = None, analyzer=None,
                  clipboard=None, liveness_checker=None, **kwargs):
         super().__init__(**kwargs)
+        # 넓게 그려지는 기호(… → ◆ ●) 뒤에 글자가 붙으면 한 칸 띄운다 (요구 이력 58)
+        self._filters.append(SymbolGap())
         self.home = home
         self.settings = settings_mod.load(home or store.base_dir())
         # 분석기: 설정 파일의 분석 대상이 '끄기'이거나 CONTROL_TUI_ANALYZE=0이면 끈다 (테스트는 끈다)
@@ -243,6 +251,9 @@ class ControlApp(App):
             pane, name = 3, "③ 입력"
             keys = [("Enter", "보내기"), ("⇧Enter", "줄바꿈"), ("↑↓", "이전 글"), ("Tab", "추천·다음 구역"),
                     ("⇧Tab", "권한 모드"), ("PgUp/Dn", "대화 스크롤"), ("Esc", "지우기"), ("^q", "종료")]
+        elif focused is conv and conv.askall:
+            pane, name = 2, "② 묻는 것 전체"
+            keys = [("PgUp/Dn", "스크롤"), ("k·Esc", "닫기"), ("q", "종료")]
         elif focused is conv and conv.flowall:
             pane, name = 2, "② 흐름 전체"
             keys = [("PgUp/Dn", "스크롤"), ("g·Esc", "닫기"), ("q", "종료")]
@@ -254,8 +265,8 @@ class ControlApp(App):
             keys = [("Esc", "목록으로"), ("o", "원문"), ("PgUp/Dn", "스크롤"), ("q", "종료")]
         elif focused is conv:
             pane, name = 2, "② 대화"
-            keys = [("↑↓", "턴"), ("Enter", "펼치기"), ("g", "흐름 전체"), ("c", "요청 전체"), ("d", "상세"), ("o", "원문"),
-                    ("s", "요약 보기"), ("PgUp/Dn", "스크롤"), ("]", "마지막"), ("Tab", "다음 구역")]
+            keys = [("↑↓", "턴"), ("Enter", "펼치기"), ("g", "흐름 전체"), ("k", "묻는 것"), ("c", "요청 전체"), ("d", "상세"), ("o", "원문"),
+                    ("s", "요약 보기"), ("p", "세션 창"), ("PgUp/Dn", "스크롤"), ("]", "마지막"), ("Tab", "다음 구역")]
             if permission:  # 허락 대기면 입력줄이 잠기므로 y/n은 ①②에서 받는다
                 keys = [("y", "허용"), ("n", "거절")] + keys
             elif question:  # 질문 대기는 ③ 질문 답하기로 (y/n은 질문에 쓰지 않는다, 요청 39)
@@ -263,7 +274,7 @@ class ControlApp(App):
             keys += [("q", "종료")]
         else:
             pane, name = 1, "① 세션 목록"
-            keys = [("↑↓", "세션 고르기"), ("Tab", "다음 구역"), ("i", "입력"), ("a", "분석"), ("q", "종료")]
+            keys = [("↑↓", "세션 고르기"), ("p", "세션 창으로"), ("Tab", "다음 구역"), ("i", "입력"), ("a", "분석"), ("q", "종료")]
             if permission:
                 keys = [("y", "허용"), ("n", "거절")] + keys
             elif question:
@@ -278,6 +289,9 @@ class ControlApp(App):
         self.keybar.update(out)
 
     def on_mount(self) -> None:
+        self._started_at = time.time()
+        self._blurred_at = None
+        self._write_control()
         self.theme_changed_signal.subscribe(self, self._on_theme_changed)
         self.refresh_keybar()
         self.refresh_sessions()
@@ -285,8 +299,103 @@ class ControlApp(App):
         self.session_list.focus()
 
     def on_unmount(self) -> None:
+        self._remove_control()
         if self.analyzer is not None:
             self.analyzer.shutdown()  # 기다리던 분석은 버리고 바로 끝낸다 (요청 25~29, BUILD_PLAN §4.1)
+
+    # ---------- 관제로 돌아오기 (요구 이력 56, BUILD_PLAN §4.8) ----------
+
+    def _control_path(self) -> Path:
+        return (self.home or store.base_dir()) / CONTROL_FILE
+
+    def _write_control(self) -> None:
+        """mod의 관제로 버튼이 이 패널을 찾도록 자기 iTerm 패널과 pid를 남긴다. 다른 관제가 살아 있으면 두지 않는다."""
+        sid = os.environ.get("ITERM_SESSION_ID", "")
+        if not sid:
+            return
+        path = self._control_path()
+        try:
+            old = json.loads(path.read_text(encoding="utf-8"))
+            if old.get("pid") != os.getpid() and _pid_alive(old.get("pid")):
+                return
+        except (OSError, ValueError):
+            pass
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps({"iterm_session_id": panels.panel_id_of(sid), "pid": os.getpid(),
+                                        "at": time.time()}) + "\n", encoding="utf-8")
+        except OSError:
+            pass
+
+    def _remove_control(self) -> None:
+        path = self._control_path()
+        try:
+            if json.loads(path.read_text(encoding="utf-8")).get("pid") == os.getpid():
+                path.unlink()
+        except (OSError, ValueError):
+            pass
+
+    def on_app_blur(self, event) -> None:
+        self._blurred_at = time.time()
+
+    def on_app_focus(self, event) -> None:
+        since, self._blurred_at = getattr(self, "_blurred_at", None), None
+        if since is None:   # 떠난 기록이 없으면 돌아옴으로 보지 않는다 (SCREEN §8: 첫 focus가 오지 않은 경우)
+            return
+        self._return_to(since)
+
+    def _take_goto(self, since: float) -> str:
+        """mod 관제로 버튼이 남긴 요청. 읽으면 지운다. 관제가 켜지기 전·오래된 것은 버린다."""
+        path = (self.home or store.base_dir()) / GOTO_FILE
+        try:
+            req = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return ""
+        try:
+            path.unlink()
+        except OSError:
+            pass
+        at = float(req.get("at") or 0)
+        started = getattr(self, "_started_at", 0.0)
+        if at < max(since - 2, started) or time.time() - at > GOTO_MAX_AGE:
+            return ""
+        return str(req.get("session") or "")
+
+    def _recent_prompt(self, since: float) -> str:
+        """자리를 비운 사이 사용자가 세션에 직접 입력한 것 중 가장 최근. 관제가 보낸 글은 뺀다."""
+        best, best_at = "", since
+        for v in self.session_list.views:
+            at = transcript._ts_value(v.prompt_ts) if v.prompt_ts else 0.0
+            if at <= best_at:
+                continue
+            sent = self._last_sent.get(v.session_id)
+            if sent and abs(transcript._ts_value(sent) - at) <= SENT_MARGIN:
+                continue
+            best, best_at = v.session_id, at
+        return best
+
+    def _return_to(self, since: float) -> None:
+        target, why = self._take_goto(since), "mod에서 관제로"
+        if not target:
+            self.refresh_sessions()   # 그 사이 입력 기록을 읽는다
+            target, why = self._recent_prompt(since), "방금 입력한 세션"
+        self._select_returned(target, why)
+
+    def _select_returned(self, target: str, why: str) -> None:
+        current = self.session_list.selected()
+        view = next((v for v in self.session_list.views if v.session_id == target), None)
+        if view is None or (current is not None and current.session_id == target):
+            return
+        picking = (current is not None and current.state == "question"
+                   and self.question_picker.answers and not self.question_picker.sent)
+        if self.input_box.text.strip() or picking:
+            # 쓰던 글이 다른 세션으로 가지 않게 고른 세션은 그대로 둔다
+            self._say(f"{view.title} 세션에서 돌아옴 · 쓰던 글이 있어 고른 세션을 그대로 둠", f"{C.warn}")
+            return
+        self.session_list.selected_id = target
+        self.session_list.acknowledged.add(target)
+        self.refresh_sessions()
+        self._say(f"{view.title} 세션을 골랐습니다 · {why}", f"{C.info}")
 
     # ---------- 세션 목록 ----------
 
@@ -342,6 +451,11 @@ class ControlApp(App):
         worker_mod.write_glossary(session_dir, v.transcript_path, v.cwd)   # 분석기도 같은 함수로 쓴다 (관제가 꺼져 있을 때)
 
     def refresh_sessions(self) -> None:
+        if getattr(self, "_blurred_at", 1) is None and ((self.home or store.base_dir()) / GOTO_FILE).exists():
+            # 관제가 이미 앞에 있을 때 mod 버튼이 누른 것 (focus 알림이 오지 않음)
+            target = self._take_goto(time.time() - GOTO_MAX_AGE)
+            if target:
+                self.call_later(self._select_returned, target, "mod에서 관제로")
         views = store.load_sessions(self.home)
         linked = {panels.panel_id_of(v.iterm_session_id) for v in views if v.iterm_session_id}
         views = views + self._pending_views(linked)
@@ -350,6 +464,9 @@ class ControlApp(App):
         self._check_alive()
         self.closed.mark(views)
         views = lifecycle.arrange(views, selected_id=current.session_id if current else "")
+        views = lifecycle.group_views(views)   # 프로젝트 폴더별로 (요구 이력 59)
+        for v in views:
+            v.name = transcript.session_title(v.transcript_path)
         selected_id = current.session_id if current else (views[0].session_id if views else "")
         if self.analyzer is not None:
             self.analyzer.prioritize(selected_id)
@@ -432,7 +549,7 @@ class ControlApp(App):
     # 한글 입력기가 켜져 있으면 단축키 글자가 한글 자모로 들어온다 (두벌식). 입력줄 밖에서는 같은 키로 받는다.
     # 2026-11-10 Liner 검토(review/out-keys): q·y·n 등이 ㅂ·ㅛ·ㅜ로 와서 듣지 않는다.
     JAMO_KEYS = {"ㅂ": "q", "ㅑ": "i", "ㅛ": "y", "ㅜ": "n", "ㅁ": "a", "ㄱ": "r", "ㅔ": "p",
-                 "ㅐ": "o", "ㅇ": "d", "ㄴ": "s", "ㅊ": "c", "ㅎ": "g"}
+                 "ㅐ": "o", "ㅇ": "d", "ㄴ": "s", "ㅊ": "c", "ㅎ": "g", "ㅏ": "k"}
 
     def on_key(self, event) -> None:
         key = self.JAMO_KEYS.get(event.character or "")
@@ -454,10 +571,37 @@ class ControlApp(App):
         elif self.focused is self.conversation:
             {"o": self.conversation.action_raw, "d": self.conversation.action_detail,
              "s": self.conversation.action_summary_view, "c": self.conversation.action_checklist,
-             "g": self.conversation.action_flow_all}[key]()
+             "g": self.conversation.action_flow_all, "k": self.conversation.action_ask_all}[key]()
 
     def action_jump_panel(self) -> None:
-        self._say("패널로 이동(p)은 아직 만들지 않았습니다 (SCREEN §3).", f"{C.warn}")
+        """p: 고른 세션의 iTerm 패널을 앞으로 (요구 이력 56, SCREEN §3). 그 세션 옆에 mod 패널이 있다."""
+        view = self.session_list.selected()
+        if view is None:
+            return
+        focus = getattr(self.terminal, "focus", None)
+        if focus is None:
+            self._say("이 터미널에서는 패널로 옮겨 갈 수 없습니다.", f"{C.warn}")
+            return
+        if not view.iterm_session_id:
+            self._say("이 세션은 iTerm 패널과 짝이 없어 옮겨 갈 수 없습니다.", f"{C.warn}")
+            return
+        try:
+            alive = panels.panel_id_of(view.iterm_session_id) in self.panel_checker()
+        except Exception:
+            alive = True   # 확인하지 못하면 옮겨 가 본다 (보내기와 달리 글이 셸로 가지 않는다)
+        if not alive:
+            self._say("그 패널에 Claude가 떠 있지 않습니다. 패널이 닫혔는지 보세요.", f"{C.err}")
+            return
+        panel, title = panels.panel_id_of(view.iterm_session_id), view.title
+        self.run_worker(lambda: self._focus_panel(focus, panel, title), thread=True, exclusive=True, group="focus")
+
+    def _focus_panel(self, focus, panel: str, title: str) -> None:
+        try:
+            focus(panel)
+        except TerminalError as e:
+            self.call_from_thread(self._say, f"패널로 옮기지 못했습니다: {e}", f"{C.err}")
+            return
+        self.call_from_thread(self._say, f"{title} 패널로 옮겼습니다 · 돌아오려면 ⌘숫자 또는 mod의 관제로", f"{C.info}")
 
     def action_conv_page(self, delta: int) -> None:
         self.conversation.action_page(delta)
@@ -792,3 +936,11 @@ class ControlApp(App):
             self._say(f"허락 응답을 보내지 못했습니다: {e}", f"{C.err}")
             return
         self._say(f"허락 응답 {key}을 보냈습니다.", f"{C.ok}")
+
+
+def _pid_alive(pid) -> bool:
+    try:
+        os.kill(int(pid), 0)
+    except (OSError, ValueError, TypeError):
+        return False
+    return True
