@@ -6,12 +6,35 @@ the next instruction from where you are. It comes in two parts: a Claude Code pl
 records your sessions, analyzes them in the background and adds a side panel inside each
 session, and the control screen (the `nunchi` command), which `install.sh` installs.
 
-You need macOS, iTerm2 and git. The plugin's hooks run with the `python3` on your PATH
-(3.9 or later; the one that ships with macOS works). The control screen needs Python 3.11
-or later. The analysis features (goals, dropped requests, summaries) use the `claude`
-command on your PATH.
-
 한국어 안내: [docs/ko/GUIDE.md](ko/GUIDE.md)
+
+## What it needs
+
+Tested on macOS only. The two parts need different things.
+
+**The plugin** runs outside Claude Code's own runtime, so it relies on these commands
+being on the PATH of the shell you start Claude Code from:
+
+- `python3`, 3.9 or later. The hooks and the analyzer use only the standard library, so
+  nothing is installed with pip. The `python3` that comes with the Xcode Command Line
+  Tools works; you already have it if `git` works, because git on macOS comes from the
+  same package. If `python3` is missing, the hooks fail and sessions are not recorded,
+  but Claude Code keeps working.
+- `claude`, for analysis. The analyzer calls `claude -p` once per new turn on your
+  account's quota (see "Reducing analysis cost"). Without it, sessions are still
+  recorded but goals, dropped requests and summaries stay empty.
+- `git` and access to the repository, to add the marketplace.
+
+The hooks and the analyzer use POSIX file locks and detached processes, so they do not
+run on Windows.
+
+**The control screen** (`install.sh`) needs:
+
+- Python 3.11 or later. `install.sh` creates `.venv` in the repository and installs
+  `textual` into it with pip, which needs network access once.
+- iTerm2. Sending text to a pane goes through AppleScript (`osascript`), so macOS asks
+  once for permission to control iTerm2.
+- `git`, to download and update the source.
 
 ## Install
 

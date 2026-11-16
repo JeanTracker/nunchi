@@ -11,7 +11,8 @@ the next instruction without leaving the screen.
 
 ## Install
 
-macOS, iTerm2 and git are required.
+macOS, iTerm2 and git are required. The plugin's hooks use the `python3` that comes with
+the Xcode Command Line Tools (3.9+, standard library only); analysis uses the `claude` command.
 
 nunchi has two parts. The Claude Code plugin records your sessions, analyzes them in the
 background and adds a side panel inside each session. Install it first, from inside
