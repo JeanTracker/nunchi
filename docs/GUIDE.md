@@ -18,8 +18,12 @@ being on the PATH of the shell you start Claude Code from:
 - `python3`, 3.9 or later. The hooks and the analyzer use only the standard library, so
   nothing is installed with pip. The `python3` that comes with the Xcode Command Line
   Tools works; you already have it if `git` works, because git on macOS comes from the
-  same package. If `python3` is missing, the hooks fail and sessions are not recorded,
-  but Claude Code keeps working.
+  same package. If no `python3` 3.9 or later is found, Claude Code keeps working but
+  nothing is recorded. The first line of each session then says so and gives the
+  install command, and the agent offers to help install it in its first reply (it does
+  not install anything without your agreement). After installing, restart the session.
+  The check happens when a session starts; Claude Code has no way to run plugin code
+  at install time.
 - `claude`, for analysis. The analyzer calls `claude -p` once per new turn on your
   account's quota (see "Reducing analysis cost"). Without it, sessions are still
   recorded but goals, dropped requests and summaries stay empty.

@@ -72,5 +72,5 @@ def test_plugin_hooks_cover_every_event_once_and_point_at_files_that_exist():
     assert [(ROOT / "hooks" / m).resolve().is_file() for m in hooks["modules"]] == [True]
     assert sorted(hooks["hooks"]) == sorted(install_hooks.EVENTS)
     for groups in hooks["hooks"].values():
-        assert [h["command"] for g in groups for h in g["hooks"]] == ['python3 "${CLAUDE_PLUGIN_ROOT}/hooks/emit.py"']
+        assert [h["command"] for g in groups for h in g["hooks"]] == ['sh "${CLAUDE_PLUGIN_ROOT}/hooks/emit.sh"']
     assert [(p["name"], p["source"]) for p in market["plugins"]] == [(plugin["name"], "./")]

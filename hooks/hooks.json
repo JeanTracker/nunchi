@@ -8,7 +8,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/emit.py\""
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/emit.sh\""
           }
         ]
       }
@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/emit.py\""
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/emit.sh\""
           }
         ]
       }
@@ -28,7 +28,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/emit.py\""
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/emit.sh\""
           }
         ]
       }
@@ -38,7 +38,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/emit.py\""
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/emit.sh\""
           }
         ]
       }
@@ -48,7 +48,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/emit.py\""
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/emit.sh\""
           }
         ]
       }
@@ -58,7 +58,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/emit.py\""
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/emit.sh\""
           }
         ]
       }
@@ -68,7 +68,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/emit.py\""
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/emit.sh\""
           }
         ]
       }
@@ -78,7 +78,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/emit.py\""
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/emit.sh\""
           }
         ]
       }
@@ -88,7 +88,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/emit.py\""
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/emit.sh\""
           }
         ]
       }
@@ -98,7 +98,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/emit.py\""
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/emit.sh\""
           }
         ]
       }
