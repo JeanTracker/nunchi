@@ -1,0 +1,6 @@
+{
+  "name": "nunchi",
+  "version": "0.1.0",
+  "description": "눈치: 세션 옆 패널에 목표 흐름, 대화 정리, 남은 요청을 보여 준다 (관제 분석 결과를 읽기만 함, R17)",
+  "types": "./types/index.d.ts"
+}

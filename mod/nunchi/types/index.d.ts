@@ -1,0 +1,34 @@
+// 눈치 mod가 세션 동안 들고 있는 값 (REQUIREMENTS R17, SCREEN §11, 요구 이력 45)
+export type Ask = { n: number; summary: string; turn: number; quote: string; partial: boolean; stale: boolean }
+
+export type Term = { id: string; means: string[] }   // 번호 풀이 (요구 이력 51)
+
+export type Left = { mark: string; summary: string; note: string; turn: number }
+
+export type View = {
+  basis: number          // 어느 턴까지 분석했나
+  total: number          // 요청 기준 마지막 턴 (흐름을 다시 만드는 중인지 알 때)
+  latest: number         // 상태 파일이 알려 준 지금 도는 턴 (분석 중일 때)
+  state: string          // idle · queued · running · none
+  asks: Ask[]            // 에이전트가 묻는 것 (열린 것, 최근 물은 것부터)
+  askCount: number
+  blanketClosed: number  // 통째 승인으로 닫힌 것 수
+  goal: string           // 지금 목표
+  goalTurn: number
+  decisions: string[]    // 정한 것 (결정 턴 이름, 최근 3개)
+  recent: string         // 방금 한 일 (마지막 턴의 에이전트 요약)
+  left: Left[]           // 내 요청 중 남은 것
+  leftCount: number
+  ratio: number          // 옆 패널 폭 비율 (관제 설정 mod_width_ratio)
+  terms: Term[]          // 마지막 응답에 나온 기획 번호와 문서 원문 뜻
+  termsMore: number
+  tick: number           // '분석 중...' 점을 바꾸려고 1초마다 올린다
+  on: boolean            // 이 세션에서 /nunchi로 눈치를 켰는지 (세션 폴더의 want, 요구 이력 53)
+  error: string          // 분석 실패 이유 한 줄
+}
+
+declare module 'claude-code' {
+  interface PluginState {
+    nunchi: { view: Shaped<View> }
+  }
+}
