@@ -10,6 +10,8 @@
 - claude -p는 도구를 모두 끈다 (--tools ""). 모델은 설정 파일로 정할 수 있다.
 """
 
+from __future__ import annotations
+
 import json
 import os
 import subprocess

@@ -5,8 +5,6 @@
 같은 값으로 Textual 테마도 만든다. 테두리·바탕처럼 CSS가 그리는 곳은 그쪽 변수를 쓴다.
 """
 
-from textual.theme import Theme
-
 # 역할: pane.1~3 구역 색, idle 지금 구역이 아닌 테두리, text/muted/subtle/faint 글자 흐림 4단계,
 # ok/warn/err/info 상태, bg 바탕, bar 머리·맨 아래 줄 바탕, sel 고른 줄 바탕.
 # 값은 디자인 캔버스 '관제 TUI 디자인 시스템과 테마'의 시안과 같다. 호박·인광·모래는 넣지 않는다 (요청 36).
@@ -90,6 +88,7 @@ def plain_name(textual: str) -> str:
 
 def textual_themes() -> list:
     """Textual에 등록할 테마. CSS가 그리는 테두리·바탕·명령 팔레트가 같은 값을 쓴다."""
+    from textual.theme import Theme  # 분석기·훅은 textual 없이 이 파일을 읽는다 (설정의 테마 이름 확인)
     out = []
     for name, t in THEMES.items():
         out.append(Theme(
