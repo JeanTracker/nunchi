@@ -138,6 +138,17 @@ def test_apply_makes_backup(tmp_path):
     assert backups[0].read_text(encoding="utf-8") == '{"model": "x"}'
 
 
+def test_backups_in_the_same_second_keep_the_first(tmp_path):
+    s = tmp_path / "settings.json"
+    s.write_text('{"model": "x"}', encoding="utf-8")
+    run(INSTALL, args=["--settings", str(s), "--apply"])
+    run(INSTALL, args=["--settings", str(s), "--remove", "--apply"])
+    run(INSTALL, args=["--settings", str(s), "--apply"])
+    texts = sorted(b.read_text(encoding="utf-8") for b in tmp_path.glob("settings.json.bak-*"))
+    assert len(texts) == 3
+    assert '{"model": "x"}' in texts
+
+
 def test_remove_restores_original_settings(tmp_path):
     original = {"model": "x",
                 "statusLine": {"type": "command", "command": "bash ~/my status.sh", "padding": 0},

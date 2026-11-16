@@ -218,7 +218,10 @@ def main() -> int:
         print("\n미리보기입니다. 아무것도 바꾸지 않았습니다. 적용하려면 --apply 를 주세요.")
         return 0
 
-    backup = path.with_name(f"{path.name}.bak-{datetime.now():%Y%m%d-%H%M%S}")
+    stamp = f"{path.name}.bak-{datetime.now():%Y%m%d-%H%M%S}"
+    backup, n = path.with_name(stamp), 1
+    while backup.exists():   # 같은 초에 두 번 바꾸면 앞 백업(원본)을 덮어쓰지 않는다
+        backup, n = path.with_name(f"{stamp}-{n}"), n + 1
     if path.exists():
         shutil.copy2(path, backup)
         print(f"백업: {backup}")
