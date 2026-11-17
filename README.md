@@ -3,8 +3,9 @@
 **Read the room in your Claude Code session.**
 
 nunchi adds a side panel to a Claude Code session. When you come back to a session, it
-shows what you need first: what the agent is asking you, how the conversation got here,
-and which of your requests are still open.
+shows where things stand: the current goal and how the conversation got there, the
+decisions you made, what the agent is asking you, and which of your requests are still
+open.
 
 > *Nunchi (눈치)* is the Korean art of quickly reading a situation and acting on it.
 

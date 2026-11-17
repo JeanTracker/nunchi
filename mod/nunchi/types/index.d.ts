@@ -10,16 +10,17 @@ export type View = {
   total: number          // 요청 기준 마지막 턴 (흐름을 다시 만드는 중인지 알 때)
   latest: number         // 상태 파일이 알려 준 지금 도는 턴 (분석 중일 때)
   state: string          // idle · queued · running · none
-  asks: Ask[]            // 에이전트가 묻는 것 (열린 것, 최근 물은 것부터)
+  asks: Ask[]            // 에이전트 질문 (열린 것, 최근 물은 것부터)
   askCount: number
   blanketClosed: number  // 통째 승인으로 닫힌 것 수
   digest: string         // 처음부터 이 턴까지 흐름 한 덩어리 정리 (분석기 추정, 요구 이력 57)
   digestTurn: number     // 그 정리가 어느 턴까지인지
   goal: string           // 지금 목표
   goalTurn: number
-  decisions: string[]    // 정한 것 (결정 턴 이름, 최근 3개)
+  decisions: { text: string; turn: number }[]   // 의사결정 (결정 턴 이름과 그 턴, 최근 3개, 요구 이력 71)
+  decisionCount: number  // 의사결정 전체 수
   recent: string         // 방금 한 일 (마지막 턴의 에이전트 요약)
-  left: Left[]           // 내 요청 중 남은 것
+  left: Left[]           // 남은 요청 (내 요청 중 남은 것)
   leftCount: number
   ratio: number          // 옆 패널 폭 비율 (관제 설정 mod_width_ratio)
   terms: Term[]          // 마지막 응답에 나온 기획 번호와 문서 원문 뜻

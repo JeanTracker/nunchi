@@ -11,7 +11,7 @@ import type { View, Left } from '../types'
 const PANE = 'nunchi'
 const EMPTY: View = {
   basis: 0, total: 0, latest: 0, state: 'none', asks: [], askCount: 0, blanketClosed: 0,
-  digest: '', digestTurn: 0, goal: '', goalTurn: 0, decisions: [], recent: '', left: [], leftCount: 0, ratio: 0.4, tick: 0,
+  digest: '', digestTurn: 0, goal: '', goalTurn: 0, decisions: [], decisionCount: 0, recent: '', left: [], leftCount: 0, ratio: 0.4, tick: 0,
   terms: [], termsMore: 0, on: false, error: '', control: false, behind: 0,
 }
 const view = atom({ plugin: 'nunchi', key: 'view' } as const, EMPTY, { shape: 'view-8' })
@@ -108,8 +108,9 @@ export function buildView(analysis: any, status: any, tick: number, ratio: numbe
     else if (r.state === 'in_progress') left.push({ mark: '◐', summary: one(r.summary), note: '진행 중', turn: r.by_turn ?? r.from_turn ?? 0 })   // 요구 이력 66
   }
   // 도구 실패(△)는 보이지 않는다: 도구 사용은 모으지도 보이지도 않는다 (요구 이력 48)
-  const decisions = steps.filter((s: any) => s.label === '확정').slice(-SHOWN)
-    .map((s: any) => one(s.title || s.decision || s.summary, 80))
+  // 의사결정 (요구 이력 71): 관계가 확정인 턴. 분석기의 요약이라 원문 대조가 없으므로 정한 턴을 함께 보인다
+  const decided = steps.filter((s: any) => s.label === '확정')
+  const decisions = decided.slice(-SHOWN).map((s: any) => ({ text: one(s.title || s.decision || s.summary, 80), turn: s.index ?? 0 }))
   const last = steps.length ? steps[steps.length - 1] : null
   // 처음부터 이 턴까지 한 덩어리 정리: 분석기가 턴마다 써 둔 digest 중 마지막 것 (요구 이력 57, 추정)
   const digested = (flow.steps ?? []).filter((s: any) => s.digest).pop()
@@ -126,6 +127,7 @@ export function buildView(analysis: any, status: any, tick: number, ratio: numbe
     goal: one(flow.current_goal?.text ?? analysis.current_goal ?? ''),
     goalTurn: flow.current_goal?.turn ?? 0,
     decisions,
+    decisionCount: decided.length,
     recent: one(last?.agent_summary ?? '', 240),
     left: left.slice(0, SHOWN),
     leftCount: left.length,
@@ -359,7 +361,20 @@ export const register: Register = on => {
             : !v.on ? <Text color="yellow">  자동 분석 꺼짐 · /nunchi로 켜기</Text> : null}
         </Text>
         <Text> </Text>
-        <Text><Text bold>에이전트가 묻는 것 </Text><Text color={v.askCount ? 'yellow' : 'green'}>{v.askCount ? String(v.askCount) : '없음'}</Text></Text>
+        {/* 차례 (요구 이력 71): 목표 → 의사결정 → 에이전트 질문 → 남은 요청 */}
+        <Text><Text bold>목표</Text><Text dimColor>{v.goalTurn ? `  #${v.goalTurn}부터` : ''}</Text></Text>
+        {wrapParts(v.goal, cols - 4, 3).map(line => <Text>   {ln(line)}</Text>)}
+        {v.digest ? <Text dimColor> 흐름  #1–#{v.digestTurn}</Text> : null}
+        {v.digest ? wrapParts(v.digest, cols - 4, 3).map(line => <Text dimColor>   {ln(line)}</Text>) : null}
+        {v.recent ? <Text dimColor> 방금</Text> : null}
+        {v.recent ? wrapParts(v.recent, cols - 4, 3).map(line => <Text dimColor>   {ln(line)}</Text>) : null}
+        {v.decisions.length ? <Text> </Text> : null}
+        {v.decisions.length ? <Text><Text bold>의사결정 </Text><Text color="green">{String(v.decisionCount)}</Text></Text> : null}
+        {v.decisions.map(d => wrapParts('✔ ' + d.text, cols - 12, 2).map((line, k, all) =>
+          <Text>   {k ? '  ' : ''}{ln(line)}{k === all.length - 1 && d.turn ? <Text dimColor>  #{d.turn}</Text> : null}</Text>))}
+        {v.decisionCount > v.decisions.length ? <Text dimColor>   … {v.decisionCount - v.decisions.length}개 더</Text> : null}
+        <Text> </Text>
+        <Text><Text bold>에이전트 질문 </Text><Text color={v.askCount ? 'yellow' : 'green'}>{v.askCount ? String(v.askCount) : '없음'}</Text></Text>
         {v.asks.map(a => (
           <Box flexDirection="column">
             <Text><Text color="yellow" bold> {a.n} </Text>{ln(cutParts(a.summary, cols - 12))}<Text dimColor> #{a.turn}{a.stale ? '부터 답 없음' : ''}{a.partial ? ' · 일부 답함' : ''}</Text></Text>
@@ -369,17 +384,7 @@ export const register: Register = on => {
         {v.askCount > v.asks.length ? <Text dimColor>   … {v.askCount - v.asks.length}개 더</Text> : null}
         {v.blanketClosed ? <Text dimColor>   통째 승인으로 닫은 것 {v.blanketClosed}</Text> : null}
         <Text> </Text>
-        <Text bold>지금까지</Text>
-        {v.digest ? <Text dimColor> 흐름  #1–#{v.digestTurn}</Text> : null}
-        {v.digest ? wrapParts(v.digest, cols - 4, 3).map(line => <Text dimColor>   {ln(line)}</Text>) : null}
-        <Text><Text dimColor>{v.digest ? ' 지금 목표' : ' 목표'}</Text><Text dimColor>{v.goalTurn ? `  #${v.goalTurn}부터` : ''}</Text></Text>
-        {wrapParts(v.goal, cols - 4, 3).map(line => <Text>   {ln(line)}</Text>)}
-        {v.decisions.length ? <Text dimColor> 정한 것</Text> : null}
-        {v.decisions.map(d => wrapParts('✔ ' + d, cols - 9, 2).map((line, k) => <Text>   {k ? '  ' : ''}{ln(line)}</Text>))}
-        {v.recent ? <Text dimColor> 방금</Text> : null}
-        {v.recent ? wrapParts(v.recent, cols - 4, 3).map(line => <Text>   {ln(line)}</Text>) : null}
-        <Text> </Text>
-        <Text><Text bold>남은 것 </Text><Text color={v.leftCount ? 'yellow' : 'green'}>{v.leftCount ? String(v.leftCount) : '없음'}</Text><Text dimColor> 내 요청 중</Text></Text>
+        <Text><Text bold>남은 요청 </Text><Text color={v.leftCount ? 'yellow' : 'green'}>{v.leftCount ? String(v.leftCount) : '없음'}</Text><Text dimColor> 내 요청 중</Text></Text>
         {v.left.map(x => (
           <Text><Text color="yellow"> {x.mark} </Text>{ln(cutParts(x.summary + (x.note ? ' — ' + x.note : ''), cols - 8))}<Text dimColor> #{x.turn}</Text></Text>
         ))}
@@ -418,8 +423,8 @@ export const register: Register = on => {
       <Text>
         <Text bold>눈치 </Text>
         <Text>목표: {cut(v.goal, Math.max(10, (e.props.bodyColumns ?? 80) - 52))}</Text>
-        <Text color={v.askCount ? 'yellow' : 'green'}> · 묻는 것 {v.askCount}</Text>
-        <Text color={v.leftCount ? 'yellow' : 'green'}> · 남은 것 {v.leftCount}</Text>
+        <Text color={v.askCount ? 'yellow' : 'green'}> · 질문 {v.askCount}</Text>
+        <Text color={v.leftCount ? 'yellow' : 'green'}> · 요청 {v.leftCount}</Text>
         {busy ? <Text color="yellow"> · {dots(v.tick, v.state)}</Text> : <Text dimColor> · #{v.basis} 기준</Text>}
         {!busy && !v.on ? <Text color="yellow"> · 분석 꺼짐</Text> : null}
       </Text>

@@ -56,11 +56,24 @@ function engine(on: any, status: unknown, want = false, analysis: unknown = ANAL
   })
 }
 
-test('the pane shows what the agent asks first, then so far, then what is left', async ($, on) => {
+test('the sections come in the order goal, decisions, questions, requests (요구 이력 71)', async ($, on) => {
   engine(on, { state: 'idle', turn: 0 })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect((await ui.find({ type: 'Text', text: /에이전트가 묻는 것 2/ }))).toBeTruthy()
+  const heads = (await ui.findAll({ type: 'Text', text: /^(목표|의사결정|에이전트 질문|남은 요청)(\s|$)/ }))
+    .map(t => String(t.text).split(/\s/)[0] === '에이전트' ? '에이전트 질문' : String(t.text).split(/\s/)[0] === '남은' ? '남은 요청' : String(t.text).split(/\s/)[0])
+  expect(heads.filter((h, k) => heads.indexOf(h) === k)).toEqual(['목표', '의사결정', '에이전트 질문', '남은 요청'])
+  for (const old of [/에이전트가 묻는 것/, /^지금까지/, /정한 것/, /^남은 것/]) {
+    expect((await ui.find({ type: 'Text', text: old }))).toBeFalsy()
+  }
+  await ui.unmount()
+})
+
+test('the pane shows the goal, decisions, the agent\'s questions and open requests (요구 이력 71)', async ($, on) => {
+  engine(on, { state: 'idle', turn: 0 })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /에이전트 질문 2/ }))).toBeTruthy()
   expect((await ui.find({ type: 'Text', text: /1 폭 정하기 #3 · 일부 답함/ }))).toBeTruthy()      // 최근에 물은 것부터
   expect((await ui.find({ type: 'Text', text: /2 색 고르기 #1부터 답 없음/ }))).toBeTruthy()
   expect((await ui.find({ type: 'Text', text: /“폭은 몇 칸으로 할지 알려 주세요”/ }))).toBeTruthy()
@@ -68,9 +81,10 @@ test('the pane shows what the agent asks first, then so far, then what is left',
   expect((await ui.find({ type: 'Text', text: /흐름\s+#1–#3/ }))).toBeTruthy()             // 처음부터 한 덩어리 정리 (요구 이력 57)
   expect((await ui.find({ type: 'Text', text: /^\s+설치 절을 정한 뒤 CHANGELOG를 요청함$/ }))).toBeTruthy()
   expect((await ui.find({ type: 'Text', text: /README 설치 절을 요청함/ }))).toBeFalsy()   // 마지막 정리 하나만
-  expect((await ui.find({ type: 'Text', text: /지금 목표\s+#3부터/ }))).toBeTruthy()       // 이름 줄
+  expect((await ui.find({ type: 'Text', text: /^목표\s+#3부터$/ }))).toBeTruthy()            // 덩어리 이름 줄 (요구 이력 71)
   expect((await ui.find({ type: 'Text', text: /^\s+CHANGELOG 만들기$/ }))).toBeTruthy()      // 다음 줄에 들여 쓴 내용
-  expect((await ui.find({ type: 'Text', text: /✔ 설치 절 확정/ }))).toBeTruthy()
+  expect((await ui.find({ type: 'Text', text: /^의사결정 1$/ }))).toBeTruthy()
+  expect((await ui.find({ type: 'Text', text: /✔ 설치 절 확정\s+#2/ }))).toBeTruthy()       // 정한 턴을 붙인다
   expect((await ui.find({ type: 'Text', text: /CHANGELOG를 만들고 폭을 물음/ }))).toBeTruthy()
   expect((await ui.find({ type: 'Text', text: /테스트 돌리기 — 못 했거나 미룸/ }))).toBeTruthy()
   expect((await ui.find({ type: 'Text', text: /도구 실패/ }))).toBeFalsy()          // 도구 실패는 보이지 않는다 (요구 이력 48)
@@ -84,7 +98,7 @@ test('a session with only its first turn analyzed shows the goal without a flow 
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect((await ui.find({ type: 'Text', text: /흐름\s+#1/ }))).toBeFalsy()
-  expect((await ui.find({ type: 'Text', text: /^ 목표/ }))).toBeTruthy()
+  expect((await ui.find({ type: 'Text', text: /^목표/ }))).toBeTruthy()   // 목표가 덩어리 머리 줄이 됨 (요구 이력 71)
   await ui.unmount()
 })
 
@@ -290,7 +304,7 @@ test('more than three remaining requests end with how many more (요구 이력 6
   engine(on, { state: 'idle', turn: 0 }, false, many)
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect((await ui.find({ type: 'Text', text: /남은 것 4/ }))).toBeTruthy()
+  expect((await ui.find({ type: 'Text', text: /남은 요청 4/ }))).toBeTruthy()
   expect((await ui.find({ type: 'Text', text: /남은 일 4/ }))).toBeFalsy()
   expect((await ui.find({ type: 'Text', text: /… 1개 더$/ }))).toBeTruthy()   // 관제 c는 뺐다 (요구 이력 70)
   await ui.unmount()
@@ -328,7 +342,7 @@ test('a request still in progress stays in what is left with a half mark (요구
   engine(on, { state: 'idle', turn: 0 }, false, prog)
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect((await ui.find({ type: 'Text', text: /남은 것 1/ }))).toBeTruthy()
+  expect((await ui.find({ type: 'Text', text: /남은 요청 1/ }))).toBeTruthy()
   expect((await ui.find({ type: 'Text', text: /◐ 약관 취소 버튼 — 진행 중 #4/ }))).toBeTruthy()
   await ui.unmount()
 })

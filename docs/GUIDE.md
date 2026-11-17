@@ -1,9 +1,9 @@
 # nunchi guide
 
 nunchi is a Claude Code plugin that adds a side panel to a session. When you come back to
-a session after a while, the panel shows what you need first: what the agent is asking
-you, how the conversation got here, and which of your requests are still open. You read
-that, answer, and carry on.
+a session after a while, the panel shows where things stand: the current goal and how
+the conversation got there, the decisions you made, what the agent is asking you, and
+which of your requests are still open. You read that, answer, and carry on.
 
 The panel only reads analysis results. A small engine that ships with the plugin records
 each session's events through Claude Code hooks and, when a response ends, analyzes the
@@ -70,8 +70,8 @@ again (`/nunchi off`) is not built yet.
 
 The panel opens on the right when the window is 110 columns or wider and takes 40% of
 the window. In a narrower window a single line appears above the input box instead:
-`눈치 목표: … · 묻는 것 n · 남은 것 n · #n 기준` (goal, open questions, open requests,
-analysis basis). Labels are in Korean; the translations below follow the screen from top
+`눈치 목표: … · 질문 n · 요청 n · #n 기준` (goal, the agent's open questions, your open
+requests, analysis basis). Labels are in Korean; the translations below follow the screen from top
 to bottom.
 
 **Header.** `눈치 · #12 기준` means the results are based on turn 12. Next to it you may
@@ -87,22 +87,26 @@ see:
 Before the first result the panel shows `눈치 켜짐 · 다음 응답이 끝나면 분석합니다`
 (on; analysis starts when the next response ends).
 
-**에이전트가 묻는 것 (what the agent is asking).** Decisions, confirmations or
-information the agent is waiting on, newest first. Each item has a number, a one-line
-summary, the turn it was asked in, and the agent's own words in quotes. `#5부터 답 없음`
-means it has gone unanswered since turn 5; `일부 답함` means partly answered. An item
-closes when one of your messages answers it. Items closed by a blanket approval such as
-"go ahead as you suggest" are counted separately (`통째 승인으로 닫은 것`).
+**목표 (goal).** What the conversation is working on now, and from which turn
+(`#10부터`). Two dimmed lines follow, because they are the analyzer's estimate:
 
-**지금까지 (so far).**
-
-- `흐름` (flow): one paragraph on how the conversation has gone from the start. It is the
-  analyzer's estimate, so it is dimmed.
-- `지금 목표` (current goal): what the conversation is working on now, and from which turn.
-- `정한 것` (decided): decisions you made, marked ✔.
+- `흐름` (flow): one paragraph on how the conversation has gone from the start.
 - `방금` (just now): the agent's summary of the last turn.
 
-**남은 것 (still open).** Your requests that are not done yet: ○ not handled, ◐ in
+**의사결정 (decisions).** Decisions you made, marked ✔, with the turn each was made in
+(the last three; `… n개 더` when there are more). The wording is the analyzer's summary,
+so the turn number lets you check it in the conversation. The section is left out when
+there are none.
+
+**에이전트 질문 (the agent's questions).** Decisions, confirmations or information the
+agent is waiting on, newest first. Each item has a number, a one-line summary, the turn it
+was asked in, and the agent's own words in quotes. `#5부터 답 없음` means it has gone
+unanswered since turn 5; `일부 답함` means partly answered. An item closes when one of
+your messages answers it. Items closed by a blanket approval such as "go ahead as you
+suggest" are counted separately (`통째 승인으로 닫은 것`). In a short panel this section
+may sit below the visible area; scroll the panel to reach it.
+
+**남은 요청 (open requests).** Your requests that are not done yet: ○ not handled, ◐ in
 progress (for example a merge request waiting for review), ⊘ the agent could not do it or
 deferred it. Each shows the turn it came from.
 
