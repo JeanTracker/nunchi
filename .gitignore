@@ -20,3 +20,6 @@ review/
 docs/BUILD_PLAN.md
 docs/REQUIREMENTS.md
 docs/SCREEN.md
+
+# Rust build output
+/target/

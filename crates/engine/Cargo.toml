@@ -1,0 +1,28 @@
+[package]
+name = "nunchi-engine"
+version = "0.3.0"
+edition = "2021"
+description = "nunchi hooks and background analyzer"
+license = "UNLICENSED"
+publish = false
+
+[dependencies]
+serde_json = { version = "1", features = ["preserve_order"] }
+libc = "0.2"
+sha1_smol = "1"
+
+[build-dependencies]
+sha1_smol = "1"
+
+[features]
+# 개발·시험용 하위 명령(dev)과 가짜 claude. 배포용 실행 파일에는 넣지 않는다.
+dev = []
+
+[[bin]]
+name = "nunchi-engine"
+path = "src/main.rs"
+
+[[bin]]
+name = "fake-claude"
+path = "src/bin/fake_claude.rs"
+required-features = ["dev"]
