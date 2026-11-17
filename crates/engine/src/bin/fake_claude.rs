@@ -42,6 +42,14 @@ fn main() {
                 };
             }
         }
+        // 부른 모양을 남긴다: 인자, 기록 끔 표시, 새 세션(setsid)인지, 표준 입력이 비었는지, 마지막 프롬프트
+        let own_session = unsafe { libc::getsid(0) == libc::getpid() };
+        let mut probe = [0u8; 1];
+        let stdin_empty = std::io::Read::read(&mut std::io::stdin(), &mut probe).map(|n| n == 0).unwrap_or(false);
+        let call = json!({"args": args[1..].to_vec(), "analyzer_env": std::env::var("CONTROL_TUI_ANALYZER").ok(),
+                          "own_session": own_session, "stdin_empty": stdin_empty});
+        let _ = std::fs::write(format!("{state}/last_call.json"), call.to_string());
+        let _ = std::fs::write(format!("{state}/last_prompt.txt"), &prompt);
         let hash = sha1_smol::Sha1::from(prompt.as_bytes()).digest().to_string();
         if let Ok(mut f) = std::fs::OpenOptions::new().append(true).create(true).open(format!("{state}/log")) {
             let _ = writeln!(f, "{n} {mode} {}", &hash[..12]);

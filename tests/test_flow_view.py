@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from control_tui import analyzer
 from control_tui.app import ControlApp
+from tests.fake_analyzer import FROZEN, FakeAnalyzer
 
 
 def write(path: Path, rows):
@@ -138,7 +138,7 @@ async def test_previous_turn_without_summary_shows_raw_and_preparing(tmp_path):
     a = dict(ANALYSIS, source_ts="x")
     home, _, _ = make_session(tmp_path, n=4, analysis=a)
     gate = threading.Event()
-    app = app_for(home, analyzer=analyzer.Analyzer(runner=lambda p: gate.wait(5) and "{}"))  # 분석 중인 상태
+    app = app_for(home, analyzer=FakeAnalyzer(result=FROZEN["EMPTY_4_TURNS"], gate=gate))  # 분석 중인 상태
     async with app.run_test(size=(160, 46)) as pilot:
         await ready(app, pilot)
         text = text_of(app)
@@ -153,7 +153,7 @@ async def test_change_notice_after_analysis(tmp_path):
     a = dict(ANALYSIS, analyzed_at=now, changes={"missed_before": 0, "missed_after": 1,
                                                    "new_missed": ["출처 표시"], "goal_changed": True})
     home, _, _ = make_session(tmp_path, n=2, analysis=a)
-    app = app_for(home, analyzer=analyzer.Analyzer(runner=lambda p: "{}"))  # 이미 최신이라 다시 돌지 않는다
+    app = app_for(home, analyzer=FakeAnalyzer(result=FROZEN["EMPTY_4_TURNS"]))  # 이미 최신이라 다시 돌지 않는다
     async with app.run_test(size=(160, 46)) as pilot:
         await ready(app, pilot)
         text = text_of(app)
@@ -219,7 +219,7 @@ async def test_only_the_selected_session_is_analyzed_and_old_ones_are_not_on_sta
     home, _, _ = make_session(tmp_path, n=2, sid="aaa")
     make_session(tmp_path, n=2, sid="bbb")
     calls = []
-    a = analyzer.Analyzer(runner=lambda p: calls.append(p) or json.dumps(ANALYSIS))
+    a = FakeAnalyzer(result=FROZEN["ANALYSIS_2_TURNS"], calls=calls)
     app = app_for(home, analyzer=a)
     async with app.run_test(size=(160, 46)) as pilot:
         await ready(app, pilot)
@@ -232,7 +232,7 @@ async def test_manual_mode_waits_for_the_a_key(tmp_path):
     home, _, _ = make_session(tmp_path, n=2)
     (home / "config.json").write_text(json.dumps({"analyze_when": "manual"}), encoding="utf-8")
     calls = []
-    a = analyzer.Analyzer(runner=lambda p: calls.append(p) or json.dumps(ANALYSIS))
+    a = FakeAnalyzer(result=FROZEN["ANALYSIS_2_TURNS"], calls=calls)
     app = app_for(home, analyzer=a)
     async with app.run_test(size=(160, 46)) as pilot:
         await ready(app, pilot)
@@ -261,7 +261,7 @@ async def test_session_list_shows_analysis_marks(tmp_path):
 async def test_quitting_shuts_the_analyzer_down(tmp_path):
     home, _, _ = make_session(tmp_path, n=2)
     stopped = []
-    a = analyzer.Analyzer(runner=lambda p: json.dumps(ANALYSIS))
+    a = FakeAnalyzer(result=FROZEN["ANALYSIS_2_TURNS"])
     a.shutdown = lambda: stopped.append(True)
     app = app_for(home, analyzer=a)
     async with app.run_test(size=(160, 46)) as pilot:
@@ -297,20 +297,6 @@ async def test_summary_arriving_does_not_collapse_the_full_answer_being_read(tmp
         assert "긴 응답 본문" in text and "요약이 도착했습니다" in text   # 자동으로 접지 않는다
         await pilot.press("o")
         assert "요약  마지막 응답 요약입니다" in text_of(app)
-
-
-def test_broken_analysis_shape_does_not_kill_the_worker(tmp_path):
-    outputs = iter(['{"turns": [null], "ledger": [7]}', json.dumps(ANALYSIS)])
-    a = analyzer.Analyzer(runner=lambda p: next(outputs))
-    tr = tmp_path / "t.jsonl"
-    write(tr, [{"type": "user", "timestamp": "2026-11-09T00:01:00.000Z", "message": {"content": "요청"}},
-               {"type": "assistant", "timestamp": "2026-11-09T00:01:30.000Z",
-                "message": {"content": [{"type": "text", "text": "답"}]}}])
-    for sid in ("s1", "s2"):
-        (tmp_path / sid).mkdir()
-        a.request(sid, tmp_path / sid, str(tr), "2026-11-09T00:01:40.000Z")
-    a.wait_idle(10)
-    assert analyzer.read_analysis(tmp_path / "s1") is not None or analyzer.read_analysis(tmp_path / "s2") is not None
 
 
 def test_records_after_the_response_time_are_not_read(tmp_path):

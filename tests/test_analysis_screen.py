@@ -5,9 +5,8 @@ import threading
 
 import pytest
 
-from control_tui import analyzer
 from control_tui.app import ControlApp
-from tests.test_analyzer import GOOD, make_transcript
+from tests.fake_analyzer import FROZEN, FakeAnalyzer, make_transcript
 
 
 def write_session(home, sid, rows):
@@ -36,12 +35,8 @@ async def test_goals_labels_and_missed_count_appear_after_analysis(tmp_path):
     write_session(home, "s1", [stop_row("s1", tr)])
     release = threading.Event()  # 분석이 끝나는 시점을 테스트가 정한다 (시간에 기대지 않는다)
 
-    def held(prompt):
-        release.wait(timeout=10)
-        return GOOD
-
     app = ControlApp(home=home, panel_scanner=lambda ids: [], panel_checker=lambda: set(),
-                     analyzer=analyzer.Analyzer(runner=held))
+                     analyzer=FakeAnalyzer(result=FROZEN["GOOD"], gate=release))
     async with app.run_test(size=(140, 40)) as pilot:
         await pilot.pause()
         assert "판정 전" in str(app.conversation.render_text())  # 요청 30: 판정 전은 미판정으로
@@ -64,11 +59,8 @@ async def test_analysis_failure_is_shown_in_the_conversation(tmp_path):
     home = tmp_path / "home"
     write_session(home, "s1", [stop_row("s1", tr)])
 
-    def broken(prompt):
-        raise analyzer.AnalyzerError("claude 종료 코드 1")
-
     app = ControlApp(home=home, panel_scanner=lambda ids: [], panel_checker=lambda: set(),
-                     analyzer=analyzer.Analyzer(runner=broken))
+                     analyzer=FakeAnalyzer(error="claude 종료 코드 1"))
     async with app.run_test(size=(140, 40)) as pilot:
         await pilot.pause()
         await settle(app, pilot)
@@ -85,7 +77,7 @@ async def test_no_analysis_request_for_a_session_that_has_not_responded(tmp_path
                                 "transcript_path": str(tr), "iterm_session_id": "", "data": {}}])
     calls = []
     app = ControlApp(home=home, panel_scanner=lambda ids: [], panel_checker=lambda: set(),
-                     analyzer=analyzer.Analyzer(runner=lambda p: calls.append(p) or GOOD))
+                     analyzer=FakeAnalyzer(result=FROZEN["GOOD"], calls=calls))
     async with app.run_test(size=(140, 40)) as pilot:
         await pilot.pause()
         app.analyzer.wait_idle(timeout=5)
@@ -110,7 +102,7 @@ async def test_analysis_is_not_run_again_for_the_same_answer(tmp_path):
     write_session(home, "s1", [stop_row("s1", tr)])
     calls = []
     app = ControlApp(home=home, panel_scanner=lambda ids: [], panel_checker=lambda: set(),
-                     analyzer=analyzer.Analyzer(runner=lambda p: calls.append(p) or GOOD))
+                     analyzer=FakeAnalyzer(result=FROZEN["GOOD"], calls=calls))
     async with app.run_test(size=(140, 40)) as pilot:
         await pilot.pause()
         await settle(app, pilot)
