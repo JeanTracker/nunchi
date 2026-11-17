@@ -169,8 +169,8 @@ scripts/build-engine.sh
 claude --plugin-dir ~/src/nunchi
 ```
 
-Uninstall the plugin first, or both copies record every event. `cargo test` runs the
-engine tests. Releases are cut by pushing a tag `v<version>` that matches
+With the plugin installed, the folder you pass replaces it for that session; only one copy
+loads (checked with Claude Code 2.1.325). `cargo test` runs the engine tests. Releases are cut by pushing a tag `v<version>` that matches
 `.claude-plugin/plugin.json`: a workflow builds the engine and replaces the `dist` branch,
 which the marketplace entry points at.
 

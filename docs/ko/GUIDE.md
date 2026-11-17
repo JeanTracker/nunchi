@@ -117,7 +117,7 @@ scripts/build-engine.sh
 claude --plugin-dir ~/src/nunchi
 ```
 
-설치된 플러그인을 먼저 지우세요. 둘 다 붙으면 이벤트가 두 번 기록됩니다. 엔진 시험은 `cargo test`입니다. 릴리스는 `.claude-plugin/plugin.json`과 같은 버전의 태그 `v<버전>`을 올려서 만듭니다. 그러면 워크플로가 엔진을 빌드해 마켓플레이스가 가리키는 `dist` 브랜치를 바꿉니다.
+플러그인이 설치되어 있어도 그 세션에서는 넘긴 폴더가 대신 붙고, 하나만 읽힙니다(Claude Code 2.1.325에서 확인). 엔진 시험은 `cargo test`입니다. 릴리스는 `.claude-plugin/plugin.json`과 같은 버전의 태그 `v<버전>`을 올려서 만듭니다. 그러면 워크플로가 엔진을 빌드해 마켓플레이스가 가리키는 `dist` 브랜치를 바꿉니다.
 
 ## 관제 화면
 
