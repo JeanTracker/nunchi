@@ -16,23 +16,21 @@ const EMPTY: View = {
   terms: [], termsMore: 0, on: false, error: '', control: false, behind: 0,
 }
 const view = atom({ plugin: 'nunchi', key: 'view' } as const, EMPTY, { shape: 'view-9' })
-// 펼친 수 (요구 이력 74): view와 따로 둔다. view는 분석 결과가 올 때마다 통째로 다시 쓰여 함께 두면 풀린다
-const NO_MORE: More = { decisions: 0, asks: 0, left: 0, all: false }
-const more = atom({ plugin: 'nunchi', key: 'more' } as const, NO_MORE, { shape: 'more-2' })
+// 펼친 수 (요구 이력 74): view와 따로 둔다. view는 분석 결과가 올 때마다 통째로 다시 쓰여 함께 두면 풀린다. 이 세션에만 (요구 이력 77)
+const NO_MORE: More = { decisions: 0, asks: 0, left: 0 }
+const more = atom({ plugin: 'nunchi', key: 'more' } as const, NO_MORE, { shape: 'more-3' })
 const STEP = 5   // 한 번 누를 때 더 보이는 수
 
-// 펼친 수 바꾸기 (요구 이력 74·75). 모두 펼침은 개수가 아니라 표시라 목록이 늘어도 모두 보이고, 줄이기는 실제 개수에서 줄인다
+// 펼친 수 바꾸기 (요구 이력 74·77). 덩어리별 `… n개 더`는 그 덩어리만, 맨 아래 펼치기·줄이기는 세 덩어리 함께 5개씩
 type Totals = { decisions: number; asks: number; left: number }
 const SECTIONS = ['decisions', 'asks', 'left'] as const
 export function moved(m: More, t: Totals, op: { op?: string; d?: number; k?: string }): More {
   const room = (k: typeof SECTIONS[number]) => Math.max(0, t[k] - SHOWN)
-  const now = (k: typeof SECTIONS[number]) => m.all ? room(k) : Math.min(m[k], room(k))
-  const base: More = { decisions: now('decisions'), asks: now('asks'), left: now('left'), all: false }
-  if (op.op === 'all') return { ...base, all: true }
-  if (op.op === 'none' || op.op === 'more' && op.k === 'collapse') return NO_MORE
-  if (op.op === 'step') {
-    if (m.all && (op.d ?? 0) > 0) return m
-    for (const k of SECTIONS) base[k] = Math.max(0, Math.min(room(k), base[k] + STEP * Math.sign(op.d ?? 0)))
+  const now = (k: typeof SECTIONS[number]) => Math.min(m[k], room(k))
+  const base: More = { decisions: now('decisions'), asks: now('asks'), left: now('left') }
+  if (op.op === 'step' || op.op === 'more' && (op.k === 'expand' || op.k === 'shrink')) {
+    const d = op.op === 'step' ? Math.sign(op.d ?? 0) : op.k === 'expand' ? 1 : -1
+    for (const k of SECTIONS) base[k] = Math.max(0, Math.min(room(k), base[k] + STEP * d))
     return base
   }
   if (op.op === 'more' && (SECTIONS as readonly string[]).includes(op.k ?? '')) {
@@ -42,15 +40,9 @@ export function moved(m: More, t: Totals, op: { op?: string; d?: number; k?: str
   }
   return m
 }
-const SAVED = '/mod.json'   // 새 세션에도 모두 펼칠지 (요구 이력 75). 사람이 고치는 config.json과 따로
-
 async function apply($: EngineInterface, op: { op?: string; d?: number; k?: string }) {
   const v = await read($, view)
   await update($, more, x => moved(x ?? NO_MORE, { decisions: v.decisionCount, asks: v.askCount, left: v.leftCount }, op))
-  if (op.op === 'all' || op.op === 'none') {
-    await $.fs.write((await controlHome($)) + SAVED, JSON.stringify({ expand: op.op }) + '\n')
-    $.ui.toast(op.op === 'all' ? '눈치: 모두 펼쳤습니다. 새 세션도 모두 펼친 채 엽니다' : '눈치: 모두 접었습니다. 새 세션도 처음 3개로 엽니다')
-  }
 }
 
 const SHOWN = 3
@@ -331,10 +323,6 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: 'nunchi', description: '눈치 켜기: 이 세션을 분석하고 패널을 연다' })
     await refresh($)
-    // 저장해 둔 모두 펼침 (요구 이력 75): 이 세션에서 아직 펼치거나 접지 않았을 때만
-    const saved = await readJson($, (await controlHome($)) + SAVED)
-    const now = await read($, more)
-    if (saved?.expand === 'all' && !now.all && !now.decisions && !now.asks && !now.left) await update($, more, () => ({ ...NO_MORE, all: true }))
     $.clock.every(1000, () => { void refresh($) })   // 분석 파일이 바뀌면 다시 그린다. '분석 중' 점도 1초마다
     return next(e)
   })
@@ -356,15 +344,9 @@ export const register: Register = on => {
     return { text: '눈치를 켰습니다. 다음 응답이 끝나면 이 세션을 분석합니다.' + where }
   })
 
-  on('ui.message', async ($, e) => {
-    const d = (e as any).data
-    if (d && typeof d === 'object' && typeof d.op === 'string') await apply($, d)
-    return {}
-  })
-
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const els: any = $.ui.resolve(e)
-    const { Box, Text, Button, Client } = els
+    const { Box, Text, Button } = els
     const v = await read($, view)
     const m = await read($, more)
     const cols = Math.max(20, e.props.bodyColumns ?? 50)
@@ -383,9 +365,7 @@ export const register: Register = on => {
       askedColumns = want   // 창 폭의 비율로 다시 요청한다 (사용자가 끌어 정한 폭이 있으면 그것이 앞선다)
       void $.ui.open({ id: PANE, title: '눈치', columns: want })
     }
-    // 본문 줄 (요구 이력 75): 다 만든 줄을 키를 받는 본문(Client)에 넘긴다. Client가 없는 화면은 같은 줄을 여기서 그린다
-    // vscode·모바일 표에도 Client가 들어 있지만 빈 상자로 그린다(시험 2026-11-17): 화면 이름으로 고른다
-    const keys = !!Client && (e.surface === 'terminal' || e.surface === 'desktop')
+    // 본문 줄: 다 만든 줄을 보통 글자로 그린다. 키를 받는 본문(요구 이력 75)은 글자를 끌어 복사할 수 없어 없앴다 (요구 이력 77)
     const rows: Row[] = []
     const row = (...s: Span[]) => { rows.push({ s: s.filter(x => x.t) }) }
     const sp = (t: string, o: Omit<Span, 't'> = {}): Span => ({ t, ...o })
@@ -400,7 +380,7 @@ export const register: Register = on => {
         : sp('눈치 꺼짐 · /nunchi로 켜면 이 세션을 분석합니다', { d: 1 }))
     } else {
       // … n개 더 (요구 이력 74): 누를 때마다 그 덩어리만 5개씩, 다 펼치면 접기
-      const shownOf = (k: keyof Totals, total: number) => m.all ? total : Math.min(total, SHOWN + m[k])
+      const shownOf = (k: keyof Totals, total: number) => Math.min(total, SHOWN + m[k])
       const moreRow = (k: keyof Totals, total: number) => {
         if (total <= SHOWN) return
         const rest = total - shownOf(k, total)
@@ -415,14 +395,15 @@ export const register: Register = on => {
       row(sp(' '))
       // 차례 (요구 이력 71): 목표 → 의사결정 → 에이전트 질문 → 남은 요청
       row(sp('목표', { b: 1 }), sp(v.goalTurn ? `  #${v.goalTurn}부터` : '', { d: 1 }))
-      for (const line of wrapParts(v.goal, cols - 4, 3)) row(sp('   '), ...parts(line))
+      // 목표·흐름·방금은 각 2줄까지: 목표 덩어리가 길어 아래 덩어리가 첫 화면에서 밀리지 않게 (요구 이력 77)
+      for (const line of wrapParts(v.goal, cols - 4, 2)) row(sp('   '), ...parts(line))
       if (v.digest) {
         row(sp(` 흐름  #1–#${v.digestTurn}`, { d: 1 }))
-        for (const line of wrapParts(v.digest, cols - 4, 3)) row(sp('   ', { d: 1 }), ...parts(line, { d: 1 }))
+        for (const line of wrapParts(v.digest, cols - 4, 2)) row(sp('   ', { d: 1 }), ...parts(line, { d: 1 }))
       }
       if (v.recent) {
         row(sp(' 방금', { d: 1 }))
-        for (const line of wrapParts(v.recent, cols - 4, 3)) row(sp('   ', { d: 1 }), ...parts(line, { d: 1 }))
+        for (const line of wrapParts(v.recent, cols - 4, 2)) row(sp('   ', { d: 1 }), ...parts(line, { d: 1 }))
       }
       if (v.decisions.length) {
         row(sp(' '))
@@ -460,17 +441,14 @@ export const register: Register = on => {
         }
         if (v.termsMore) row(sp(`   … ${v.termsMore}개 더`, { d: 1 }))
       }
+      // 맨 아래 펼치기·줄이기 (요구 이력 77): 세 덩어리를 함께 5개씩. 넘치는 덩어리가 없으면 두지 않는다
       const totals: Totals = { decisions: v.decisionCount, asks: v.askCount, left: v.leftCount }
-      const overflow = SECTIONS.some(k => totals[k] > SHOWN)
-      // 실제로 3개 넘게 그려진 덩어리가 있을 때만 (펼친 뒤 목록이 줄면 접을 것이 없다)
-      const expanded = SECTIONS.some(k => shownOf(k, totals[k]) > SHOWN)
-      row(sp(' '))
-      if (expanded) rows.push({ more: 'collapse', label: '모두 접기' })
-      if (overflow && keys) row(sp('] 펼치기 · [ 줄이기 · shift와 함께 누르면 새 세션에도 (패널을 클릭한 뒤)', { d: 1 }))
+      if (SECTIONS.some(k => totals[k] > SHOWN)) {
+        row(sp(' '))
+        rows.push({ btns: [{ k: 'expand', label: '펼치기' }, { k: 'shrink', label: '줄이기' }] })
+      }
     }
-    const body = keys
-      ? <Client key="body" module="./body.tsx" props={{ rows }} />
-      : drawRows(rows, els, k => { void apply($, { op: 'more', k }) })
+    const body = drawRows(rows, els, k => { void apply($, { op: 'more', k }) })
     return (
       <Box flexDirection="column">
         {body}

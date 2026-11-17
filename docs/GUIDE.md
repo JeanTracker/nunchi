@@ -113,23 +113,13 @@ deferred it. Each shows the turn it came from.
 **More and fewer.** Decisions, questions and open requests show three items each. When a
 list has more, its last line reads `… n개 더` (n more): click it to see five more of that
 list, and once it is fully open the same line reads `접기` (fold) and takes it back to
-three. `모두 접기` (fold all) at the bottom folds every list.
+three. While any list has more than three, the bottom of the panel has two buttons:
+`펼치기` (more) shows five more of all three lists, `줄이기` (fewer) shows five fewer, down
+to three. What you open stays open while you work in that session, even as new analysis
+results come in; each session keeps its own, and a new session starts with three.
 
-Keys work once you have clicked the panel body:
-
-| Key | What it does |
-| --- | --- |
-| `]` | five more of all three lists |
-| `[` | five fewer of all three lists, down to three |
-| `Shift+]` (or `}`) | open everything, and open everything in new sessions too |
-| `Shift+[` (or `{`) | fold everything to three, and do the same in new sessions |
-
-The two shift keys show a short notice and save the choice in
-`~/.claude-control/mod.json`. Sessions started after that follow it; sessions already
-open keep theirs until they restart. What you open stays open while you work in that
-session, even as new analysis results come in, and each session keeps its own.
-Moving to the panel with `ctrl+x` then `tab` does not send these keys to it; click the
-panel instead. In VS Code the `… n개 더` lines can be clicked but the keys do nothing.
+The goal, the flow summary and the last step show two lines each, so the lists below
+stay on the first screen.
 
 **번호 풀이 (numbers explained).** When the last response cites plan numbers such as R17,
 §4.5, Phase 4c or 요구 이력 41, the panel looks them up in the project's `docs/*.md` and

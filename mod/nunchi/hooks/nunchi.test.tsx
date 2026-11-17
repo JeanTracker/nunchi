@@ -37,29 +37,9 @@ const PANE = {
   props: { title: '눈치', isFocused: false, bodyColumns: 50, placement: 'dock', scroll: { offset: 0, bodyRows: 30 }, view: {} },
 } as const
 
-// 패널 본문은 키를 받는 요소(Client)가 그린다 (요구 이력 75). 시험은 그 요소에 넘긴 줄을 읽는다:
-// 줄 전체 글과 조각 글을 Text로, 링크 조각을 Link로, … n개 더를 Button으로 찾고, 본문 밖(꼬리)은 그대로 찾는다.
+// 패널 본문은 보통 글자로 그린다 (요구 이력 77: 키를 받는 본문은 없앰)
 async function mountPane($: any, spec: any) {
-  const ui = await $.ui.mount(spec)
-  const nodes = async () => {
-    const out: any[] = []
-    const client = await ui.find({ type: 'Client' })
-    for (const r of (client?.props?.props?.rows ?? []) as any[]) {
-      if (r.more) { out.push({ type: 'Button', key: r.more === 'collapse' ? 'collapse' : 'more-' + r.more, text: r.label, props: {} }); continue }
-      out.push({ type: 'Text', text: r.s.map((x: any) => x.t).join(''), props: {} })
-      for (const x of r.s) out.push(x.href ? { type: 'Link', text: x.t, props: { href: x.href } } : { type: 'Text', text: x.t, props: {} })
-    }
-    return out
-  }
-  const hit = (n: any, q: any) => n.type === q.type && (q.key === undefined || n.key === q.key)
-    && (q.text === undefined || (q.text instanceof RegExp ? q.text.test(n.text) : n.text === q.text))
-  return {
-    find: async (q: any) => (await nodes()).find(n => hit(n, q)) ?? (await ui.find(q)),
-    findAll: async (q: any) => [...(await nodes()).filter(n => hit(n, q)), ...(await ui.findAll(q))],
-    press: (t: any) => ui.press(t),
-    key: (k: any) => ui.key(k),
-    unmount: () => ui.unmount(),
-  }
+  return $.ui.mount(spec)
 }
 
 function engine(on: any, status: unknown, want = false, analysis: unknown = ANALYSIS, events = '', files: Record<string, string> = {}) {
@@ -312,7 +292,7 @@ test('a wide symbol touching the next letter gets one space after it (요구 이
 test('links in the pane are drawn as Link elements a click opens (요구 이력 60)', async ($, on) => {
   const steps = ANALYSIS.flow.steps.map((x: any) => x.index === 3 ? { ...x, agent_summary: '[가이드](https://example.com/g)를 읽고 정리함.' } : x)
   const linked = { ...ANALYSIS, flow: { ...ANALYSIS.flow, steps,
-    current_goal: { text: '시안 https://claude.ai/artifact/R8EpVcd9cueTtn7Ep2MS82 확인.', turn: 3 } } }
+    current_goal: { text: 'https://claude.ai/artifact/R8EpVcd9cueTtn7Ep2MS82 확인.', turn: 3 } } }   // 주소로 시작: 목표 2줄 상한(요구 이력 77) 안에서 주소가 두 줄에 나뉜다
   engine(on, { state: 'idle', turn: 0 }, false, linked)
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   const ui = await mountPane($, { ...PANE, props: { ...PANE.props, bodyColumns: 30 }, surface: 'terminal' })
@@ -421,8 +401,8 @@ test('decisions show what was decided before the title, newest first (요구 이
   await ui.unmount()
 })
 
-// 요구 이력 74: … n개 더는 버튼. 누를 때마다 5개씩, 다 펼치면 접기, 0은 모두 접기
-test('more opens five at a time, then folds back to three (요구 이력 74)', async ($, on) => {
+// 요구 이력 74·77: … n개 더는 버튼. 누를 때마다 그 덩어리만 5개씩, 다 펼치면 접기. 모두 접기는 없앴다(요구 이력 77, 줄이기와 겹침)
+test('more opens five at a time, then folds back to three (요구 이력 74·77)', async ($, on) => {
   const many = { ...ANALYSIS, flow: { ...ANALYSIS.flow, requests: [1, 2, 3, 4, 5, 6, 7, 8, 9].map(i =>
     ({ id: `R${i}`, from_turn: i, summary: `남은 일 ${i}`, state: 'deferred' })) } }
   engine(on, { state: 'idle', turn: 0 }, false, many)
@@ -438,17 +418,13 @@ test('more opens five at a time, then folds back to three (요구 이력 74)', a
   expect(await seen(8)).toBe(true)
   expect(await seen(9)).toBe(false)
   expect(await label('more-left')).toBe('… 1개 더')
-  expect(await label('collapse')).toBe('모두 접기')
+  expect(await label('collapse')).toBeUndefined()      // 모두 접기는 없다 (요구 이력 77)
   await ui.press({ key: 'more-left' })
   expect(await seen(9)).toBe(true)
   expect(await label('more-left')).toBe('접기')
   await ui.press({ key: 'more-left' })                 // 다 펼친 뒤 누르면 처음 3개로
   expect(await seen(4)).toBe(false)
-  await ui.press({ key: 'more-left' })
-  await ui.press({ key: 'collapse' })                  // 모두 접기
-  expect(await seen(4)).toBe(false)
   expect(await label('more-left')).toBe('… 6개 더')
-  expect(await label('collapse')).toBeUndefined()
   await ui.unmount()
 })
 
@@ -484,23 +460,24 @@ test('what was opened stays open when a new analysis result comes in (요구 이
   await ui.unmount()
 })
 
-test('fold all goes away once nothing is drawn past three (요구 이력 74)', async ($, on) => {
+test('the bottom expand and shrink buttons show only while a section has more than three (요구 이력 77)', async ($, on) => {
   const asks = [1, 2, 3, 4, 5].map(i => ({ id: `Q${i}`, turn: i, last_turn: i, summary: `물음 ${i}`, quote: `물음 ${i}?`, state: 'open' }))
   const live: any = { ...ANALYSIS, flow: { ...ANALYSIS.flow, asks } }
   engine(on, { state: 'idle', turn: 0 }, true, live)
   on('fs.write', () => ({ value: undefined }))
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   const ui = await mountPane($, { ...PANE, surface: 'terminal' })
-  await ui.press({ key: 'more-asks' })
-  expect((await ui.find({ type: 'Button', key: 'collapse' }))?.text).toBe('모두 접기')
+  expect((await ui.find({ type: 'Button', key: 'expand' }))?.text).toBe('펼치기')
+  expect((await ui.find({ type: 'Button', key: 'shrink' }))?.text).toBe('줄이기')
   live.flow = { ...live.flow, asks: asks.map((a, k) => k < 3 ? { ...a, state: 'answered' } : a) }
   await $.command.run({ command: 'nunchi' } as any)
   expect((await ui.find({ type: 'Text', text: /에이전트 질문 2/ }))).toBeTruthy()
-  expect((await ui.find({ type: 'Button', key: 'collapse' }))).toBeFalsy()
+  expect((await ui.find({ type: 'Button', key: 'expand' }))).toBeFalsy()
+  expect((await ui.find({ type: 'Button', key: 'shrink' }))).toBeFalsy()
   await ui.unmount()
 })
 
-// 요구 이력 75: 본문을 클릭한 뒤 ] 펼치기, [ 줄이기 (세 덩어리 함께), Shift+] / } 모두 펼치기 저장, Shift+[ / { 모두 접기 저장
+// 요구 이력 77: 맨 아래 펼치기·줄이기 버튼 (세 덩어리 함께 5개씩, 이 세션에만). 키(요구 이력 75)와 mod.json 저장은 없앴다
 function lots(n: number) {
   const k = Array.from({ length: n }, (_, i) => i + 1)
   return { ...ANALYSIS, last_turn: 3 + n, flow: { ...ANALYSIS.flow, until: 3 + n,
@@ -513,65 +490,47 @@ async function counts(ui: any) {
   return [await n(/^\s+✔ 결정 \d+\s+#\d+$/), await n(/^ \d+ 물음 \d+ #\d+/), await n(/^ ○ 일 \d+ #\d+$/)]
 }
 
-test('] opens all three sections five more at a time and [ takes five back, never below three (요구 이력 75)', async ($, on) => {
+test('expand opens all three sections five more at a time and shrink takes five back, never below three (요구 이력 77)', async ($, on) => {
   engine(on, { state: 'idle', turn: 0 }, false, lots(12))
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   const ui = await mountPane($, { ...PANE, surface: 'terminal' })
   expect(await counts(ui)).toEqual([3, 3, 3])
-  expect((await ui.find({ type: 'Text', text: /^\] 펼치기 · \[ 줄이기/ }))).toBeTruthy()
-  await ui.key({ key: ']' })
+  expect((await ui.find({ type: 'Text', text: /\] 펼치기|\[ 줄이기/ }))).toBeFalsy()   // 키 안내 줄은 없다
+  await ui.press({ key: 'expand' })
   expect(await counts(ui)).toEqual([8, 8, 8])
-  await ui.key({ key: ']' })
-  await ui.key({ key: ']' })
+  await ui.press({ key: 'expand' })
+  await ui.press({ key: 'expand' })
   expect(await counts(ui)).toEqual([12, 12, 12])   // 있는 만큼만
-  await ui.key({ key: '[' })
+  await ui.press({ key: 'shrink' })
   expect(await counts(ui)).toEqual([7, 7, 7])
-  await ui.key({ key: '[' })
-  await ui.key({ key: '[' })
+  await ui.press({ key: 'shrink' })
+  await ui.press({ key: 'shrink' })
   expect(await counts(ui)).toEqual([3, 3, 3])      // 바닥은 처음 3개
   await ui.unmount()
 })
 
-test('shift+] or } opens everything and saves it, shift+[ or { folds and saves (요구 이력 75)', async ($, on) => {
-  const written: Record<string, string> = {}, toasts: string[] = []
-  engine(on, { state: 'idle', turn: 0 }, false, lots(12))
-  on('fs.write', (_: unknown, e: any) => { written[String(e.path)] = String(e.text ?? ''); return { value: undefined } })
-  on('ui.toast', (_: unknown, e: any) => { toasts.push(String(e.text ?? e)); return { value: undefined } })
-  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
-  const saved = () => JSON.parse(written['/home/me/.claude-control/mod.json'] ?? '{}').expand
-  await ui.key({ key: ']', shift: true })
-  expect(await counts(ui)).toEqual([12, 12, 12])
-  expect(saved()).toBe('all')
-  expect(toasts.some(t => /새 세션도 모두 펼친 채/.test(t))).toBe(true)
-  await ui.key({ key: '[' })                       // 모두 펼친 뒤 줄이기는 실제 개수에서
-  expect(await counts(ui)).toEqual([7, 7, 7])
-  await ui.key({ key: '{' })
-  expect(await counts(ui)).toEqual([3, 3, 3])
-  expect(saved()).toBe('none')
-  await ui.key({ key: '}' })
-  expect(saved()).toBe('all')
-  await ui.key({ key: '[', shift: true })
-  expect(saved()).toBe('none')
-  await ui.unmount()
-})
-
-test('a new session opens everything when everything was saved open (요구 이력 75)', async ($, on) => {
+test('keys do nothing, nothing is saved, and a new session starts with three (요구 이력 77)', async ($, on) => {
+  const written: Record<string, string> = {}
   engine(on, { state: 'idle', turn: 0 }, false, lots(12), '', { '/home/me/.claude-control/mod.json': '{"expand":"all"}' })
+  on('fs.write', (_: unknown, e: any) => { written[String(e.path)] = String(e.text ?? ''); return { value: undefined } })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   const ui = await mountPane($, { ...PANE, surface: 'terminal' })
-  expect(await counts(ui)).toEqual([12, 12, 12])
+  expect(await counts(ui)).toEqual([3, 3, 3])      // 옛 mod.json의 모두 펼침은 쓰지 않는다
+  expect((await ui.find({ type: 'Client' } as any))).toBeFalsy()   // 본문은 보통 글자 (끌어 복사할 수 있게)
+  await ui.press({ key: 'expand' })
+  expect(await counts(ui)).toEqual([8, 8, 8])
+  expect(Object.keys(written).some(p => p.endsWith('/mod.json'))).toBe(false)
   await ui.unmount()
 })
 
-test('a surface without Client draws the same rows itself (요구 이력 75)', async ($, on) => {
+test('vscode draws the same rows (요구 이력 75·77)', async ($, on) => {
   engine(on, { state: 'idle', turn: 0 }, false, lots(5))
   await $.session.start({ cwd: '/', surface: 'vscode', isInteractive: true })
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' } as any)
   expect((await ui.find({ type: 'Client' } as any))).toBeFalsy()
   expect((await ui.find({ type: 'Text', text: /^목표\s+#3부터$/ }))).toBeTruthy()
   expect((await ui.find({ type: 'Button', key: 'more-left' }))?.text).toBe('… 2개 더')
-  expect((await ui.find({ type: 'Text', text: /\] 펼치기/ }))).toBeFalsy()   // 키를 받지 못하니 안내하지 않는다
+  expect((await ui.find({ type: 'Button', key: 'expand' }))?.text).toBe('펼치기')
   await ui.press({ key: 'more-left' })
   expect((await ui.find({ type: 'Text', text: /일 5 #5/ }))).toBeTruthy()
   await ui.unmount()

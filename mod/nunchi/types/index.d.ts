@@ -33,7 +33,7 @@ export type View = {
 }
 
 // 처음 3개보다 더 보이는 수 (요구 이력 74). 세션 동안 남고 세션마다 따로
-export type More = { decisions: number; asks: number; left: number; all: boolean }   // all: 모두 펼침 (요구 이력 75)
+export type More = { decisions: number; asks: number; left: number }   // 이 세션에만 (요구 이력 77)
 
 declare module 'claude-code' {
   interface PluginState {
