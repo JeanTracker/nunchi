@@ -66,13 +66,26 @@ start, when the next response ends.
 The panel does not open on its own in sessions you have not turned on. Turning it off
 again (`/nunchi off`) is not built yet.
 
+## Language
+
+The panel's labels come in Korean and English. By default they follow Claude Code's
+language setting (`/config`, the response language): Korean when it is Korean, English
+otherwise. With no setting, the terminal's `LANG` decides. The first session after you
+install tells you once which language it picked.
+
+To change it, type `/nunchi language` and pick `한국어`, `English` or
+`Claude Code 설정 따르기` (follow the Claude Code setting). The panel switches right away,
+in every open session. Press Esc to leave it as it is. The summaries in the panel are
+written by the analysis and stay in the language they were written in; quoted words are
+always shown as they were said.
+
 ## What the panel shows
 
 The panel opens on the right when the window is 110 columns or wider and takes 40% of
 the window. In a narrower window a single line appears above the input box instead:
 `눈치 목표: … · 질문 n · 요청 n · #n 기준` (goal, the agent's open questions, your open
-requests, analysis basis). Labels are in Korean; the translations below follow the screen from top
-to bottom.
+requests, analysis basis). The labels below are the Korean ones, with the English panel's
+wording in parentheses, from top to bottom.
 
 **Header.** `눈치 · #12 기준` means the results are based on turn 12. Next to it you may
 see:
@@ -112,9 +125,9 @@ deferred it. Each shows the turn it came from.
 
 **More and fewer.** Decisions, questions and open requests show three items each. When a
 list has more, its last line reads `… n개 더` (n more): click it to see five more of that
-list, and once it is fully open the same line reads `접기` (fold) and takes it back to
+list, and once it is fully open the same line reads `접기` (Collapse) and takes it back to
 three. While any list has more than three, the bottom of the panel has two buttons:
-`펼치기` (more) shows five more of all three lists, `줄이기` (fewer) shows five fewer, down
+`펼치기` (More) shows five more of all three lists, `줄이기` (Fewer) shows five fewer, down
 to three. What you open stays open while you work in that session, even as new analysis
 results come in; each session keeps its own, and a new session starts with three.
 

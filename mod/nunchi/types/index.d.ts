@@ -30,6 +30,12 @@ export type View = {
   error: string          // 분석 실패 이유 한 줄
   control: boolean       // 관제가 켜져 있는지 (<관제 홈>/control.json, 요구 이력 56)
   behind: number         // 분석이 본 마지막 응답 뒤에 끝난 응답 수 (events.jsonl의 Stop, 요구 이력 65)
+  ui: 'ko' | 'en'        // 화면 언어 (요구 이력 76)
+  want: string           // 지금 판정된 분석 언어: ko · en · 그 밖은 소문자 원래 값
+  from: string           // 판정 출처: saved · claude · terminal · default
+  flowLang: string       // 이 세션이 실제로 분석된 언어 (analysis.flow.lang, 없으면 ko)
+  analyzed: boolean      // 분석 결과가 있는지
+  rebuilding: boolean    // 다시 분석 중 (상태 파일의 rebuild)
 }
 
 // 처음 3개보다 더 보이는 수 (요구 이력 74). 세션 동안 남고 세션마다 따로

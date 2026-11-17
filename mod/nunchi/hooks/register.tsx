@@ -8,14 +8,16 @@ import type { Register, EngineInterface } from 'claude-code'
 
 import type { View, Left, More } from '../types'
 import { drawRows, type Row, type Span } from './rows'
+import { TEXT, pick, norm, langName, failText, columns, ASK_LANG, OPT_KO, OPT_EN, OPT_FOLLOW, type Ui } from './lang'
 
 const PANE = 'nunchi'
 const EMPTY: View = {
   basis: 0, total: 0, latest: 0, state: 'none', asks: [], askCount: 0, blanketClosed: 0,
   digest: '', digestTurn: 0, goal: '', goalTurn: 0, decisions: [], decisionCount: 0, recent: '', left: [], leftCount: 0, ratio: 0.4, tick: 0,
   terms: [], termsMore: 0, on: false, error: '', control: false, behind: 0,
+  ui: 'ko', want: 'ko', from: 'default', flowLang: 'ko', analyzed: false, rebuilding: false,
 }
-const view = atom({ plugin: 'nunchi', key: 'view' } as const, EMPTY, { shape: 'view-9' })
+const view = atom({ plugin: 'nunchi', key: 'view' } as const, EMPTY, { shape: 'view-10' })
 // 펼친 수 (요구 이력 74): view와 따로 둔다. view는 분석 결과가 올 때마다 통째로 다시 쓰여 함께 두면 풀린다. 이 세션에만 (요구 이력 77)
 const NO_MORE: More = { decisions: 0, asks: 0, left: 0 }
 const more = atom({ plugin: 'nunchi', key: 'more' } as const, NO_MORE, { shape: 'more-3' })
@@ -40,6 +42,18 @@ export function moved(m: More, t: Totals, op: { op?: string; d?: number; k?: str
   }
   return m
 }
+const SAVED = '/mod.json'   // mod가 쓰는 값: 고른 언어·첫 알림 (요구 이력 76). 펼침은 저장하지 않는다(요구 이력 77). 사람이 고치는 config.json과 따로
+
+/** mod.json을 읽고 합쳐 쓴다. 값이 그대로면 쓰지 않는다. undefined인 키는 지운다 (요구 이력 76, BUILD_PLAN §4.14) */
+async function saveMod($: EngineInterface, patch: Record<string, unknown>): Promise<void> {
+  const path = (await controlHome($)) + SAVED
+  const old = (await readJson($, path)) ?? {}
+  const next: Record<string, unknown> = { ...old }
+  for (const [k, v] of Object.entries(patch)) { if (v === undefined) delete next[k]; else next[k] = v }
+  if (JSON.stringify(next) === JSON.stringify(old)) return
+  await $.fs.write(path, JSON.stringify(next) + '\n')
+}
+
 async function apply($: EngineInterface, op: { op?: string; d?: number; k?: string }) {
   const v = await read($, view)
   await update($, more, x => moved(x ?? NO_MORE, { decisions: v.decisionCount, asks: v.askCount, left: v.leftCount }, op))
@@ -50,6 +64,7 @@ const MAX_RATIO = 0.45   // Claude Code가 옆 패널에 허락하는 폭
 let paneDrawnAt = 0      // 패널이 마지막으로 그려진 때. 패널이 보이는 동안은 띠를 두지 않는다
 let askedColumns = 0     // 마지막으로 요청한 옆 패널 폭
 let opened = false       // 이 세션에서 패널을 한 번 열었는지 (켠 세션·분석된 세션만 저절로 연다)
+let shownUi: Ui = 'ko'   // 지금 화면 언어 (요구 이력 76). 패널 제목처럼 그리기 밖에서 쓰는 문구용, 판정할 때마다 바꾼다
 
 async function controlHome($: EngineInterface): Promise<string> {
   return (await $.env.get('CONTROL_TUI_HOME')) || ((await $.env.get('HOME')) || '') + '/.claude-control'
@@ -87,14 +102,15 @@ end run`
 
 /** 관제로 (요구 이력 56, BUILD_PLAN §4.8): 이 세션으로 와 달라는 요청(goto)을 남기고 관제 패널을 앞으로 */
 export async function goControl($: EngineInterface): Promise<string> {
+  const T = TEXT[shownUi]
   const home = await controlHome($)
   const ctl = await readJson($, home + '/control.json')
-  if (!ctl?.iterm_session_id) return '관제가 꺼져 있습니다. 다른 패널에서 nunchi로 켜세요.'
+  if (!ctl?.iterm_session_id) return T.controlOff
   const alive = await $.process.run(['kill', '-0', String(ctl.pid ?? '')]).catch(() => null)
-  if (!alive || alive.exitCode !== 0) return '관제가 꺼져 있습니다. 다른 패널에서 nunchi로 켜세요.'
+  if (!alive || alive.exitCode !== 0) return T.controlOff
   await $.fs.write(home + '/goto', JSON.stringify({ session: await sessionId($), at: (await $.clock.now()) / 1000 }) + '\n')
   const r = await $.process.run(['osascript', '-e', FOCUS_SCRIPT, String(ctl.iterm_session_id)]).catch(() => null)
-  if (!r || r.exitCode !== 0 || !String(r.stdout).includes('ok')) return '관제 패널을 찾지 못했습니다. ⌘숫자로 옮겨 가세요.'
+  if (!r || r.exitCode !== 0 || !String(r.stdout).includes('ok')) return T.controlMissing
   return ''
 }
 
@@ -115,11 +131,13 @@ export function enabled(v: View): boolean {
   return v.on || v.basis > 0 || !!v.goal
 }
 
-export function buildView(analysis: any, status: any, tick: number, ratio: number, gloss: any = null, on = false): View {
+export function buildView(analysis: any, status: any, tick: number, ratio: number, gloss: any = null, on = false, ui: Ui = 'ko'): View {
+  const T = TEXT[ui]
   const terms = (gloss?.items ?? []).map((x: any) => ({ id: one(x.id, 20), means: (x.means ?? []).map((m: any) => one(m, 120)) }))
   const termsMore = Math.max(0, (gloss?.total ?? 0) - terms.length)
-  const error = status?.state === 'failed' ? one(status?.error, 60) : ''
-  const base = { ...EMPTY, state: status?.state ?? 'none', latest: status?.turn ?? 0, tick, ratio, terms, termsMore, on, error }
+  const error = status?.state === 'failed' ? one(failText(one(status?.error, 200), ui), 60) : ''   // 엔진은 실패 이유를 코드로 남긴다 (요구 이력 76)
+  const rebuilding = !!status?.rebuild && (status?.state === 'running' || status?.state === 'queued')
+  const base = { ...EMPTY, state: status?.state ?? 'none', latest: status?.turn ?? 0, tick, ratio, terms, termsMore, on, error, ui, rebuilding }
   if (!analysis) return base
   const flow = analysis.flow ?? {}
   const steps: any[] = (flow.steps ?? []).filter((s: any) => s.grounded)
@@ -127,14 +145,14 @@ export function buildView(analysis: any, status: any, tick: number, ratio: numbe
   const open = (flow.asks ?? []).filter((a: any) => a.state !== 'answered')
     .sort((a: any, b: any) => (b.last_turn ?? b.turn ?? 0) - (a.last_turn ?? a.turn ?? 0))
   const asks = open.map((a: any, k: number) => ({
-    n: k + 1, summary: one(a.summary, 60), turn: a.turn ?? 0, quote: one(a.quote, 60),
+    n: k + 1, summary: one(a.summary, 100), turn: a.turn ?? 0, quote: one(a.quote, 60),   // 요약 100: 영어 세션은 엔진이 100자까지 남긴다 (요구 이력 76)
     partial: a.state === 'partial', stale: (a.last_turn ?? a.turn ?? 0) < basis - 1,
   }))
   const left: Left[] = []
   for (const r of flow.requests ?? []) {
     if (r.state === 'open') left.push({ mark: '○', summary: one(r.summary), note: '', turn: r.from_turn ?? 0 })
-    else if (r.state === 'deferred') left.push({ mark: '⊘', summary: one(r.summary), note: '못 했거나 미룸', turn: r.from_turn ?? 0 })
-    else if (r.state === 'in_progress') left.push({ mark: '◐', summary: one(r.summary), note: '진행 중', turn: r.by_turn ?? r.from_turn ?? 0 })   // 요구 이력 66
+    else if (r.state === 'deferred') left.push({ mark: '⊘', summary: one(r.summary), note: T.deferred, turn: r.from_turn ?? 0 })
+    else if (r.state === 'in_progress') left.push({ mark: '◐', summary: one(r.summary), note: T.inProgress, turn: r.by_turn ?? r.from_turn ?? 0 })   // 요구 이력 66
   }
   // 도구 실패(△)는 보이지 않는다: 도구 사용은 모으지도 보이지도 않는다 (요구 이력 48)
   // 의사결정 (요구 이력 71): 관계가 확정인 턴. 분석기의 요약이라 원문 대조가 없으므로 정한 턴을 함께 보인다
@@ -146,6 +164,8 @@ export function buildView(analysis: any, status: any, tick: number, ratio: numbe
   const digested = (flow.steps ?? []).filter((s: any) => s.digest).pop()
   return {
     ...base,
+    flowLang: norm(flow.lang) || 'ko',   // 이 세션의 분석 언어. 엔진은 ko면 적지 않는다 (요구 이력 76)
+    analyzed: true,
     basis,
     total: analysis.last_turn ?? 0,
     state: status?.state ?? 'idle',
@@ -272,13 +292,23 @@ function wrap(text: string, cols: number, maxLines: number): string[] {
   return wrapParts(text, cols, maxLines).map(flat)
 }
 
-function dots(tick: number, state = 'running'): string {
-  return (state === 'queued' ? '분석 대기' : '분석 중') + ['.', '..', '...'][tick % 3]
+function dots(tick: number, state = 'running', ui: Ui = 'ko'): string {
+  return (state === 'queued' ? TEXT[ui].queued : TEXT[ui].running) + ['.', '..', '...'][tick % 3]
 }
 
 async function openPane($: EngineInterface) {
   opened = true
-  return $.ui.open({ id: PANE, title: '눈치' })
+  return $.ui.open({ id: PANE, title: TEXT[shownUi].title })
+}
+
+/** 언어 판정 (요구 이력 76): mod.json에 고른 값 → Claude Code language → LC_ALL → LANG → en */
+async function language($: EngineInterface, saved?: any) {
+  const mod = saved === undefined ? await readJson($, (await controlHome($)) + SAVED) : saved
+  let setting: unknown
+  try { setting = await $.settings.read({ key: 'language' }) } catch { setting = undefined }
+  const p = pick({ saved: mod?.language, setting, lcAll: await $.env.get('LC_ALL'), lang: await $.env.get('LANG') })
+  shownUi = p.ui
+  return p
 }
 
 // 분석이 본 마지막 응답 뒤에 끝난 응답 수 (요구 이력 65). 훅이 모든 세션의 Stop을 events.jsonl에 남긴다.
@@ -307,23 +337,54 @@ export async function answersAfter($: EngineInterface, dir: string, since: strin
 async function refresh($: EngineInterface) {
   const dir = await sessionDir($)
   const home = await controlHome($)
-  const [analysis, status, config, gloss, want, ctl] = await Promise.all([
+  const [analysis, status, config, gloss, want, ctl, saved] = await Promise.all([
     readJson($, dir + '/analysis.json'), readJson($, dir + '/analysis_status.json'),
     readJson($, home + '/config.json'), readJson($, dir + '/glossary.json'),
-    readJson($, dir + '/want'), readJson($, home + '/control.json'),
+    readJson($, dir + '/want'), readJson($, home + '/control.json'), readJson($, home + SAVED),
   ])
   const ratio = Math.min(MAX_RATIO, Math.max(0.2, Number(config?.mod_width_ratio) || 0.4))
   const behind = await answersAfter($, dir, String(analysis?.source_ts ?? ''))
-  await update($, view, old => ({ ...buildView(analysis, status, (old?.tick ?? 0) + 1, ratio, gloss, want !== null),
-    control: !!ctl?.iterm_session_id, behind }))
+  const lang = await language($, saved)   // 1초마다 다시 정하므로 다른 세션에서 바꿔도 곧 따라온다
+  await update($, view, old => ({ ...buildView(analysis, status, (old?.tick ?? 0) + 1, ratio, gloss, want !== null, lang.ui),
+    control: !!ctl?.iterm_session_id, behind, want: lang.analysis, from: lang.from }))
   if (!opened && enabled(await read($, view))) void openPane($)   // 켠 세션이나 관제가 분석한 세션만 저절로 연다
+}
+
+/** /nunchi language (요구 이력 76): 질문 창에서 고른다. Esc·-p(거절)면 바꾸지 않는다 */
+async function chooseLanguage($: EngineInterface): Promise<string> {
+  const now = await language($)
+  const T = TEXT[now.ui]
+  const from = now.from === 'claude' ? T.fromClaude : ''
+  const opts = now.analysis === 'en' ? [OPT_EN, OPT_KO, OPT_FOLLOW] : [OPT_KO, OPT_EN, OPT_FOLLOW]   // 지금 언어가 맨 위
+  let answer: string
+  try {
+    answer = await $.ui.ask(ASK_LANG(langName(now.analysis), from), opts)
+  } catch {
+    return T.unchanged + ' ' + T.langNow(langName(now.analysis), from)
+  }
+  const picked = answer === OPT_KO ? 'ko' : answer === OPT_EN ? 'en' : answer === OPT_FOLLOW ? undefined : norm(answer)
+  if (picked !== undefined && picked !== 'ko' && picked !== 'en') return T.unchanged   // 직접 쓴 글은 두 언어만 받는다
+  await saveMod($, { language: picked })
+  const after = await language($)
+  await refresh($)
+  const T2 = TEXT[after.ui]
+  return picked === undefined ? T2.langFollow(langName(after.analysis)) : T2.langSet(langName(after.analysis))
 }
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
-    await $.command.register({ name: 'nunchi', description: '눈치 켜기: 이 세션을 분석하고 패널을 연다' })
+    const first = await language($)
+    await $.command.register({ name: 'nunchi', description: TEXT[first.ui].command, argumentHint: '[language]' })
     await refresh($)
     $.clock.every(1000, () => { void refresh($) })   // 분석 파일이 바뀌면 다시 그린다. '분석 중' 점도 1초마다
+    // 설치 뒤 첫 세션: 묻지 않고 정한 언어와 바꾸는 법을 한 번 알린다 (요구 이력 76). 다시 불러와도·다른 세션에서도 다시 띄우지 않는다
+    try {
+      const saved = await readJson($, (await controlHome($)) + SAVED)
+      if (!saved?.noticed) {
+        $.ui.toast(TEXT[first.ui].notice)
+        await saveMod($, { noticed: true })
+      }
+    } catch { /* 알림을 못 남겨도 세션은 그대로 */ }
     return next(e)
   })
 
@@ -332,16 +393,18 @@ export const register: Register = on => {
     return next(e)
   })
 
-  on('command.run', { command: 'nunchi' }, async $ => {
+  on('command.run', { command: 'nunchi' }, async ($, e) => {
+    if (String((e as any).args ?? '').trim().toLowerCase() === 'language') return { text: await chooseLanguage($) }
     const dir = await sessionDir($)
     const was = (await readJson($, dir + '/want')) !== null
     await $.fs.write(dir + '/want', JSON.stringify({ at: new Date(await $.clock.now()).toISOString(), by: 'nunchi' }) + '\n')
     await refresh($)
     const r = await openPane($)
-    const where = r.isPlaced ? '' : ' 창이 좁아 패널 대신 입력창 위 한 줄로 보입니다.'
+    const T = TEXT[(await read($, view)).ui]
+    const where = r.isPlaced ? '' : T.narrow
     const v = await read($, view)
-    if (was || v.basis > 0) return { text: '눈치 패널을 열었습니다.' + where }
-    return { text: '눈치를 켰습니다. 다음 응답이 끝나면 이 세션을 분석합니다.' + where }
+    if (was || v.basis > 0) return { text: T.opened + where }
+    return { text: T.turnedOn + where }
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
@@ -349,13 +412,14 @@ export const register: Register = on => {
     const { Box, Text, Button } = els
     const v = await read($, view)
     const m = await read($, more)
+    const T = TEXT[v.ui]
     const cols = Math.max(20, e.props.bodyColumns ?? 50)
     const toControl = async () => {
       const problem = await goControl($)
       if (problem) $.ui.toast(problem)
     }
     const tail = v.control
-      ? <Box flexDirection="row"><Button key="control" hotkey="1" onPress={() => { void toControl() }}>관제로</Button><Text dimColor>  또는 ⌘숫자</Text></Box>
+      ? <Box flexDirection="row"><Button key="control" hotkey="1" onPress={() => { void toControl() }}>{T.control}</Button><Text dimColor>{T.controlOr}</Text></Box>
       : null   // 관제 화면을 지워(요구 이력 70) 켜라고 하지 않는다
     paneDrawnAt = await $.clock.now()
     // viewport는 패널을 뺀 나머지 폭이라(실측 2026-11-12: 200칸 창에서 141), 창 전체 = 나머지 + 패널 + 경계로 본다
@@ -363,7 +427,7 @@ export const register: Register = on => {
     const want = Math.round(whole * v.ratio)
     if (e.props.placement === 'dock' && want >= 24 && Math.abs(want - askedColumns) > 1) {
       askedColumns = want   // 창 폭의 비율로 다시 요청한다 (사용자가 끌어 정한 폭이 있으면 그것이 앞선다)
-      void $.ui.open({ id: PANE, title: '눈치', columns: want })
+      void $.ui.open({ id: PANE, title: T.title, columns: want })
     }
     // 본문 줄: 다 만든 줄을 보통 글자로 그린다. 키를 받는 본문(요구 이력 75)은 글자를 끌어 복사할 수 없어 없앴다 (요구 이력 77)
     const rows: Row[] = []
@@ -372,42 +436,47 @@ export const register: Register = on => {
     const parts = (line: Piece[], o: Omit<Span, 't' | 'href'> = {}): Span[] => line.map(p => p.href ? { t: p.t, href: p.href } : { t: p.t, ...o })
     const busy = v.state === 'running' || v.state === 'queued'
     const rebuilding = busy && v.latest > 0 && v.total > 0 && v.latest < v.total
+    // 다시 분석 중 (요구 이력 76): 엔진이 상태 파일에 rebuild를 적는다. 처음 턴(결과 없음)부터 같은 문구
+    const progress = v.rebuilding ? T.rebuilding(v.latest, v.total || v.latest) : v.basis <= 1 ? T.rebuilding(v.latest, v.total) : T.catching(v.latest, v.total)
     if (!v.goal && v.basis === 0) {   // 아직 분석 결과가 없다 (SCREEN §11)
-      row(sp('눈치', { b: 1 }))
-      row(v.state === 'running' || v.state === 'queued' ? sp(dots(v.tick, v.state), { c: 'yellow' })
-        : v.state === 'failed' ? sp('분석 실패 · ' + v.error, { c: 'red' })
-        : v.on ? sp('눈치 켜짐 · 다음 응답이 끝나면 분석합니다', { d: 1 })
-        : sp('눈치 꺼짐 · /nunchi로 켜면 이 세션을 분석합니다', { d: 1 }))
+      row(sp(T.title, { b: 1 }))
+      row(v.rebuilding && busy ? sp(progress + ' ' + dots(v.tick, v.state, v.ui).replace(/^[^.]*/, ''), { c: 'yellow' })
+        : v.state === 'running' || v.state === 'queued' ? sp(dots(v.tick, v.state, v.ui), { c: 'yellow' })
+        : v.state === 'failed' ? sp(T.failed + v.error, { c: 'red' })
+        : v.on ? sp(T.onWaiting, { d: 1 })
+        : sp(T.offIdle, { d: 1 }))
     } else {
       // … n개 더 (요구 이력 74): 누를 때마다 그 덩어리만 5개씩, 다 펼치면 접기
       const shownOf = (k: keyof Totals, total: number) => Math.min(total, SHOWN + m[k])
       const moreRow = (k: keyof Totals, total: number) => {
         if (total <= SHOWN) return
         const rest = total - shownOf(k, total)
-        rows.push({ more: k, label: rest > 0 ? `… ${rest}개 더` : '접기' })
+        rows.push({ more: k, label: rest > 0 ? T.more(rest) : T.collapse })
       }
-      row(sp('눈치', { b: 1 }), sp(` · #${v.basis} 기준`, { d: 1 }),
-        v.behind > 0 && !busy ? sp(` · 응답 ${v.behind}개 밀림`, { c: 'yellow' }) : sp(''),
-        rebuilding ? sp(`  ${v.basis <= 1 ? '흐름 처음부터 만드는 중' : '밀린 턴 반영 중'} #${v.latest}/#${v.total} ${dots(v.tick)}`, { c: 'yellow' })
-          : busy ? sp('  ' + dots(v.tick, v.state), { c: 'yellow' })
-          : v.state === 'failed' ? sp('  분석 실패 · ' + v.error, { c: 'red' })
-          : !v.on ? sp('  자동 분석 꺼짐 · /nunchi로 켜기', { c: 'yellow' }) : sp(''))
+      row(sp(T.title, { b: 1 }), sp(T.asOf(v.basis), { d: 1 }),
+        v.behind > 0 && !busy ? sp(T.behind(v.behind), { c: 'yellow' }) : sp(''),
+        rebuilding || (v.rebuilding && busy) ? sp(`  ${progress} ${dots(v.tick, 'running', v.ui).replace(/^[^.]*/, '')}`, { c: 'yellow' })
+          : busy ? sp('  ' + dots(v.tick, v.state, v.ui), { c: 'yellow' })
+          : v.state === 'failed' ? sp('  ' + T.failed + v.error, { c: 'red' })
+          : !v.on ? sp('  ' + T.autoOff, { c: 'yellow' }) : sp(''))
+      // 화면과 이 세션의 분석 언어가 다르면 (요구 이력 76): 고른 분석 언어와 다를 때 다시 분석하는 법
+      if (v.analyzed && v.flowLang !== v.want && !v.rebuilding) row(sp(T.langLine(langName(v.flowLang)), { c: 'yellow', d: 1 }))
       row(sp(' '))
       // 차례 (요구 이력 71): 목표 → 의사결정 → 에이전트 질문 → 남은 요청
-      row(sp('목표', { b: 1 }), sp(v.goalTurn ? `  #${v.goalTurn}부터` : '', { d: 1 }))
+      row(sp(T.goal, { b: 1 }), sp(v.goalTurn ? T.since(v.goalTurn) : '', { d: 1 }))
       // 목표·흐름·방금은 각 2줄까지: 목표 덩어리가 길어 아래 덩어리가 첫 화면에서 밀리지 않게 (요구 이력 77)
       for (const line of wrapParts(v.goal, cols - 4, 2)) row(sp('   '), ...parts(line))
       if (v.digest) {
-        row(sp(` 흐름  #1–#${v.digestTurn}`, { d: 1 }))
+        row(sp(T.flow(v.digestTurn), { d: 1 }))
         for (const line of wrapParts(v.digest, cols - 4, 2)) row(sp('   ', { d: 1 }), ...parts(line, { d: 1 }))
       }
       if (v.recent) {
-        row(sp(' 방금', { d: 1 }))
+        row(sp(T.recent, { d: 1 }))
         for (const line of wrapParts(v.recent, cols - 4, 2)) row(sp('   ', { d: 1 }), ...parts(line, { d: 1 }))
       }
       if (v.decisions.length) {
         row(sp(' '))
-        row(sp('의사결정 ', { b: 1 }), sp(String(v.decisionCount), { c: 'green' }))
+        row(sp(T.decisions, { b: 1 }), sp(String(v.decisionCount), { c: 'green' }))
         for (const d of v.decisions.slice(0, shownOf('decisions', v.decisionCount))) {
           const lines = wrapParts('✔ ' + d.text, cols - 12, 2)
           lines.forEach((line, k) => row(sp('   '), sp(k ? '  ' : ''), ...parts(line),
@@ -416,36 +485,36 @@ export const register: Register = on => {
         moreRow('decisions', v.decisionCount)
       }
       row(sp(' '))
-      row(sp('에이전트 질문 ', { b: 1 }), sp(v.askCount ? String(v.askCount) : '없음', { c: v.askCount ? 'yellow' : 'green' }))
+      row(sp(T.asks, { b: 1 }), sp(v.askCount ? String(v.askCount) : T.none, { c: v.askCount ? 'yellow' : 'green' }))
       for (const a of v.asks.slice(0, shownOf('asks', v.askCount))) {
         row(sp(` ${a.n} `, { c: 'yellow', b: 1 }), ...parts(cutParts(a.summary, cols - 12)),
-          sp(` #${a.turn}${a.stale ? '부터 답 없음' : ''}${a.partial ? ' · 일부 답함' : ''}`, { d: 1 }))
+          sp(` #${a.turn}${a.stale ? T.stale : ''}${a.partial ? T.partial : ''}`, { d: 1 }))
         row(sp('   “', { d: 1 }), ...parts(cutParts(a.quote, cols - 6), { d: 1 }), sp('”', { d: 1 }))
       }
       moreRow('asks', v.askCount)
-      if (v.blanketClosed) row(sp(`   통째 승인으로 닫은 것 ${v.blanketClosed}`, { d: 1 }))
+      if (v.blanketClosed) row(sp(T.blanket(v.blanketClosed), { d: 1 }))
       row(sp(' '))
-      row(sp('남은 요청 ', { b: 1 }), sp(v.leftCount ? String(v.leftCount) : '없음', { c: v.leftCount ? 'yellow' : 'green' }), sp(' 내 요청 중', { d: 1 }))
+      row(sp(T.left, { b: 1 }), sp(v.leftCount ? String(v.leftCount) : T.none, { c: v.leftCount ? 'yellow' : 'green' }), sp(T.mine, { d: 1 }))
       for (const x of v.left.slice(0, shownOf('left', v.leftCount)))
         row(sp(` ${x.mark} `, { c: 'yellow' }), ...parts(cutParts(x.summary + (x.note ? ' — ' + x.note : ''), cols - 8)), sp(` #${x.turn}`, { d: 1 }))
       moreRow('left', v.leftCount)
       if (v.terms.length) {
         row(sp(' '))
-        row(sp('번호 풀이', { b: 1 }), sp('  이번 응답 · 문서 원문', { d: 1 }))
+        row(sp(T.terms, { b: 1 }), sp(T.termsNote, { d: 1 }))
         for (const x of v.terms) {
           row(sp(` ${x.id}`, { c: 'yellow' }))
-          ;(x.means.length ? x.means.slice(0, 2) : ['문서에 없음']).forEach((mean, k) => {
+          ;(x.means.length ? x.means.slice(0, 2) : [T.noDoc]).forEach((mean, k) => {
             for (const line of wrapParts((x.means.length > 1 ? '①②'[k] + ' ' : '') + mean, cols - 4, 2))
               row(sp('   '), ...parts(line, x.means.length ? {} : { d: 1 }))
           })
         }
-        if (v.termsMore) row(sp(`   … ${v.termsMore}개 더`, { d: 1 }))
+        if (v.termsMore) row(sp('   ' + T.more(v.termsMore), { d: 1 }))
       }
       // 맨 아래 펼치기·줄이기 (요구 이력 77): 세 덩어리를 함께 5개씩. 넘치는 덩어리가 없으면 두지 않는다
       const totals: Totals = { decisions: v.decisionCount, asks: v.askCount, left: v.leftCount }
       if (SECTIONS.some(k => totals[k] > SHOWN)) {
         row(sp(' '))
-        rows.push({ btns: [{ k: 'expand', label: '펼치기' }, { k: 'shrink', label: '줄이기' }] })
+        rows.push({ btns: [{ k: 'expand', label: T.expand }, { k: 'shrink', label: T.shrink }] })
       }
     }
     const body = drawRows(rows, els, k => { void apply($, { op: 'more', k }) })
@@ -470,14 +539,18 @@ export const register: Register = on => {
     if (!v.goal && !busy) return next(e)
     if (!busy && v.leftCount === 0 && !v.goal) return next(e)
     const { Text } = $.ui.resolve(e)
+    const T = TEXT[v.ui]
+    // 목표 자르기 폭: 고정 라벨의 실제 칸 수를 뺀다 (요구 이력 76: 영어 라벨은 폭이 다르다. 한국어 보통 상태에서 예전 52칸과 같다)
+    const tailText = T.bandAsks + v.askCount + T.bandLeft + v.leftCount + (busy ? ' · ' + dots(v.tick, v.state, v.ui) : T.bandAsOf(v.basis)) + (!busy && !v.on ? T.bandOff : '')
+    const fixed = columns(T.band + T.bandGoal + tailText) + 12
     return (
       <Text>
-        <Text bold>눈치 </Text>
-        <Text>목표: {cut(v.goal, Math.max(10, (e.props.bodyColumns ?? 80) - 52))}</Text>
-        <Text color={v.askCount ? 'yellow' : 'green'}> · 질문 {v.askCount}</Text>
-        <Text color={v.leftCount ? 'yellow' : 'green'}> · 요청 {v.leftCount}</Text>
-        {busy ? <Text color="yellow"> · {dots(v.tick, v.state)}</Text> : <Text dimColor> · #{v.basis} 기준</Text>}
-        {!busy && !v.on ? <Text color="yellow"> · 분석 꺼짐</Text> : null}
+        <Text bold>{T.band}</Text>
+        <Text>{T.bandGoal}{cut(v.goal, Math.max(10, (e.props.bodyColumns ?? 80) - fixed))}</Text>
+        <Text color={v.askCount ? 'yellow' : 'green'}>{T.bandAsks}{v.askCount}</Text>
+        <Text color={v.leftCount ? 'yellow' : 'green'}>{T.bandLeft}{v.leftCount}</Text>
+        {busy ? <Text color="yellow"> · {dots(v.tick, v.state, v.ui)}</Text> : <Text dimColor>{T.bandAsOf(v.basis)}</Text>}
+        {!busy && !v.on ? <Text color="yellow">{T.bandOff}</Text> : null}
       </Text>
     )
   })

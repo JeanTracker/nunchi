@@ -1,5 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import { answersAfter, answerEnded, pieces as piecesOf } from './register.js'
+import { pick, norm, failText } from './lang.js'
 
 // SCREEN §11: 관제 분석 결과를 읽어 세션 옆 패널에 보인다
 const ANALYSIS = {
@@ -47,6 +48,7 @@ function engine(on: any, status: unknown, want = false, analysis: unknown = ANAL
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('session.start', (_: unknown, e: any) => ({ cwd: e.cwd }))
   on('session.id', () => ({ value: 'abc' }))
+  on('settings.read', () => ({ value: { language: '한국어' } }))   // Claude Code 언어 설정 (요구 이력 76): 기존 시험은 한국어 화면
   on('env.get', (_: unknown, e: any) => ({ value: e.name === 'HOME' ? '/home/me' : undefined }))
   on('clock.every', () => ({ value: null }))
   on('clock.now', () => ({ value: 1000 }))
@@ -163,10 +165,11 @@ function bare(on: any, status: unknown, opened: string[], written: string[], wan
   on('ui.open', (_: unknown, e: any) => { opened.push(String(e.id)); return { value: { isPlaced: true } } })
   on('session.start', (_: unknown, e: any) => ({ cwd: e.cwd }))
   on('session.id', () => ({ value: 'abc' }))
+  on('settings.read', () => ({ value: { language: '한국어' } }))   // Claude Code 언어 설정 (요구 이력 76): 기존 시험은 한국어 화면
   on('env.get', (_: unknown, e: any) => ({ value: e.name === 'HOME' ? '/home/me' : undefined }))
   on('clock.every', () => ({ value: null }))
   on('clock.now', () => ({ value: 1000 }))
-  on('fs.write', (_: unknown, e: any) => { written.push(String(e.path)); want = true; return { value: null } })
+  on('fs.write', (_: unknown, e: any) => { written.push(String(e.path)); if (String(e.path).endsWith('/want')) want = true; return { value: null } })   // want를 쓸 때만 켬 (mod.json 쓰기는 켜지 않음)
   on('fs.read', (_: unknown, e: any) => {
     const p = String(e.path ?? e)
     if (p.endsWith('/sessions/abc/analysis_status.json') && status) return { value: JSON.stringify(status) }
@@ -223,6 +226,7 @@ function withControl(on: any, runs: string[][], written: Record<string, string>,
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('session.start', (_: unknown, e: any) => ({ cwd: e.cwd }))
   on('session.id', () => ({ value: 'abc' }))
+  on('settings.read', () => ({ value: { language: '한국어' } }))   // Claude Code 언어 설정 (요구 이력 76): 기존 시험은 한국어 화면
   on('env.get', (_: unknown, e: any) => ({ value: e.name === 'HOME' ? '/home/me' : undefined }))
   on('clock.every', () => ({ value: null }))
   on('clock.now', () => ({ value: 5000 }))
@@ -511,7 +515,8 @@ test('expand opens all three sections five more at a time and shrink takes five 
 
 test('keys do nothing, nothing is saved, and a new session starts with three (요구 이력 77)', async ($, on) => {
   const written: Record<string, string> = {}
-  engine(on, { state: 'idle', turn: 0 }, false, lots(12), '', { '/home/me/.claude-control/mod.json': '{"expand":"all"}' })
+  // 이미 첫 알림을 띄운 상태(noticed, 요구 이력 76)에서: 펼침 때문에 mod.json을 쓰는 일이 없어야 한다
+  engine(on, { state: 'idle', turn: 0 }, false, lots(12), '', { '/home/me/.claude-control/mod.json': '{"expand":"all","noticed":true}' })
   on('fs.write', (_: unknown, e: any) => { written[String(e.path)] = String(e.text ?? ''); return { value: undefined } })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   const ui = await mountPane($, { ...PANE, surface: 'terminal' })
@@ -533,5 +538,177 @@ test('vscode draws the same rows (요구 이력 75·77)', async ($, on) => {
   expect((await ui.find({ type: 'Button', key: 'expand' }))?.text).toBe('펼치기')
   await ui.press({ key: 'more-left' })
   expect((await ui.find({ type: 'Text', text: /일 5 #5/ }))).toBeTruthy()
+  await ui.unmount()
+})
+
+// ---------- 언어 (요구 이력 76, SCREEN §11 언어, BUILD_PLAN §4.14) ----------
+
+const MOD = '/home/me/.claude-control/mod.json'
+
+// 언어 시험 엔진: Claude Code language(setting)·터미널 언어(env)·mod.json(files)을 정하고, 질문 창 답(answers, null이면 Esc)을 차례로 준다
+function langEngine(on: any, o: { setting?: unknown; env?: Record<string, string>; files?: Record<string, string>; analysis?: unknown; status?: unknown;
+  answers?: (string | null)[]; toasts?: string[]; asked?: any[]; runs?: string[][] } = {}) {
+  const files: Record<string, string> = { ...(o.files ?? {}) }
+  const answers = [...(o.answers ?? [])]
+  on('command.register', () => ({ value: { command: 'nunchi' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('session.start', (_: unknown, e: any) => ({ cwd: e.cwd }))
+  on('session.id', () => ({ value: 'abc' }))
+  on('settings.read', () => ({ value: o.setting === undefined ? {} : { language: o.setting } }))
+  on('env.get', (_: unknown, e: any) => ({ value: e.name === 'HOME' ? '/home/me' : o.env?.[e.name] }))
+  on('clock.every', () => ({ value: null }))
+  on('clock.now', () => ({ value: 1000 }))
+  on('ui.toast', (_: unknown, e: any) => { o.toasts?.push(String(e.text ?? e)); return { value: undefined } })
+  on('fs.write', (_: unknown, e: any) => { files[String(e.path)] = String(e.text ?? ''); return { value: undefined } })
+  on('process.run', (_: unknown, e: any) => { o.runs?.push([...((e.argv ?? e) as string[])]); return { value: { exitCode: 0, stdout: '', stderr: '' } } })
+  on('fs.read', (_: unknown, e: any) => {
+    const p = String(e.path ?? e)
+    if (p in files) return { value: files[p] }
+    if (p.endsWith('/sessions/abc/analysis.json') && o.analysis !== null) return { value: JSON.stringify(o.analysis ?? ANALYSIS) }
+    if (p.endsWith('/sessions/abc/analysis_status.json')) return { value: JSON.stringify(o.status ?? { state: 'idle', turn: 0 }) }
+    throw new Error('missing ' + p)
+  })
+  on('tool.call', (_: unknown, e: any) => {
+    o.asked?.push(e)
+    const a = answers.shift()
+    if (a == null) return { deny: 'esc' }
+    const q = String(e.questions?.[0]?.question ?? '')
+    return { result: { answers: { [q]: a } } }
+  })
+  return files
+}
+
+test('the language comes from the saved choice, then Claude Code, then the terminal, then English (요구 이력 76)', async () => {
+  expect(norm(' 한국어 ')).toBe('ko')
+  expect(norm('Korean')).toBe('ko')
+  expect(norm('ko_KR')).toBe('ko')
+  expect(norm('English')).toBe('en')
+  expect(norm('en-US')).toBe('en')
+  expect(norm('Japanese')).toBe('japanese')
+  expect(pick({ saved: 'en', setting: '한국어' })).toEqual({ ui: 'en', analysis: 'en', from: 'saved' })
+  expect(pick({ setting: '한국어', lang: 'en_US.UTF-8' })).toEqual({ ui: 'ko', analysis: 'ko', from: 'claude' })
+  expect(pick({ setting: 'japanese' })).toEqual({ ui: 'en', analysis: 'japanese', from: 'claude' })   // 화면은 영어, 분석은 그 언어
+  expect(pick({ lcAll: 'ko_KR.UTF-8', lang: 'en_US.UTF-8' })).toEqual({ ui: 'ko', analysis: 'ko', from: 'terminal' })
+  expect(pick({ lang: 'ja_JP.UTF-8' })).toEqual({ ui: 'en', analysis: 'en', from: 'terminal' })        // 터미널 값은 분석기에 넘기지 않는다
+  expect(pick({ lang: 'C' })).toEqual({ ui: 'en', analysis: 'en', from: 'terminal' })
+  expect(pick({})).toEqual({ ui: 'en', analysis: 'en', from: 'default' })
+})
+
+test('with Claude Code set to English the pane is in English and quotes stay as written (요구 이력 76)', async ($, on) => {
+  langEngine(on, { setting: 'English', files: { [MOD]: '{"noticed":true}' } })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /^Nunchi · as of #3/ }))).toBeTruthy()
+  for (const head of [/^Goal  since #3/, /^Decisions 1/, /^Agent questions 2/, /^Open requests 1 of mine/]) {
+    expect((await ui.find({ type: 'Text', text: head }))).toBeTruthy()
+  }
+  expect((await ui.find({ type: 'Text', text: /no answer since/ }))).toBeTruthy()
+  expect((await ui.find({ type: 'Text', text: /partly answered/ }))).toBeTruthy()
+  expect((await ui.find({ type: 'Text', text: /테스트 돌리기 — deferred/ }))).toBeTruthy()   // 요약은 분석 언어 그대로, 상태 이름만 화면 언어
+  expect((await ui.find({ type: 'Text', text: /“폭은 몇 칸으로 할지 알려 주세요”/ }))).toBeTruthy()
+  for (const ko of [/^목표/, /^의사결정/, /^에이전트 질문/, /^남은 요청/, /기준/]) {
+    expect((await ui.find({ type: 'Text', text: ko }))).toBeFalsy()
+  }
+  await ui.unmount()
+})
+
+test('when the session was analyzed in another language the head says how to rebuild it (요구 이력 76)', async ($, on) => {
+  langEngine(on, { setting: 'English', files: { [MOD]: '{"noticed":true}' } })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: 'analysis: 한국어 · /nunchi language to rebuild' }))).toBeTruthy()
+  await ui.unmount()
+})
+
+test('no language line when the session is already in the chosen language, and Japanese shows English labels (요구 이력 76)', async ($, on) => {
+  langEngine(on, { setting: 'japanese', files: { [MOD]: '{"noticed":true}' },
+    analysis: { ...ANALYSIS, flow: { ...ANALYSIS.flow, lang: 'japanese' } } })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /^Goal/ }))).toBeTruthy()
+  expect((await ui.find({ type: 'Text', text: /^analysis:/ }))).toBeFalsy()
+  await ui.unmount()
+})
+
+test('the first session tells once which language it uses, and never again (요구 이력 76)', async ($, on) => {
+  const toasts: string[] = []
+  const files = langEngine(on, { setting: '한국어', toasts, files: { [MOD]: '{"expand":"all"}' } })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  expect(toasts).toEqual(['눈치: 한국어로 표시합니다 · /nunchi language로 변경'])
+  expect(JSON.parse(files[MOD]!)).toEqual({ expand: 'all', noticed: true })   // 펼침 저장은 남는다
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })   // 다시 불러와도 (session.start가 다시 옴)
+  expect(toasts.length).toBe(1)
+  await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()   // 열었다 닫아 1초 갱신 타이머를 정리한다
+})
+
+test('the notice is in English when Claude Code is set to English (요구 이력 76)', async ($, on) => {
+  const toasts: string[] = []
+  langEngine(on, { setting: 'English', toasts })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  expect(toasts).toEqual(['Nunchi: showing English · change with /nunchi language'])
+  await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()   // 열었다 닫아 1초 갱신 타이머를 정리한다
+})
+
+test('/nunchi language asks with the current language first and saves the choice (요구 이력 76)', async ($, on) => {
+  const asked: any[] = []
+  const files = langEngine(on, { setting: '한국어', files: { [MOD]: '{"noticed":true,"expand":"all"}' }, answers: ['English'], asked })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const r = await $.command.run({ command: 'nunchi', args: 'language' } as any)
+  const q = asked[0]?.questions?.[0]
+  expect(q?.question).toBe('눈치 언어 / Nunchi language? 지금: 한국어 (Claude Code 설정)')
+  expect(q?.options?.map((x: any) => x.label ?? x)).toEqual(['한국어', 'English', 'Claude Code 설정 따르기'])
+  expect(JSON.parse(files[MOD]!)).toEqual({ noticed: true, expand: 'all', language: 'en' })
+  expect(String(r.text)).toMatch(/^Nunchi language: English/)
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /^Goal/ }))).toBeTruthy()      // 패널 문구가 바로 바뀐다
+  await ui.unmount()
+})
+
+test('following Claude Code removes the saved choice, and Esc changes nothing (요구 이력 76)', async ($, on) => {
+  const files = langEngine(on, { setting: '한국어', files: { [MOD]: '{"noticed":true,"language":"en"}' }, answers: ['Claude Code 설정 따르기', null] })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const r = await $.command.run({ command: 'nunchi', args: 'language' } as any)
+  expect(JSON.parse(files[MOD]!)).toEqual({ noticed: true })
+  expect(String(r.text)).toMatch(/Claude Code 설정을 따릅니다\(지금 한국어\)/)
+  const before = files[MOD]
+  const r2 = await $.command.run({ command: 'nunchi', args: 'language' } as any)
+  expect(files[MOD]).toBe(before)
+  expect(String(r2.text)).toMatch(/바꾸지 않았습니다/)
+  await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()   // 열었다 닫아 1초 갱신 타이머를 정리한다
+})
+
+test('/nunchi without arguments still turns nunchi on (요구 이력 76)', async ($, on) => {
+  const files = langEngine(on, { setting: '한국어', analysis: null, files: { [MOD]: '{"noticed":true}' } })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const r = await $.command.run({ command: 'nunchi' } as any)
+  expect(Object.keys(files).some(p => p.endsWith('/sessions/abc/want'))).toBe(true)
+  expect(String(r.text)).toMatch(/눈치를 켰습니다/)
+  await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()   // 열었다 닫아 1초 갱신 타이머를 정리한다
+})
+
+test('failure codes from the engine read in the screen language, unknown text as is (요구 이력 76)', async () => {
+  expect(failText('exit:1', 'ko')).toBe('claude 종료 코드 1')
+  expect(failText('exit:1', 'en')).toBe('claude exited with 1')
+  expect(failText('timeout:150', 'ko')).toBe('시간 초과 (150초)')
+  expect(failText('timeout:150', 'en')).toBe('timed out (150s)')
+  expect(failText('no-turns', 'en')).toBe('no turns recorded to analyze')
+  expect(failText('시간 초과 (150초)', 'en')).toBe('시간 초과 (150초)')   // 옛 결과
+})
+
+test('a failed analysis shows the translated reason in English (요구 이력 76)', async ($, on) => {
+  langEngine(on, { setting: 'English', analysis: null, status: { state: 'failed', turn: 0, error: 'exit:1' }, files: { [MOD]: '{"noticed":true}' } })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: 'Analysis failed · claude exited with 1' }))).toBeTruthy()
+  await ui.unmount()
+})
+
+test('the bottom buttons read More and Fewer in English (요구 이력 76·77)', async ($, on) => {
+  langEngine(on, { setting: 'English', analysis: lots(5), files: { [MOD]: '{"noticed":true}' } })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
+  expect((await ui.find({ type: 'Button', key: 'expand' }))?.text).toBe('More')
+  expect((await ui.find({ type: 'Button', key: 'shrink' }))?.text).toBe('Fewer')
+  expect((await ui.find({ type: 'Button', key: 'more-left' }))?.text).toBe('… 2 more')
   await ui.unmount()
 })
