@@ -205,3 +205,15 @@ def test_drain_drops_hook_requests_of_a_turned_off_session_but_not_control_ones(
     assert analyzer.read_analysis(home / "sessions" / "s1") is None                 # 끈 세션은 분석하지 않는다
     assert analyzer.read_analysis(home / "sessions" / "s2")                           # 관제에서 직접 고른 것은 분석
     assert worker.pending(home) == []
+
+
+def test_worker_command_prefers_the_rust_engine(tmp_path, monkeypatch):
+    """bin/nunchi-engine이 있으면 관제도 러스트 분석기를 깨운다 (요구 이력 68)."""
+    from control_tui import worker as w
+    monkeypatch.setattr(w, "REPO", tmp_path)
+    assert w.worker_command(tmp_path / "home")[1:] == ["-m", "control_tui.worker", "--home", str(tmp_path / "home")]
+    (tmp_path / "bin").mkdir()
+    engine = tmp_path / "bin" / "nunchi-engine"
+    engine.write_text("#!/bin/sh\n")
+    engine.chmod(0o755)
+    assert w.worker_command(tmp_path / "home") == [str(engine), "worker", "--home", str(tmp_path / "home")]

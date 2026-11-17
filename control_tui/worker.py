@@ -189,6 +189,10 @@ def _drop(item: dict) -> None:
 # ---------- 깨우기 ----------
 
 def worker_command(home: Path) -> list:
+    """분석기 실행 명령. 러스트 엔진(bin/nunchi-engine)이 있으면 그것을 쓴다: 훅과 관제가 같은 분석기를 띄운다 (요구 이력 68)."""
+    engine = REPO / "bin" / "nunchi-engine"
+    if os.access(engine, os.X_OK):
+        return [str(engine), "worker", "--home", str(home)]
     py = REPO / ".venv" / "bin" / "python"
     exe = str(py) if py.exists() else sys.executable
     return [exe, "-m", "control_tui.worker", "--home", str(home)]

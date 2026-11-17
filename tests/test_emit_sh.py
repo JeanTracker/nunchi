@@ -76,3 +76,19 @@ def test_python_older_than_3_9_counts_as_missing(bindir, tmp_path):
     res = run(bindir, tmp_path / "control", "SessionStart")
     assert "systemMessage" in json.loads(res.stdout)
     assert not (tmp_path / "ran").exists()
+
+
+def test_hands_over_to_the_rust_engine_when_it_is_shipped(tmp_path, bindir):
+    """bin/nunchi-engine이 있으면 파이썬을 찾지 않고 그것을 부른다 (요구 이력 68)."""
+    plugin = tmp_path / "plugin"
+    (plugin / "hooks").mkdir(parents=True)
+    (plugin / "bin").mkdir()
+    script = plugin / "hooks" / "emit.sh"
+    script.write_text(EMIT_SH.read_text())
+    engine = plugin / "bin" / "nunchi-engine"
+    engine.write_text(f'#!/bin/sh\nread -r line\nprintf "%s|%s" "$1" "$line" > "{tmp_path}/called"\n')
+    engine.chmod(0o755)
+    res = subprocess.run(["/bin/sh", str(script)], input='{"hook_event_name":"Stop"}\n', capture_output=True, text=True,
+                         env={"PATH": str(bindir)}, timeout=20)
+    assert res.returncode == 0, res.stderr
+    assert (tmp_path / "called").read_text() == 'hook|{"hook_event_name":"Stop"}'

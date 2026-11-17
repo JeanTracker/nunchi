@@ -1,10 +1,14 @@
 #!/bin/sh
-# 플러그인 훅의 입구 (요구 이력 67, BUILD_PLAN §4.12).
+# 플러그인 훅의 입구 (요구 이력 67·68, BUILD_PLAN §4.12·§4.13).
 # 쓸 수 있는 python3(3.9 이상)가 있으면 emit.py로 넘긴다. 없으면 세션 시작 때 한 번,
 # 사용자에게는 설치 방법을, 에이전트에게는 설치를 도와주라는 안내를 내고, 다른 훅은 조용히 끝낸다.
 # 셸 내장 기능만 쓴다 (PATH가 비어 있어도 돌도록 dirname·cat 같은 바깥 명령을 쓰지 않는다).
 
 here=${0%/*}
+# 러스트 엔진이 함께 실려 있으면 그것을 쓴다 (요구 이력 68, BUILD_PLAN §4.13). 파이썬이 필요 없다.
+if [ -x "$here/../bin/nunchi-engine" ]; then
+  exec "$here/../bin/nunchi-engine" hook
+fi
 py=$(command -v python3 2>/dev/null || true)
 # 개발 도구가 없는 맥의 /usr/bin/python3는 설치 창을 띄우는 껍데기라 부르지 않는다.
 if [ "$py" = /usr/bin/python3 ] && ! /usr/bin/xcode-select -p >/dev/null 2>&1; then
