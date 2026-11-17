@@ -1,51 +1,25 @@
-# Installing and using nunchi
+# nunchi guide
 
-nunchi is a terminal app you keep open in one iTerm2 pane. It shows the state and
-conversation of the Claude Code sessions running in your other panes, and lets you send
-the next instruction from where you are. It comes in two parts: a Claude Code plugin that
-records your sessions, analyzes them in the background and adds a side panel inside each
-session, and the control screen (the `nunchi` command), which `install.sh` installs.
+nunchi is a Claude Code plugin that adds a side panel to a session. When you come back to
+a session after a while, the panel shows what you need first: what the agent is asking
+you, how the conversation got here, and which of your requests are still open. You read
+that, answer, and carry on.
+
+The panel only reads analysis results. A small engine that ships with the plugin records
+each session's events through Claude Code hooks and, when a response ends, analyzes the
+new turn in the background with `claude -p`.
 
 한국어 안내: [docs/ko/GUIDE.md](ko/GUIDE.md)
 
-## What it needs
+## What you need
 
-Tested on macOS only. The two parts need different things.
-
-**The plugin** runs outside Claude Code's own runtime, so it relies on these commands
-being on the PATH of the shell you start Claude Code from:
-
-- `python3`, 3.9 or later. The hooks and the analyzer use only the standard library, so
-  nothing is installed with pip. The `python3` that comes with the Xcode Command Line
-  Tools works; you already have it if `git` works, because git on macOS comes from the
-  same package. If no `python3` 3.9 or later is found, Claude Code keeps working but
-  nothing is recorded. The first line of each session then says so and gives the
-  install command, and the agent offers to help install it in its first reply (it does
-  not install anything without your agreement). After installing, restart the session.
-  The check happens when a session starts; Claude Code has no way to run plugin code
-  at install time.
-- `claude`, for analysis. The analyzer calls `claude -p` once per new turn on your
-  account's quota (see "Reducing analysis cost"). Without it, sessions are still
-  recorded but goals, dropped requests and summaries stay empty.
-- `git` and access to the repository, to add the marketplace.
-
-The hooks and the analyzer use POSIX file locks and detached processes, so they do not
-run on Windows.
-
-**The control screen** (`install.sh`) needs:
-
-- Python 3.11 or later. `install.sh` creates `.venv` in the repository and installs
-  `textual` into it with pip, which needs network access once.
-- iTerm2. Sending text to a pane goes through AppleScript (`osascript`), so macOS asks
-  once for permission to control iTerm2.
-- `git`, to download and update the source.
+- macOS (Apple silicon or Intel). The engine is a native binary; no Python is needed.
+- Claude Code. Tested with 2.1.322 to 2.1.325.
+- The `claude` command on the PATH of the shell you start Claude Code from. The analyzer
+  calls `claude -p` once per new turn on your account's quota (see "Analysis cost").
+- While the repository is private, git access to it, to add the marketplace.
 
 ## Install
-
-Install the plugin first. Without it no session is recorded and the control screen
-stays empty.
-
-### 1. The plugin
 
 Run this inside Claude Code. It adds the marketplace and installs the plugin in one step:
 
@@ -61,284 +35,148 @@ claude plugin install nunchi@nunchi
 claude plugin list                                   # look for nunchi@nunchi · enabled
 ```
 
-The plugin brings three things: the hooks that record each session's events into
-`~/.claude-control`, the background analyzer that the hooks wake when a response ends,
-and the side panel (the mod, described below). It adds no hook entries to
-`~/.claude/settings.json` (Claude Code itself records the marketplace and the enabled
-plugin there), and it adds no tokens to the conversation. Claude Code keeps
-its own copy of the whole repository, so moving or deleting your clone does not affect
-it. New sessions pick it up; restart a session that is already open
-(`claude --resume <session ID>`). While the repository is private, adding the
-marketplace needs git access to it.
+The plugin brings the panel, the hooks that record each session into
+`~/.claude-control`, and the engine. It adds no hook entries to `~/.claude/settings.json`
+(Claude Code itself records the marketplace and the enabled plugin there), and it adds no
+tokens to the conversation.
+
+Claude Code keeps its own copy of the plugin. New sessions pick it up; restart a session
+that is already open (`claude --resume <session ID>`). Hooks are read when a session
+starts, so a session opened before the install is not recorded until it restarts.
 
 **Update.** `claude plugin marketplace update nunchi`, then
-`claude plugin update nunchi@nunchi`, and restart your sessions. Claude Code keeps each
-version in its own folder, so sessions that were already open, and analyses already
-running, finish on the old version.
-
-### 2. The control screen
-
-Once the repository is public, one line is enough:
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/JeanTracker/nunchi/main/install.sh | sh
-```
-
-The repository is private for now, so that URL returns 404. Clone it with an account
-that has access and run the installer from the clone:
-
-```sh
-git clone https://github.com/JeanTracker/nunchi.git
-cd nunchi
-./install.sh
-```
-
-The two methods differ only in where the source lives. The curl install downloads to
-`~/.local/share/nunchi`; running `./install.sh` in a clone installs in place. Everything
-else is the same:
-
-1. Creates `.venv` inside the repository and installs `textual`.
-2. Links `~/.local/bin/nunchi` to the repository's `bin/nunchi`.
-3. If `~/.local/bin` is not on your PATH, adds it to your shell rc file (`~/.zshrc` for
-   zsh) inside a `# >>> nunchi >>>` … `# <<< nunchi <<<` block. Nothing outside the
-   block is touched.
-4. Tidies `~/.claude/settings.json`: removes nunchi hooks that an earlier version put
-   there, from any folder (the plugin records now, and keeping both records every event
-   twice), and wraps your status line to record context usage. It shows the change as a
-   diff first and asks `적용할까요? [y/N]` (apply?). If you accept, a backup
-   `settings.json.bak-<timestamp>` is written next to it.
-
-Your existing status line keeps working. nunchi wraps that command and only records the
-context usage on the side. At the end the installer says whether the plugin is
-installed, and if it is not, shows the command to install it. It does not install the
-plugin itself, because that changes `~/.claude`.
-
-Running the curl line or `~/.local/share/nunchi/install.sh` again updates the install:
-it runs `git pull` in the download folder and re-syncs dependencies, and leaves settings
-that are already in place alone. If you have edited files in that folder, it skips the
-update and keeps them. For a clone, run `git pull` and then `./install.sh` again.
-
-With curl, pass options after `sh -s --`. For example, to install without prompts:
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/JeanTracker/nunchi/main/install.sh | sh -s -- --yes
-```
-
-- `--no-hooks`: leave `~/.claude/settings.json` alone. Tidy it later with
-  `install.sh --settings`.
-- `--settings`: only tidy `~/.claude/settings.json`, as in step 4.
-- `--hooks`: for using nunchi without the plugin, register the hooks in
-  `~/.claude/settings.json` as earlier versions did. Do not combine it with the plugin.
-- `--link`, `--path`: redo only the command link, or only the PATH entry.
-- `--yes`: proceed without confirmation, including the `~/.claude/settings.json` change.
-
-You can change locations with `NUNCHI_HOME` (download folder), `NUNCHI_BIN` (command
-folder) and `NUNCHI_RC` (shell rc file). `./install.sh --help` lists everything.
-
-> Hooks in `~/.claude/settings.json` and the plugin's hooks both record, so every event
-> is recorded twice when both are present. If you installed an earlier version, run
-> `./install.sh --settings` once after installing the plugin.
-
-## First run
-
-Split an iTerm2 pane and run `nunchi`. If the command is not found because you have not
-opened a new terminal yet, run `source ~/.zshrc` first.
-
-```sh
-nunchi
-```
-
-When you start Claude Code in another pane, it appears in the session list at the top.
-Sessions that were already open before you installed the plugin show as "연결 대기"
-(waiting to connect). Hooks are read when a session starts, so end that session once and
-start it again to connect it.
-
-The first time you send an instruction, macOS may ask whether to allow control of
-iTerm2. Allow it, otherwise nunchi cannot type into the panes.
-
-## Attaching the in-session panel (mod)
-
-The mod is the part of the plugin that opens a nunchi panel beside a Claude Code session.
-It shows what the agent is asking you right now, the goal and decisions so far, and which
-of your requests are still open. The mod does not analyze anything; it only reads
-analysis results. Analysis is done by the background analyzer from the same plugin,
-which the hooks wake when a response ends, so you do not need the nunchi control screen
-running. The analyzer runs only when there is work and stops by itself when done. The
-plugin is not a skill: it has no instructions for the model, so it adds no tokens to the
-conversation.
-
-Verified with Claude Code 2.1.322. The repository is also a plugin marketplace
-(`.claude-plugin/marketplace.json`); the plugin is the repository itself. Install and
-update it as described in "Install" above.
+`claude plugin update nunchi@nunchi`, and restart your sessions. Each version lives in its
+own folder, so sessions already open, and analyses already running, finish on the old one.
 
 If you copied the mod into `~/.claude/skills/nunchi` earlier, delete that copy
-(`rm -rf ~/.claude/skills/nunchi`). The installed plugin takes precedence and the copy
-is reported as "already taken" and not loaded.
+(`rm -rf ~/.claude/skills/nunchi`). The installed plugin takes precedence and the copy is
+reported as "already taken" and not loaded.
 
-**Attach it once.** To attach a folder to a single session without installing, pass it
-as an option. For a session that is already open, close it and reopen it with `--resume`.
-The repository folder attaches the whole plugin (mod and hooks); `mod/nunchi` attaches
-only the mod. Both carry the name `nunchi`, so with the plugin installed, which copy
-Claude Code loads has not been checked yet; uninstall the plugin first when you test a
-folder this way.
+## Turning nunchi on
 
-```sh
-claude --plugin-dir ~/.local/share/nunchi                                       # mod and hooks
-claude --resume <session ID> --plugin-dir ~/.local/share/nunchi/mod/nunchi      # mod only
+Having the plugin installed does not analyze every session. Type `/nunchi` in a session
+whose flow you want to follow. That session becomes an analysis target and the panel
+opens. From then on it is analyzed after every response, and it stays on when you reopen
+the session. Responses from before you turned it on are analyzed together, from the
+start, when the next response ends.
+
+The panel does not open on its own in sessions you have not turned on. Turning it off
+again (`/nunchi off`) is not built yet.
+
+## What the panel shows
+
+The panel opens on the right when the window is 110 columns or wider and takes 40% of
+the window. In a narrower window a single line appears above the input box instead:
+`눈치 목표: … · 묻는 것 n · 남은 것 n · #n 기준` (goal, open questions, open requests,
+analysis basis). Labels are in Korean; the translations below follow the screen from top
+to bottom.
+
+**Header.** `눈치 · #12 기준` means the results are based on turn 12. Next to it you may
+see:
+
+- `분석 대기...` (queued) or `분석 중...` (analyzing)
+- `흐름 처음부터 만드는 중 #3/#12` (building the flow from the start) or `밀린 턴 반영 중`
+  (catching up on turns), with progress
+- `응답 2개 밀림`: two responses arrived since the last analysis
+- `분석 실패 · <reason>` (analysis failed); it is retried a limited number of times
+- `자동 분석 꺼짐 · /nunchi로 켜기`: the session has old results but is not turned on
+
+Before the first result the panel shows `눈치 켜짐 · 다음 응답이 끝나면 분석합니다`
+(on; analysis starts when the next response ends).
+
+**에이전트가 묻는 것 (what the agent is asking).** Decisions, confirmations or
+information the agent is waiting on, newest first. Each item has a number, a one-line
+summary, the turn it was asked in, and the agent's own words in quotes. `#5부터 답 없음`
+means it has gone unanswered since turn 5; `일부 답함` means partly answered. An item
+closes when one of your messages answers it. Items closed by a blanket approval such as
+"go ahead as you suggest" are counted separately (`통째 승인으로 닫은 것`).
+
+**지금까지 (so far).**
+
+- `흐름` (flow): one paragraph on how the conversation has gone from the start. It is the
+  analyzer's estimate, so it is dimmed.
+- `지금 목표` (current goal): what the conversation is working on now, and from which turn.
+- `정한 것` (decided): decisions you made, marked ✔.
+- `방금` (just now): the agent's summary of the last turn.
+
+**남은 것 (still open).** Your requests that are not done yet: ○ not handled, ◐ in
+progress (for example a merge request waiting for review), ⊘ the agent could not do it or
+deferred it. Each shows the turn it came from.
+
+**번호 풀이 (numbers explained).** When the last response cites plan numbers such as R17,
+§4.5, Phase 4c or 요구 이력 41, the panel looks them up in the project's `docs/*.md` and
+shows the original wording, up to five. This only works for documents written in that
+table and heading style.
+
+Links in the panel (bare URLs and Markdown links) can be clicked.
+
+## Analysis cost
+
+Each new turn of a turned-on session costs one `claude -p` call, run by the engine
+outside your session; it does not add to the session's context. Settings live in
+`~/.claude-control/config.json`:
+
+```json
+{
+  "analyze_scope": "selected",
+  "analyze_model": "",
+  "analyze_workers": 1,
+  "mod_width_ratio": 0.4
+}
 ```
 
-**Turning nunchi on.** Having the plugin attached does not analyze every session. Type
-`/nunchi` in a session whose flow you want to follow: that session becomes an analysis
-target and the panel opens. From then on it is analyzed after every response, and it
-stays on when you reopen the session. Responses from before you turned it on are
-analyzed together, from the start, when the next response ends. The panel does not open
-in sessions that are not turned on. Sessions selected in the nunchi control screen are
-still analyzed as before, and the panel opens if they have results.
+- `analyze_scope`: `"off"` stops all analysis. `"all"` analyzes every session, turned on
+  or not. The default analyzes only sessions turned on with `/nunchi` (and the session
+  selected in the control screen, if you use it).
+- `analyze_model`: the model for analysis; empty uses the `claude` default.
+- `analyze_workers`: how many analyses may run at once (1 or 2). They share your
+  account's quota.
+- `mod_width_ratio`: panel width as a share of the window (0.2 to 0.45).
 
-In a wide window (110 columns or more) the panel opens on the right; in a narrow one a
-single line appears above the input box. The panel takes 40% of the window; change it
-with `mod_width_ratio` in `~/.claude-control/config.json`. While waiting it shows
-"분석 대기..." (queued), while running "분석 중..." (analyzing), and on failure
-"분석 실패 · <reason>" (analysis failed).
+When several sessions finish at once, the most recent responses go first. The engine
+starts only when there is work and exits when the queue is empty.
 
-**Using it with amask.** amask adds its own hooks (`--settings`) and its own mod
-(`--plugin-dir`) to the command line when it opens a session. The nunchi mod has a
-different name and the events they listen to do not overlap (the amask mod only receives
-turn ends and draws nothing). Both worked together while nunchi's hooks lived in
-`~/.claude/settings.json`; with the hooks in the plugin, a session under amask has not
-been checked yet. If you pass `--settings` yourself, as in `claude --settings …`, amask
-turns its own hooks and mod off (that is amask's behavior).
+## When something is off
 
-**Detaching.** Uninstall the plugin and remove the marketplace. Open sessions run
-without the mod and the hooks after a restart, and are no longer recorded.
+- **The panel never fills in.** Check that the session was started after the plugin was
+  installed, and that `claude` runs from that shell. Errors are logged to
+  `~/.claude-control/errors.log`.
+- **A message at session start says the engine could not run.** Update or reinstall the
+  plugin (`claude plugin update nunchi@nunchi`) and restart the session.
+- **Using it with amask.** amask adds its own hooks and mod when it opens a session. The
+  two mods have different names and listen to different events. A session under amask
+  with nunchi's hooks in the plugin has not been checked yet.
+
+## Removing it
 
 ```sh
 claude plugin uninstall nunchi@nunchi
 claude plugin marketplace remove nunchi
 ```
 
-## Screen and keys
+Open sessions run without the panel and stop being recorded after a restart. Session
+records and settings stay in `~/.claude-control`; delete that folder if you no longer
+need it.
 
-The screen has three areas. At 140 columns or wider the session list is on the left and
-the conversation on the right; narrower, they stack vertically. The input line is always
-at the bottom.
+## For developers
 
-**Session list.** Sessions whose response arrived first move to the top. Each row shows
-a state (작업 working · 응답 responded · 허락 permission · 질문 question · 대기 idle ·
-종료 ended) and the number of open requests (`⚠1`). Tool names are not shown. Use ↑↓ to
-select.
-
-**Conversation.** For the selected session, the goal flow (start → turns where the topic
-moved → now) and the requests you sent that are not yet handled, or that the agent said
-it could not do, are pinned at the top. The conversation flows below in time order. Older
-turns are folded ten at a time into one line, and the last turn shows the full response
-text.
-
-- ↑↓ select a turn, Enter expand a fold or a turn
-- `d` response detail (request, final response, what the agent said along the way), Esc
-  to go back, ←→ previous/next turn
-- `c` all accumulated requests (not handled · could not do or deferred · handled ·
-  replaced by a later request), Enter to jump to that request's turn, c or Esc to close
-- `o` expand the original text, `s` show the last response as a summary
-- End (or `]`) jump to the last turn, Home (or `[`) to the top, PgUp/PgDn scroll
-
-**Input line.** Enter it with `i` or `:`, type, and press Enter: the text is typed into
-the selected session's pane as if you had typed it there. If the session is busy, it is
-queued and sent when the response ends. If the session is waiting for permission, text
-input is blocked and only `y` (allow) or `n` (deny) is accepted, so that no unintended
-option gets pressed.
-
-When a session shows a multiple-choice question and waits, the list shows `? 질문`
-(question) and the conversation area shows the question and the answers chosen so far.
-Press `i` and the options open in place of the input box. Choose with a number or
-↑↓ and Enter; for multi-select questions, toggle with Space and continue with Enter. When
-everything is chosen, the answer is shown once more; press Enter and nunchi checks that
-the question is still open in the pane before sending. Free-text answers still have to be
-typed in the pane. `y`/`n` do not work on questions.
-
-- New line: Shift+Enter, Option+Enter, or Ctrl+J
-- Starting with `/` lists Claude Code commands and skills; Tab completes
-- ↑↓ input history, Shift+Tab cycles the session's permission mode, PgUp/PgDn scroll the
-  conversation even while typing
-
-Outside the input line, Tab moves between the three areas, and `q` or Ctrl+Q quits. Keys
-work by position even with Korean input active (ㅂ=q, ㅇ=d, and so on). `p` (jump to the
-selected session's pane) is not built yet.
-
-### Reducing analysis cost
-
-The goal flow, summaries and request log are built by calling `claude -p` once for each
-new turn whenever a session finishes a response. That uses your quota. Tune it in
-`~/.claude-control/config.json`:
-
-```json
-{
-  "analyze_scope": "selected",
-  "analyze_when": "auto",
-  "analyze_model": "",
-  "analyze_max_turns": 60,
-  "analyze_workers": 1,
-  "latest_view": "full",
-  "theme": "graphite"
-}
-```
-
-Set `analyze_scope` to `"off"` to turn analysis off, or `"all"` to analyze every session.
-The default `"selected"` analyzes only the selected session. With `analyze_when` set to
-`"manual"`, analysis runs only when you press `a`. To turn it off for one run, start with
-`CONTROL_TUI_ANALYZE=0 nunchi`.
-
-Analysis is done by a background analyzer outside the nunchi screen. Its targets are the
-session selected in nunchi and sessions turned on with `/nunchi` (every session with
-`"all"`). `analyze_workers` is how many analyses may run at once (1 or 2, default 1).
-When several sessions finish at the same time, the selected session goes first, then the
-most recent responses. Raising it to 2 shortens the wait, but analysis uses the same
-account's quota, so usage arrives in bursts. Analyses already running finish even if you
-quit nunchi.
-
-`theme` sets the colors: `graphite` (default), `midnight`, `polar`, `forest`, `dusk`,
-`contrast` (high contrast) or `paper` (light background). While running, try one with
-Ctrl+P → 테마 바꾸기 (change theme); a theme chosen this way is not saved.
-
-## Uninstall
+The engine is Rust (`crates/engine`). The main branch holds sources only. Build the
+engine into `bin/` and attach your clone to a session:
 
 ```sh
-~/.local/share/nunchi/install.sh --uninstall   # curl install
-./install.sh --uninstall                       # install from a clone
+rustup target add aarch64-apple-darwin x86_64-apple-darwin
+scripts/build-engine.sh
+claude --plugin-dir ~/src/nunchi
 ```
 
-Even if the download folder is already gone, the curl form can clean up what is left.
-As with installing, this works only once the repository is public.
+Uninstall the plugin first, or both copies record every event. `cargo test` runs the
+engine tests. Releases are cut by pushing a tag `v<version>` that matches
+`.claude-plugin/plugin.json`: a workflow builds the engine and replaces the `dist` branch,
+which the marketplace entry points at.
 
-```sh
-curl -fsSL https://raw.githubusercontent.com/JeanTracker/nunchi/main/install.sh | sh -s -- --uninstall
-```
+## The control screen
 
-This removes the control screen. Remove the plugin as described in "Detaching" above.
-
-Uninstalling reverses the install. First it removes this folder's nunchi hooks (if
-`--hooks` put any there) from `~/.claude/settings.json` and restores the original status
-line command, again showing a diff, asking, and writing a backup. If you decline this
-step, or another tool has wrapped the status line again so it cannot be restored, it
-stops without removing anything else: if the files disappeared while the hooks or the
-status line stayed, every Claude Code session would call a missing file.
-
-Next it removes the `~/.local/bin/nunchi` link and the nunchi block in your shell rc
-file, then the curl download folder. If that folder contains edited or new files, they
-are kept and reported. A clone you made yourself is kept; only the `.venv` created during
-install is removed.
-
-`~/.claude-control`, which holds session records and settings, is kept. If you no longer
-need it, quit nunchi and delete it:
-
-```sh
-rm -rf ~/.claude-control
-```
-
-`install.sh --uninstall` does not remove the plugin, so sessions keep being recorded
-until you uninstall it.
-
-If you deleted the folder first and the hooks are left behind, reinstall to the same
-location and run `--uninstall` to remove them cleanly. If you installed elsewhere, delete
-the entries containing `hooks/emit.py` and `hooks/statusline.py` from settings.json by
-hand.
+The repository also contains the control screen: a terminal app you keep in one iTerm2
+pane to watch several sessions at once and send the next instruction from there. It is
+installed separately with `install.sh` and needs Python 3.11. It is being reworked, and
+this guide will cover it again later.

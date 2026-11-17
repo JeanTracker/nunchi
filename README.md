@@ -1,51 +1,46 @@
 # nunchi
 
-**Read the room across your Claude Code sessions.**
+**Read the room in your Claude Code session.**
 
-nunchi is a terminal app for people who run several Claude Code sessions at once.
-It shows each session's goal, where the conversation changed direction, which earlier
-requests may have been dropped, and what needs your attention next — and lets you send
-the next instruction without leaving the screen.
+nunchi adds a side panel to a Claude Code session. When you come back to a session, it
+shows what you need first: what the agent is asking you, how the conversation got here,
+and which of your requests are still open.
 
 > *Nunchi (눈치)* is the Korean art of quickly reading a situation and acting on it.
 
 ## Install
 
-macOS, iTerm2 and git are required. The plugin's hooks use the `python3` that comes with
-the Xcode Command Line Tools (3.9+, standard library only); analysis uses the `claude` command.
-
-nunchi has two parts. The Claude Code plugin records your sessions, analyzes them in the
-background and adds a side panel inside each session. Install it first, from inside
-Claude Code:
+Run this inside Claude Code:
 
 ```
 /plugin install nunchi --marketplace JeanTracker/nunchi
 ```
 
-The control screen (`nunchi` command, Python 3.11+) is installed by a script:
+macOS only. Nothing else to install: the plugin ships its own engine, so it needs no
+Python. While the repository is private, adding the marketplace needs git access to it.
+
+## Use
+
+In a session you want to follow, type `/nunchi`. The panel opens on the right (or as one
+line above the input box in a narrow window), and the session is analyzed after each
+response from then on. Analysis runs `claude -p` in the background and uses your
+account's quota; see the guide for how to limit it.
+
+## Update and remove
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/JeanTracker/nunchi/main/install.sh | sh
-```
-
-While the repository is private, clone it and run `./install.sh` instead. The installer
-shows a diff and asks before it touches `~/.claude/settings.json`, where it removes hooks
-left by earlier versions and wraps the status line.
-
-Then run `nunchi` in an iTerm2 pane.
-
-## Uninstall
-
-```sh
+claude plugin marketplace update nunchi && claude plugin update nunchi@nunchi
 claude plugin uninstall nunchi@nunchi && claude plugin marketplace remove nunchi
-~/.local/share/nunchi/install.sh --uninstall
 ```
 
-Full install, usage and uninstall guide: [docs/GUIDE.md](docs/GUIDE.md)
-(한국어: [docs/ko/GUIDE.md](docs/ko/GUIDE.md))
+Full guide: [docs/GUIDE.md](docs/GUIDE.md) (한국어: [docs/ko/GUIDE.md](docs/ko/GUIDE.md))
 
 ## Status
 
-Early development. Expect rough edges; jumping to a session's pane (`p`) is not built yet.
+Early development. Turning the panel off for a session (`/nunchi off`) and a status
+command are not built yet.
+
+The repository also holds a separate terminal app for watching several sessions at once
+(the control screen, `install.sh`). It is being reworked and will be documented later.
 
 nunchi is an independent project and is not affiliated with or endorsed by Anthropic.
