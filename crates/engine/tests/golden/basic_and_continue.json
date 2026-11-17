@@ -1,0 +1,328 @@
+{
+ "files": {
+  "analyzer-0.lock": "<lock>",
+  "sessions/s1/analysis.json": {
+   "first_goal": "처음 목표 1",
+   "current_goal": "목표 1",
+   "turns": [],
+   "last_response_summary": "",
+   "ledger": [],
+   "forgotten": [],
+   "flow": {
+    "version": 3,
+    "first_goal": {
+     "text": "처음 목표 1",
+     "turn": 1,
+     "quote": "설치 스크립트를 정리해"
+    },
+    "current_goal": {
+     "text": "목표 1",
+     "turn": 1,
+     "quote": "설치 스크립트를 정리해"
+    },
+    "steps": [
+     {
+      "index": 1,
+      "label": "시작",
+      "summary": "턴 1 요청 요약",
+      "quote": "설치 스크립트를 정리해",
+      "agent_summary": "턴 1 응답 요약",
+      "agent_quote": "install.sh를",
+      "fp": "설치스크립트를정리해줘",
+      "grounded": true,
+      "shift": false,
+      "title": "",
+      "decision": "",
+      "digest": "턴 1까지의 흐름",
+      "resp": "31:ad5fb1678f"
+     },
+     {
+      "index": 2,
+      "label": "구체화",
+      "summary": "턴 2 요청 요약",
+      "quote": "훅도 플러그인으로 옮겨",
+      "agent_summary": "턴 2 응답 요약",
+      "agent_quote": "먼저 구조를 봅니다.",
+      "fp": "훅도플러그인으로옮겨줘",
+      "grounded": true,
+      "shift": false,
+      "title": "",
+      "decision": "",
+      "digest": "턴 2까지의 흐름",
+      "resp": "45:08f3923ab2"
+     },
+     {
+      "index": 3,
+      "label": "구체화",
+      "summary": "턴 3 요청 요약",
+      "quote": "문서도 영문으로 맞춰줘",
+      "agent_summary": "턴 3 응답 요약",
+      "agent_quote": "GUIDE.md와 RE",
+      "fp": "문서도영문으로맞춰줘",
+      "grounded": true,
+      "shift": false,
+      "title": "",
+      "decision": "",
+      "digest": "턴 3까지의 흐름",
+      "resp": "32:96355dcc5a"
+     },
+     {
+      "index": 4,
+      "label": "확정",
+      "summary": "턴 4 요청 요약",
+      "quote": "좋아 커밋해줘",
+      "agent_summary": "턴 4 응답 요약",
+      "agent_quote": "커밋했습니다. 아직 푸",
+      "fp": "좋아커밋해줘",
+      "grounded": true,
+      "shift": false,
+      "title": "",
+      "decision": "턴 4에서 정함",
+      "digest": "턴 4까지의 흐름",
+      "resp": "19:cb9cfd4685"
+     },
+     {
+      "index": 5,
+      "label": "구체화",
+      "summary": "턴 5 요청 요약",
+      "quote": "이제 러스트로 옮기자",
+      "agent_summary": "턴 5 응답 요약",
+      "agent_quote": "엔진부터 옮기겠습니다.",
+      "fp": "이제러스트로옮기자",
+      "grounded": true,
+      "shift": false,
+      "title": "",
+      "decision": "",
+      "digest": "턴 5까지의 흐름",
+      "resp": "24:cfce963008"
+     }
+    ],
+    "requests": [
+     {
+      "summary": "요청 1",
+      "quote": "설치 스크립트를 정리해",
+      "state": "addressed",
+      "agent_quote": "install.sh를",
+      "id": "R1",
+      "from_turn": 1,
+      "by_turn": 1
+     },
+     {
+      "summary": "요청 2",
+      "quote": "훅도 플러그인으로 옮겨",
+      "state": "addressed",
+      "agent_quote": "먼저 구조를 봅니다.",
+      "id": "R2",
+      "from_turn": 2,
+      "by_turn": 2
+     },
+     {
+      "summary": "요청 3",
+      "quote": "문서도 영문으로 맞춰줘",
+      "state": "addressed",
+      "agent_quote": "커밋했습니다. 아직 푸",
+      "id": "R3",
+      "from_turn": 3,
+      "by_turn": 4
+     },
+     {
+      "summary": "요청 4",
+      "quote": "좋아 커밋해줘",
+      "state": "addressed",
+      "agent_quote": "커밋했습니다. 아직 푸",
+      "id": "R4",
+      "from_turn": 4,
+      "by_turn": 4
+     },
+     {
+      "summary": "요청 5",
+      "quote": "이제 러스트로 옮기자",
+      "state": "addressed",
+      "agent_quote": "엔진부터 옮기겠습니다.",
+      "id": "R5",
+      "from_turn": 5,
+      "by_turn": 5
+     }
+    ],
+    "asks": [],
+    "until": 5,
+    "prev": {
+     "version": 3,
+     "first_goal": {
+      "text": "처음 목표 1",
+      "turn": 1,
+      "quote": "설치 스크립트를 정리해"
+     },
+     "current_goal": {
+      "text": "목표 1",
+      "turn": 1,
+      "quote": "설치 스크립트를 정리해"
+     },
+     "steps": [
+      {
+       "index": 1,
+       "label": "시작",
+       "summary": "턴 1 요청 요약",
+       "quote": "설치 스크립트를 정리해",
+       "agent_summary": "턴 1 응답 요약",
+       "agent_quote": "install.sh를",
+       "fp": "설치스크립트를정리해줘",
+       "grounded": true,
+       "shift": false,
+       "title": "",
+       "decision": "",
+       "digest": "턴 1까지의 흐름",
+       "resp": "31:ad5fb1678f"
+      },
+      {
+       "index": 2,
+       "label": "구체화",
+       "summary": "턴 2 요청 요약",
+       "quote": "훅도 플러그인으로 옮겨",
+       "agent_summary": "턴 2 응답 요약",
+       "agent_quote": "먼저 구조를 봅니다.",
+       "fp": "훅도플러그인으로옮겨줘",
+       "grounded": true,
+       "shift": false,
+       "title": "",
+       "decision": "",
+       "digest": "턴 2까지의 흐름",
+       "resp": "45:08f3923ab2"
+      },
+      {
+       "index": 3,
+       "label": "구체화",
+       "summary": "턴 3 요청 요약",
+       "quote": "문서도 영문으로 맞춰줘",
+       "agent_summary": "턴 3 응답 요약",
+       "agent_quote": "GUIDE.md와 RE",
+       "fp": "문서도영문으로맞춰줘",
+       "grounded": true,
+       "shift": false,
+       "title": "",
+       "decision": "",
+       "digest": "턴 3까지의 흐름",
+       "resp": "32:96355dcc5a"
+      },
+      {
+       "index": 4,
+       "label": "확정",
+       "summary": "턴 4 요청 요약",
+       "quote": "좋아 커밋해줘",
+       "agent_summary": "턴 4 응답 요약",
+       "agent_quote": "커밋했습니다. 아직 푸",
+       "fp": "좋아커밋해줘",
+       "grounded": true,
+       "shift": false,
+       "title": "",
+       "decision": "턴 4에서 정함",
+       "digest": "턴 4까지의 흐름",
+       "resp": "19:cb9cfd4685"
+      }
+     ],
+     "requests": [
+      {
+       "summary": "요청 1",
+       "quote": "설치 스크립트를 정리해",
+       "state": "addressed",
+       "agent_quote": "install.sh를",
+       "id": "R1",
+       "from_turn": 1,
+       "by_turn": 1
+      },
+      {
+       "summary": "요청 2",
+       "quote": "훅도 플러그인으로 옮겨",
+       "state": "addressed",
+       "agent_quote": "먼저 구조를 봅니다.",
+       "id": "R2",
+       "from_turn": 2,
+       "by_turn": 2
+      },
+      {
+       "summary": "요청 3",
+       "quote": "문서도 영문으로 맞춰줘",
+       "state": "addressed",
+       "agent_quote": "커밋했습니다. 아직 푸",
+       "id": "R3",
+       "from_turn": 3,
+       "by_turn": 4
+      },
+      {
+       "summary": "요청 4",
+       "quote": "좋아 커밋해줘",
+       "state": "addressed",
+       "agent_quote": "커밋했습니다. 아직 푸",
+       "id": "R4",
+       "from_turn": 4,
+       "by_turn": 4
+      }
+     ],
+     "asks": [],
+     "until": 4
+    }
+   },
+   "format": 2,
+   "source_ts": "<ts1>",
+   "last_turn": 5,
+   "changes": {
+    "missed_before": 1,
+    "missed_after": 0,
+    "new_missed": [],
+    "goal_changed": false,
+    "prev_source_ts": "<ts1>"
+   },
+   "analyzed_at": "<time>"
+  },
+  "sessions/s1/analysis_status.json": {
+   "state": "idle",
+   "turn": 0,
+   "at": "<time>",
+   "pid": "<pid>"
+  },
+  "sessions/s1/events.jsonl": [
+   {
+    "ts": "<ts2>",
+    "session_id": "s1",
+    "event": "Stop",
+    "cwd": "<W>/proj",
+    "transcript_path": "<W>/transcripts/s1.jsonl",
+    "iterm_session_id": "w0t0p0:FAKE",
+    "data": {}
+   },
+   {
+    "ts": "<ts1>",
+    "session_id": "s1",
+    "event": "Stop",
+    "cwd": "<W>/proj",
+    "transcript_path": "<W>/transcripts/s1.jsonl",
+    "iterm_session_id": "w0t0p0:FAKE",
+    "data": {}
+   }
+  ],
+  "sessions/s1/glossary.json": {
+   "items": [
+    {
+     "id": "§4.13",
+     "means": [
+      "요구사항: 러스트 전환"
+     ]
+    }
+   ],
+   "total": 1,
+   "turn": 5
+  },
+  "sessions/s1/want": {
+   "at": "<time>",
+   "by": "test",
+   "on": true
+  }
+ },
+ "claude_calls": [
+  "1 ok 4b54fca166d3",
+  "2 ok f88ec81ea51f",
+  "3 ok 81267b566d60",
+  "4 ok e77040bf5248",
+  "5 ok 2e9b3ca6d9cd"
+ ]
+}

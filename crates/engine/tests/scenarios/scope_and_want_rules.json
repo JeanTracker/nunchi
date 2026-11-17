@@ -1,0 +1,167 @@
+{
+ "steps": [
+  {
+   "transcript": {
+    "session": "a",
+    "turns": [
+     {
+      "req": "설치 스크립트를 정리해줘",
+      "resp": [
+       "install.sh를 정리했습니다. 이제 관제 화면만 설치합니다."
+      ]
+     },
+     {
+      "req": "훅도 플러그인으로 옮겨줘",
+      "resp": [
+       "먼저 구조를 봅니다.",
+       {
+        "tool": "Read"
+       },
+       "hooks.json에 훅 10개를 넣었습니다. R17 기준으로 확인했습니다."
+      ]
+     },
+     {
+      "req": "문서도 영문으로 맞춰줘",
+      "resp": [
+       "GUIDE.md와 README를 영문으로 고쳤습니다. 커밋할까요?"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "transcript": {
+    "session": "b",
+    "turns": [
+     {
+      "req": "설치 스크립트를 정리해줘",
+      "resp": [
+       "install.sh를 정리했습니다. 이제 관제 화면만 설치합니다."
+      ]
+     },
+     {
+      "req": "훅도 플러그인으로 옮겨줘",
+      "resp": [
+       "먼저 구조를 봅니다.",
+       {
+        "tool": "Read"
+       },
+       "hooks.json에 훅 10개를 넣었습니다. R17 기준으로 확인했습니다."
+      ]
+     },
+     {
+      "req": "문서도 영문으로 맞춰줘",
+      "resp": [
+       "GUIDE.md와 README를 영문으로 고쳤습니다. 커밋할까요?"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "transcript": {
+    "session": "c",
+    "turns": [
+     {
+      "req": "설치 스크립트를 정리해줘",
+      "resp": [
+       "install.sh를 정리했습니다. 이제 관제 화면만 설치합니다."
+      ]
+     },
+     {
+      "req": "훅도 플러그인으로 옮겨줘",
+      "resp": [
+       "먼저 구조를 봅니다.",
+       {
+        "tool": "Read"
+       },
+       "hooks.json에 훅 10개를 넣었습니다. R17 기준으로 확인했습니다."
+      ]
+     },
+     {
+      "req": "문서도 영문으로 맞춰줘",
+      "resp": [
+       "GUIDE.md와 README를 영문으로 고쳤습니다. 커밋할까요?"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "want": {
+    "session": "b",
+    "on": false
+   }
+  },
+  {
+   "file": {
+    "path": "sessions/c/want",
+    "text": "{\"at\": \"x\"}"
+   }
+  },
+  {
+   "hook": {
+    "session": "a",
+    "event": "Stop"
+   }
+  },
+  {
+   "config": {
+    "analyze_scope": "all"
+   }
+  },
+  {
+   "hook": {
+    "session": "a",
+    "event": "Stop"
+   }
+  },
+  {
+   "hook": {
+    "session": "b",
+    "event": "Stop"
+   }
+  },
+  {
+   "config": {
+    "analyze_scope": "all",
+    "analyze_when": "manual"
+   }
+  },
+  {
+   "hook": {
+    "session": "c",
+    "event": "Stop"
+   }
+  },
+  {
+   "config": {
+    "analyze_scope": "off"
+   }
+  },
+  {
+   "hook": {
+    "session": "c",
+    "event": "Stop"
+   }
+  },
+  {
+   "config": {}
+  },
+  {
+   "hook": {
+    "session": "c",
+    "event": "Stop"
+   }
+  },
+  {
+   "file": {
+    "path": "queue/priority",
+    "text": "c"
+   }
+  },
+  {
+   "worker": {}
+  }
+ ]
+}

@@ -1,0 +1,100 @@
+{
+ "files": {
+  "analyzer-0.lock": "<lock>",
+  "sessions/s1/analysis.json": {
+   "first_goal": "처음 목표 1",
+   "current_goal": "목표 1",
+   "turns": [],
+   "last_response_summary": "",
+   "ledger": [],
+   "forgotten": [],
+   "format": 2,
+   "source_ts": "<ts1>",
+   "last_turn": 3,
+   "changes": {},
+   "analyzed_at": "<time>",
+   "flow": {
+    "version": 3,
+    "first_goal": {
+     "text": "처음 목표 1",
+     "turn": 1,
+     "quote": "설치 스크립트를 정리해"
+    },
+    "current_goal": {
+     "text": "목표 1",
+     "turn": 1,
+     "quote": "설치 스크립트를 정리해"
+    },
+    "steps": [
+     {
+      "index": 1,
+      "label": "시작",
+      "summary": "턴 1 요청 요약",
+      "quote": "설치 스크립트를 정리해",
+      "agent_summary": "턴 1 응답 요약",
+      "agent_quote": "install.sh를",
+      "fp": "설치스크립트를정리해줘",
+      "grounded": true,
+      "shift": false,
+      "title": "",
+      "decision": "",
+      "digest": "턴 1까지의 흐름",
+      "resp": "31:ad5fb1678f"
+     }
+    ],
+    "requests": [
+     {
+      "summary": "요청 1",
+      "quote": "설치 스크립트를 정리해",
+      "state": "addressed",
+      "agent_quote": "install.sh를",
+      "id": "R1",
+      "from_turn": 1,
+      "by_turn": 1
+     }
+    ],
+    "asks": [],
+    "until": 1,
+    "prev": {
+     "version": 3,
+     "first_goal": {},
+     "current_goal": {},
+     "steps": [],
+     "requests": [],
+     "asks": [],
+     "until": 0
+    }
+   }
+  },
+  "sessions/s1/analysis_status.json": {
+   "state": "failed",
+   "turn": 0,
+   "at": "<time>",
+   "pid": "<pid>",
+   "error": "claude 종료 코드 1",
+   "source_ts": "<ts1>",
+   "attempts": 2
+  },
+  "sessions/s1/events.jsonl": [
+   {
+    "ts": "<ts1>",
+    "session_id": "s1",
+    "event": "Stop",
+    "cwd": "<W>/proj",
+    "transcript_path": "<W>/transcripts/s1.jsonl",
+    "iterm_session_id": "w0t0p0:FAKE",
+    "data": {}
+   }
+  ],
+  "sessions/s1/want": {
+   "at": "<time>",
+   "by": "test",
+   "on": true
+  }
+ },
+ "claude_calls": [
+  "1 ok 4b54fca166d3",
+  "2 fail f88ec81ea51f",
+  "2 fail f88ec81ea51f"
+ ]
+}

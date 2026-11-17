@@ -1,0 +1,657 @@
+{
+ "files": {
+  "analyzer-0.lock": "<lock>",
+  "sessions/s1/analysis.json": {
+   "first_goal": "처음 목표 1",
+   "current_goal": "목표 1",
+   "turns": [],
+   "last_response_summary": "",
+   "ledger": [],
+   "forgotten": [],
+   "format": 2,
+   "source_ts": "<ts1>",
+   "last_turn": 12,
+   "changes": {
+    "missed_before": 0,
+    "missed_after": 1,
+    "new_missed": [
+     "요청 12"
+    ],
+    "goal_changed": false,
+    "prev_source_ts": "<ts1>"
+   },
+   "analyzed_at": "<time>",
+   "flow": {
+    "version": 3,
+    "first_goal": {
+     "text": "처음 목표 1",
+     "turn": 1,
+     "quote": "1번째 요청: 기능 1"
+    },
+    "current_goal": {
+     "text": "목표 1",
+     "turn": 1,
+     "quote": "1번째 요청: 기능 1"
+    },
+    "steps": [
+     {
+      "index": 1,
+      "label": "시작",
+      "summary": "턴 1 요청 요약",
+      "quote": "1번째 요청: 기능 1",
+      "agent_summary": "턴 1 응답 요약",
+      "agent_quote": "기능 1을 고쳤습니다.",
+      "fp": "1번째요청:기능1을고쳐줘",
+      "grounded": true,
+      "shift": false,
+      "title": "",
+      "decision": "",
+      "digest": "턴 1까지의 흐름",
+      "resp": "18:9fe8825362"
+     },
+     {
+      "index": 2,
+      "label": "구체화",
+      "summary": "턴 2 요청 요약",
+      "quote": "2번째 요청: 기능 2",
+      "agent_summary": "턴 2 응답 요약",
+      "agent_quote": "기능 2을 고쳤습니다.",
+      "fp": "2번째요청:기능2을고쳐줘",
+      "grounded": true,
+      "shift": false,
+      "title": "",
+      "decision": "",
+      "digest": "턴 2까지의 흐름",
+      "resp": "18:db55bd33b2"
+     },
+     {
+      "index": 3,
+      "label": "구체화",
+      "summary": "턴 3 요청 요약",
+      "quote": "3번째 요청: 기능 3",
+      "agent_summary": "턴 3 응답 요약",
+      "agent_quote": "기능 3을 고쳤습니다.",
+      "fp": "3번째요청:기능3을고쳐줘",
+      "grounded": true,
+      "shift": false,
+      "title": "",
+      "decision": "",
+      "digest": "턴 3까지의 흐름",
+      "resp": "18:ce4c26e8df"
+     },
+     {
+      "index": 4,
+      "label": "확정",
+      "summary": "턴 4 요청 요약",
+      "quote": "4번째 요청: 기능 4",
+      "agent_summary": "턴 4 응답 요약",
+      "agent_quote": "기능 4을 고쳤습니다.",
+      "fp": "4번째요청:기능4을고쳐줘",
+      "grounded": true,
+      "shift": false,
+      "title": "",
+      "decision": "턴 4에서 정함",
+      "digest": "턴 4까지의 흐름",
+      "resp": "18:35ced4f8c4"
+     },
+     {
+      "index": 5,
+      "label": "구체화",
+      "summary": "턴 5 요청 요약",
+      "quote": "5번째 요청: 기능 5",
+      "agent_summary": "턴 5 응답 요약",
+      "agent_quote": "기능 5을 고쳤습니다.",
+      "fp": "5번째요청:기능5을고쳐줘",
+      "grounded": true,
+      "shift": false,
+      "title": "",
+      "decision": "",
+      "digest": "턴 5까지의 흐름",
+      "resp": "18:70bcc830e3"
+     },
+     {
+      "index": 6,
+      "label": "구체화",
+      "summary": "턴 6 요청 요약",
+      "quote": "6번째 요청: 기능 6",
+      "agent_summary": "턴 6 응답 요약",
+      "agent_quote": "기능 6을 고쳤습니다.",
+      "fp": "6번째요청:기능6을고쳐줘",
+      "grounded": true,
+      "shift": false,
+      "title": "",
+      "decision": "",
+      "digest": "턴 6까지의 흐름",
+      "resp": "18:8b0e90a09e"
+     },
+     {
+      "index": 7,
+      "label": "구체화",
+      "summary": "턴 7 요청 요약",
+      "quote": "7번째 요청: 기능 7",
+      "agent_summary": "턴 7 응답 요약",
+      "agent_quote": "기능 7을 고쳤습니다.",
+      "fp": "7번째요청:기능7을고쳐줘",
+      "grounded": true,
+      "shift": false,
+      "title": "",
+      "decision": "",
+      "digest": "턴 7까지의 흐름",
+      "resp": "18:5db3af6bca"
+     },
+     {
+      "index": 8,
+      "label": "확정",
+      "summary": "턴 8 요청 요약",
+      "quote": "8번째 요청: 기능 8",
+      "agent_summary": "턴 8 응답 요약",
+      "agent_quote": "기능 8을 고쳤습니다.",
+      "fp": "8번째요청:기능8을고쳐줘",
+      "grounded": true,
+      "shift": false,
+      "title": "",
+      "decision": "턴 8에서 정함",
+      "digest": "턴 8까지의 흐름",
+      "resp": "18:fae29c3912"
+     },
+     {
+      "index": 9,
+      "label": "구체화",
+      "summary": "턴 9 요청 요약",
+      "quote": "9번째 요청: 기능 9",
+      "agent_summary": "턴 9 응답 요약",
+      "agent_quote": "기능 9을 고쳤습니다.",
+      "fp": "9번째요청:기능9을고쳐줘",
+      "grounded": true,
+      "shift": false,
+      "title": "",
+      "decision": "",
+      "digest": "턴 9까지의 흐름",
+      "resp": "19:f52f92d683"
+     },
+     {
+      "index": 10,
+      "label": "구체화",
+      "summary": "턴 10 요청 요약",
+      "quote": "10번째 요청: 기능",
+      "agent_summary": "턴 10 응답 요약",
+      "agent_quote": "기능 10을 고쳤습니다",
+      "fp": "10번째요청:기능10을고쳐줘",
+      "grounded": true,
+      "shift": false,
+      "title": "",
+      "decision": "",
+      "digest": "턴 10까지의 흐름",
+      "resp": "20:7f56e54d57"
+     },
+     {
+      "index": 11,
+      "label": "구체화",
+      "summary": "턴 11 요청 요약",
+      "quote": "11번째 요청: 기능",
+      "agent_summary": "턴 11 응답 요약",
+      "agent_quote": "기능 11을 고쳤습니다",
+      "fp": "11번째요청:기능11을고쳐줘",
+      "grounded": true,
+      "shift": false,
+      "title": "",
+      "decision": "",
+      "digest": "턴 11까지의 흐름",
+      "resp": "20:14babf17dc"
+     },
+     {
+      "index": 12,
+      "label": "확정",
+      "summary": "턴 12 요청 요약",
+      "quote": "12번째 요청: 기능",
+      "agent_summary": "턴 12 응답 요약",
+      "agent_quote": "기능 12을 고쳤습니다",
+      "fp": "12번째요청:기능12을고쳐줘",
+      "grounded": true,
+      "shift": false,
+      "title": "",
+      "decision": "턴 12에서 정함",
+      "digest": "턴 12까지의 흐름",
+      "resp": "20:1edd8af8f8"
+     }
+    ],
+    "requests": [
+     {
+      "summary": "요청 1",
+      "quote": "1번째 요청: 기능 1",
+      "state": "addressed",
+      "agent_quote": "기능 1을 고쳤습니다.",
+      "id": "R1",
+      "from_turn": 1,
+      "by_turn": 1
+     },
+     {
+      "summary": "요청 2",
+      "quote": "2번째 요청: 기능 2",
+      "state": "addressed",
+      "agent_quote": "기능 2을 고쳤습니다.",
+      "id": "R2",
+      "from_turn": 2,
+      "by_turn": 2
+     },
+     {
+      "summary": "요청 3",
+      "quote": "3번째 요청: 기능 3",
+      "state": "addressed",
+      "agent_quote": "기능 4을 고쳤습니다.",
+      "id": "R3",
+      "from_turn": 3,
+      "by_turn": 4
+     },
+     {
+      "summary": "요청 4",
+      "quote": "4번째 요청: 기능 4",
+      "state": "addressed",
+      "agent_quote": "기능 4을 고쳤습니다.",
+      "id": "R4",
+      "from_turn": 4,
+      "by_turn": 4
+     },
+     {
+      "summary": "요청 5",
+      "quote": "5번째 요청: 기능 5",
+      "state": "addressed",
+      "agent_quote": "기능 5을 고쳤습니다.",
+      "id": "R5",
+      "from_turn": 5,
+      "by_turn": 5
+     },
+     {
+      "summary": "요청 6",
+      "quote": "6번째 요청: 기능 6",
+      "state": "addressed",
+      "agent_quote": "기능 7을 고쳤습니다.",
+      "id": "R6",
+      "from_turn": 6,
+      "by_turn": 7
+     },
+     {
+      "summary": "요청 7",
+      "quote": "7번째 요청: 기능 7",
+      "state": "addressed",
+      "agent_quote": "기능 7을 고쳤습니다.",
+      "id": "R7",
+      "from_turn": 7,
+      "by_turn": 7
+     },
+     {
+      "summary": "요청 8",
+      "quote": "8번째 요청: 기능 8",
+      "state": "addressed",
+      "agent_quote": "기능 8을 고쳤습니다.",
+      "id": "R8",
+      "from_turn": 8,
+      "by_turn": 8
+     },
+     {
+      "summary": "요청 9",
+      "quote": "9번째 요청: 기능 9",
+      "state": "addressed",
+      "agent_quote": "기능 10을 고쳤습니다",
+      "id": "R9",
+      "from_turn": 9,
+      "by_turn": 10
+     },
+     {
+      "summary": "요청 10",
+      "quote": "10번째 요청: 기능",
+      "state": "addressed",
+      "agent_quote": "기능 10을 고쳤습니다",
+      "id": "R10",
+      "from_turn": 10,
+      "by_turn": 10
+     },
+     {
+      "summary": "요청 11",
+      "quote": "11번째 요청: 기능",
+      "state": "addressed",
+      "agent_quote": "기능 11을 고쳤습니다",
+      "id": "R11",
+      "from_turn": 11,
+      "by_turn": 11
+     },
+     {
+      "summary": "요청 12",
+      "quote": "12번째 요청: 기능",
+      "state": "open",
+      "agent_quote": "",
+      "id": "R12",
+      "from_turn": 12,
+      "by_turn": 12
+     }
+    ],
+    "asks": [],
+    "until": 12,
+    "prev": {
+     "version": 3,
+     "first_goal": {
+      "text": "처음 목표 1",
+      "turn": 1,
+      "quote": "1번째 요청: 기능 1"
+     },
+     "current_goal": {
+      "text": "목표 1",
+      "turn": 1,
+      "quote": "1번째 요청: 기능 1"
+     },
+     "steps": [
+      {
+       "index": 1,
+       "label": "시작",
+       "summary": "턴 1 요청 요약",
+       "quote": "1번째 요청: 기능 1",
+       "agent_summary": "턴 1 응답 요약",
+       "agent_quote": "기능 1을 고쳤습니다.",
+       "fp": "1번째요청:기능1을고쳐줘",
+       "grounded": true,
+       "shift": false,
+       "title": "",
+       "decision": "",
+       "digest": "턴 1까지의 흐름",
+       "resp": "18:9fe8825362"
+      },
+      {
+       "index": 2,
+       "label": "구체화",
+       "summary": "턴 2 요청 요약",
+       "quote": "2번째 요청: 기능 2",
+       "agent_summary": "턴 2 응답 요약",
+       "agent_quote": "기능 2을 고쳤습니다.",
+       "fp": "2번째요청:기능2을고쳐줘",
+       "grounded": true,
+       "shift": false,
+       "title": "",
+       "decision": "",
+       "digest": "턴 2까지의 흐름",
+       "resp": "18:db55bd33b2"
+      },
+      {
+       "index": 3,
+       "label": "구체화",
+       "summary": "턴 3 요청 요약",
+       "quote": "3번째 요청: 기능 3",
+       "agent_summary": "턴 3 응답 요약",
+       "agent_quote": "기능 3을 고쳤습니다.",
+       "fp": "3번째요청:기능3을고쳐줘",
+       "grounded": true,
+       "shift": false,
+       "title": "",
+       "decision": "",
+       "digest": "턴 3까지의 흐름",
+       "resp": "18:ce4c26e8df"
+      },
+      {
+       "index": 4,
+       "label": "확정",
+       "summary": "턴 4 요청 요약",
+       "quote": "4번째 요청: 기능 4",
+       "agent_summary": "턴 4 응답 요약",
+       "agent_quote": "기능 4을 고쳤습니다.",
+       "fp": "4번째요청:기능4을고쳐줘",
+       "grounded": true,
+       "shift": false,
+       "title": "",
+       "decision": "턴 4에서 정함",
+       "digest": "턴 4까지의 흐름",
+       "resp": "18:35ced4f8c4"
+      },
+      {
+       "index": 5,
+       "label": "구체화",
+       "summary": "턴 5 요청 요약",
+       "quote": "5번째 요청: 기능 5",
+       "agent_summary": "턴 5 응답 요약",
+       "agent_quote": "기능 5을 고쳤습니다.",
+       "fp": "5번째요청:기능5을고쳐줘",
+       "grounded": true,
+       "shift": false,
+       "title": "",
+       "decision": "",
+       "digest": "턴 5까지의 흐름",
+       "resp": "18:70bcc830e3"
+      },
+      {
+       "index": 6,
+       "label": "구체화",
+       "summary": "턴 6 요청 요약",
+       "quote": "6번째 요청: 기능 6",
+       "agent_summary": "턴 6 응답 요약",
+       "agent_quote": "기능 6을 고쳤습니다.",
+       "fp": "6번째요청:기능6을고쳐줘",
+       "grounded": true,
+       "shift": false,
+       "title": "",
+       "decision": "",
+       "digest": "턴 6까지의 흐름",
+       "resp": "18:8b0e90a09e"
+      },
+      {
+       "index": 7,
+       "label": "구체화",
+       "summary": "턴 7 요청 요약",
+       "quote": "7번째 요청: 기능 7",
+       "agent_summary": "턴 7 응답 요약",
+       "agent_quote": "기능 7을 고쳤습니다.",
+       "fp": "7번째요청:기능7을고쳐줘",
+       "grounded": true,
+       "shift": false,
+       "title": "",
+       "decision": "",
+       "digest": "턴 7까지의 흐름",
+       "resp": "18:5db3af6bca"
+      },
+      {
+       "index": 8,
+       "label": "확정",
+       "summary": "턴 8 요청 요약",
+       "quote": "8번째 요청: 기능 8",
+       "agent_summary": "턴 8 응답 요약",
+       "agent_quote": "기능 8을 고쳤습니다.",
+       "fp": "8번째요청:기능8을고쳐줘",
+       "grounded": true,
+       "shift": false,
+       "title": "",
+       "decision": "턴 8에서 정함",
+       "digest": "턴 8까지의 흐름",
+       "resp": "18:fae29c3912"
+      },
+      {
+       "index": 9,
+       "label": "구체화",
+       "summary": "턴 9 요청 요약",
+       "quote": "9번째 요청: 기능 9",
+       "agent_summary": "턴 9 응답 요약",
+       "agent_quote": "기능 9을 고쳤습니다.",
+       "fp": "9번째요청:기능9을고쳐줘",
+       "grounded": true,
+       "shift": false,
+       "title": "",
+       "decision": "",
+       "digest": "턴 9까지의 흐름",
+       "resp": "19:f52f92d683"
+      },
+      {
+       "index": 10,
+       "label": "구체화",
+       "summary": "턴 10 요청 요약",
+       "quote": "10번째 요청: 기능",
+       "agent_summary": "턴 10 응답 요약",
+       "agent_quote": "기능 10을 고쳤습니다",
+       "fp": "10번째요청:기능10을고쳐줘",
+       "grounded": true,
+       "shift": false,
+       "title": "",
+       "decision": "",
+       "digest": "턴 10까지의 흐름",
+       "resp": "20:7f56e54d57"
+      },
+      {
+       "index": 11,
+       "label": "구체화",
+       "summary": "턴 11 요청 요약",
+       "quote": "11번째 요청: 기능",
+       "agent_summary": "턴 11 응답 요약",
+       "agent_quote": "기능 11을 고쳤습니다",
+       "fp": "11번째요청:기능11을고쳐줘",
+       "grounded": true,
+       "shift": false,
+       "title": "",
+       "decision": "",
+       "digest": "턴 11까지의 흐름",
+       "resp": "20:14babf17dc"
+      }
+     ],
+     "requests": [
+      {
+       "summary": "요청 1",
+       "quote": "1번째 요청: 기능 1",
+       "state": "addressed",
+       "agent_quote": "기능 1을 고쳤습니다.",
+       "id": "R1",
+       "from_turn": 1,
+       "by_turn": 1
+      },
+      {
+       "summary": "요청 2",
+       "quote": "2번째 요청: 기능 2",
+       "state": "addressed",
+       "agent_quote": "기능 2을 고쳤습니다.",
+       "id": "R2",
+       "from_turn": 2,
+       "by_turn": 2
+      },
+      {
+       "summary": "요청 3",
+       "quote": "3번째 요청: 기능 3",
+       "state": "addressed",
+       "agent_quote": "기능 4을 고쳤습니다.",
+       "id": "R3",
+       "from_turn": 3,
+       "by_turn": 4
+      },
+      {
+       "summary": "요청 4",
+       "quote": "4번째 요청: 기능 4",
+       "state": "addressed",
+       "agent_quote": "기능 4을 고쳤습니다.",
+       "id": "R4",
+       "from_turn": 4,
+       "by_turn": 4
+      },
+      {
+       "summary": "요청 5",
+       "quote": "5번째 요청: 기능 5",
+       "state": "addressed",
+       "agent_quote": "기능 5을 고쳤습니다.",
+       "id": "R5",
+       "from_turn": 5,
+       "by_turn": 5
+      },
+      {
+       "summary": "요청 6",
+       "quote": "6번째 요청: 기능 6",
+       "state": "addressed",
+       "agent_quote": "기능 7을 고쳤습니다.",
+       "id": "R6",
+       "from_turn": 6,
+       "by_turn": 7
+      },
+      {
+       "summary": "요청 7",
+       "quote": "7번째 요청: 기능 7",
+       "state": "addressed",
+       "agent_quote": "기능 7을 고쳤습니다.",
+       "id": "R7",
+       "from_turn": 7,
+       "by_turn": 7
+      },
+      {
+       "summary": "요청 8",
+       "quote": "8번째 요청: 기능 8",
+       "state": "addressed",
+       "agent_quote": "기능 8을 고쳤습니다.",
+       "id": "R8",
+       "from_turn": 8,
+       "by_turn": 8
+      },
+      {
+       "summary": "요청 9",
+       "quote": "9번째 요청: 기능 9",
+       "state": "addressed",
+       "agent_quote": "기능 10을 고쳤습니다",
+       "id": "R9",
+       "from_turn": 9,
+       "by_turn": 10
+      },
+      {
+       "summary": "요청 10",
+       "quote": "10번째 요청: 기능",
+       "state": "addressed",
+       "agent_quote": "기능 10을 고쳤습니다",
+       "id": "R10",
+       "from_turn": 10,
+       "by_turn": 10
+      },
+      {
+       "summary": "요청 11",
+       "quote": "11번째 요청: 기능",
+       "state": "addressed",
+       "agent_quote": "기능 11을 고쳤습니다",
+       "id": "R11",
+       "from_turn": 11,
+       "by_turn": 11
+      }
+     ],
+     "asks": [],
+     "until": 11
+    }
+   }
+  },
+  "sessions/s1/analysis_status.json": {
+   "state": "idle",
+   "turn": 0,
+   "at": "<time>",
+   "pid": "<pid>"
+  },
+  "sessions/s1/events.jsonl": [
+   {
+    "ts": "<ts1>",
+    "session_id": "s1",
+    "event": "Stop",
+    "cwd": "<W>/proj",
+    "transcript_path": "<W>/transcripts/s1.jsonl",
+    "iterm_session_id": "w0t0p0:FAKE",
+    "data": {}
+   }
+  ],
+  "sessions/s1/glossary.json": {
+   "items": [],
+   "total": 0,
+   "turn": 12
+  },
+  "sessions/s1/want": {
+   "at": "<time>",
+   "by": "test",
+   "on": true
+  }
+ },
+ "claude_calls": [
+  "1 ok 932b971cdc59",
+  "2 ok cd5fe3725cdf",
+  "3 ok 793f059d51fd",
+  "4 ok cef61330312e",
+  "5 ok ede9e253607e",
+  "6 ok f2d6411a3fbc",
+  "7 ok 7425e71cff62",
+  "8 ok 83f4337991a6",
+  "9 ok 94b0ac5ba046",
+  "10 ok 591d15386845",
+  "11 ok f9950c17fe1e",
+  "12 ok bfc9047b0f06"
+ ]
+}

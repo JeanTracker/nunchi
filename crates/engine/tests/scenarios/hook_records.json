@@ -1,0 +1,154 @@
+{
+ "steps": [
+  {
+   "transcript": {
+    "session": "s1",
+    "turns": [
+     {
+      "req": "설치 스크립트를 정리해줘",
+      "resp": [
+       "install.sh를 정리했습니다. 이제 관제 화면만 설치합니다."
+      ]
+     },
+     {
+      "req": "훅도 플러그인으로 옮겨줘",
+      "resp": [
+       "먼저 구조를 봅니다.",
+       {
+        "tool": "Read"
+       },
+       "hooks.json에 훅 10개를 넣었습니다. R17 기준으로 확인했습니다."
+      ]
+     },
+     {
+      "req": "문서도 영문으로 맞춰줘",
+      "resp": [
+       "GUIDE.md와 README를 영문으로 고쳤습니다. 커밋할까요?"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "hook": {
+    "session": "s1",
+    "event": "SessionStart",
+    "extra": {
+     "source": "startup",
+     "model": "x"
+    }
+   }
+  },
+  {
+   "hook": {
+    "session": "s1",
+    "event": "UserPromptSubmit",
+    "extra": {
+     "prompt": "가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가",
+     "permission_mode": "default"
+    }
+   }
+  },
+  {
+   "hook": {
+    "session": "s1",
+    "event": "PreToolUse",
+    "extra": {
+     "tool_name": "Read",
+     "tool_use_id": "tu1",
+     "tool_input": {
+      "file_path": "/x"
+     }
+    }
+   }
+  },
+  {
+   "hook": {
+    "session": "s1",
+    "event": "PostToolUse",
+    "extra": {
+     "tool_name": "Read",
+     "tool_use_id": "tu1",
+     "tool_response": "긴 결과"
+    }
+   }
+  },
+  {
+   "hook": {
+    "session": "s1",
+    "event": "Notification",
+    "extra": {
+     "notification_type": "permission_prompt",
+     "message": "허락"
+    }
+   }
+  },
+  {
+   "hook": {
+    "session": "s1",
+    "event": "PreCompact",
+    "extra": {
+     "trigger": "manual"
+    }
+   }
+  },
+  {
+   "hook": {
+    "session": "s1",
+    "event": "PreCompact",
+    "extra": {
+     "trigger": "auto"
+    }
+   }
+  },
+  {
+   "hook": {
+    "session": "s1",
+    "event": "PostCompact",
+    "extra": {
+     "compact_summary": {
+      "요약": [
+       "a",
+       1,
+       null
+      ]
+     },
+     "trigger": "auto",
+     "source": null
+    }
+   }
+  },
+  {
+   "hook": {
+    "session": "s1",
+    "event": "Stop",
+    "extra": {
+     "permission_mode": "plan"
+    }
+   }
+  },
+  {
+   "hook_raw": {
+    "stdin": "{\"hook_event_name\": \"Stop\"}"
+   }
+  },
+  {
+   "hook_raw": {
+    "stdin": "{깨진"
+   }
+  },
+  {
+   "hook_raw": {
+    "stdin": ""
+   }
+  },
+  {
+   "hook_raw": {
+    "stdin": "{\"session_id\": \"s9\", \"hook_event_name\": \"Stop\"}",
+    "env": {
+     "CONTROL_TUI_ANALYZER": "1"
+    }
+   }
+  }
+ ]
+}
