@@ -2,7 +2,8 @@
 //!
 //! tests/scenarios/*.json의 단계를 러스트 엔진으로 돌리고, 관제 홈에 남은 파일을 tests/golden/*.json과 비교한다.
 //! 정답은 파이썬 엔진이 만든 결과다(tests/test_conformance.py). 파이썬 엔진을 지운 뒤에도 같은 동작을 지킨다.
-//! 단계 실행과 자리표 바꾸기는 tests/test_conformance.py와 같다.
+//! 단계 실행과 자리표 바꾸기는 파이썬 엔진 시절 tests/test_conformance.py와 같다.
+//! 동작을 일부러 바꿨으면 NUNCHI_UPDATE_GOLDEN=1 cargo test로 정답을 다시 쓰고, 바뀐 내용을 diff로 확인한다.
 #![cfg(feature = "dev")]
 
 use nunchi_engine::{clock, py};
@@ -242,7 +243,11 @@ fn engine_matches_golden_scenarios() {
             b.step(st);
         }
         let got = snapshot(&w);
-        let golden: Value = serde_json::from_str(&std::fs::read_to_string(root().join("tests/golden").join(name)).unwrap()).unwrap();
+        let gpath = root().join("tests/golden").join(name);
+        if std::env::var("NUNCHI_UPDATE_GOLDEN").as_deref() == Ok("1") {
+            std::fs::write(&gpath, py::dumps_indent_n(&got, 1) + "\n").unwrap();
+        }
+        let golden: Value = serde_json::from_str(&std::fs::read_to_string(&gpath).unwrap()).unwrap();
         // 키 순서까지 같아야 한다
         if py::dumps(&got) != py::dumps(&golden) {
             eprintln!("--- {name}\n got:    {}\n golden: {}", py::take(&py::dumps(&got), 3000), py::take(&py::dumps(&golden), 3000));

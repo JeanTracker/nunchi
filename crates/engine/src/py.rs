@@ -219,8 +219,13 @@ pub fn dumps(v: &Value) -> String {
 
 /// `json.dumps(v, ensure_ascii=False, indent=2)`
 pub fn dumps_indent(v: &Value) -> String {
+    dumps_indent_n(v, 2)
+}
+
+/// `json.dumps(v, ensure_ascii=False, indent=n)`
+pub fn dumps_indent_n(v: &Value, n: usize) -> String {
     let mut out = String::new();
-    write_value(&mut out, v, Some(2), 0);
+    write_value(&mut out, v, Some(n), 0);
     out
 }
 
