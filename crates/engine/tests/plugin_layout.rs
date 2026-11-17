@@ -1,8 +1,8 @@
-//! 플러그인 구성과 훅 입구 hooks/emit.sh (요구 이력 63·67·69·70, BUILD_PLAN §4.12·§4.13).
+//! 플러그인 구성과 훅 입구 hooks/emit.sh (요구 이력 63·67·69·70·73, BUILD_PLAN §4.12·§4.13).
 //! 예전 파이썬 시험 tests/test_emit_sh.py·test_plugin_engine.py를 옮겼다.
 //!
 //! emit.sh는 저장소의 것을 임시 플러그인 폴더로 복사해서 돌린다: 개발 중 빌드한 bin/nunchi-engine에 휩쓸리지 않게.
-//! PATH는 비워 둔다 (sh는 /bin/sh 절대 경로로 부른다). 셸 내장 기능만으로 돌아야 한다.
+//! PATH는 비워 둔다 (sh는 /bin/sh 절대 경로로 부른다). 맥에서는 셸 내장 기능만으로 돌아야 한다.
 
 use serde_json::{json, Value};
 use std::io::Write;
@@ -44,6 +44,19 @@ fn plugin_hooks_cover_every_event_once_and_point_at_files_that_exist() {
     assert_eq!(entries, vec![(plugin["name"].clone(), json!({"source": "github", "repo": "JeanTracker/nunchi", "ref": "dist"}))]);
 }
 
+/// emit.sh가 이 컴퓨터에서 고를 엔진 이름, 그리고 고르면 안 되는 다른 플랫폼용 이름들.
+fn host_engine() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "nunchi-engine"
+    } else if cfg!(target_arch = "aarch64") {
+        "nunchi-engine-linux-aarch64"
+    } else {
+        "nunchi-engine-linux-x86_64"
+    }
+}
+
+const ALL_ENGINES: [&str; 3] = ["nunchi-engine", "nunchi-engine-linux-x86_64", "nunchi-engine-linux-aarch64"];
+
 struct Plugin {
     dir: PathBuf,
 }
@@ -58,8 +71,11 @@ impl Plugin {
         Plugin { dir }
     }
     fn engine(&self, body: &str) {
+        self.engine_named(host_engine(), body);
+    }
+    fn engine_named(&self, name: &str, body: &str) {
         std::fs::create_dir_all(self.dir.join("bin")).unwrap();
-        let p = self.dir.join("bin/nunchi-engine");
+        let p = self.dir.join("bin").join(name);
         std::fs::write(&p, format!("#!/bin/sh\n{body}")).unwrap();
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -128,4 +144,29 @@ fn other_hooks_end_quietly_without_a_working_engine() {
             assert_eq!(p.run(event, false), (0, String::new(), String::new()), "{event} with_engine={with_engine}");
         }
     }
+}
+
+#[test]
+fn picks_only_the_engine_for_this_platform() {
+    // 다른 플랫폼용 파일은 실행해 보지도 않는다 (요구 이력 73): 맥에서 리눅스용을, 리눅스에서 맥용·다른 CPU용을
+    let p = Plugin::new("pick");
+    for name in ALL_ENGINES {
+        let mark = p.dir.join(format!("ran-{name}"));
+        p.engine_named(name, &format!(": > '{}'\n[ \"$1\" = --version ] && exit 0\nexit 0\n", mark.display()));
+    }
+    assert_eq!(p.run("Stop", false), (0, String::new(), String::new()));
+    for name in ALL_ENGINES {
+        assert_eq!(p.dir.join(format!("ran-{name}")).exists(), name == host_engine(), "{name}");
+    }
+}
+
+#[test]
+fn only_other_platform_engines_count_as_missing() {
+    let p = Plugin::new("others");
+    for name in ALL_ENGINES.iter().filter(|n| **n != host_engine()) {
+        p.engine_named(name, "exit 0\n");
+    }
+    let (_, out, _) = p.run("SessionStart", false);
+    let v: Value = serde_json::from_str(&out).unwrap();
+    assert!(v["systemMessage"].as_str().unwrap().contains("scripts/build-engine.sh"), "{out}");
 }

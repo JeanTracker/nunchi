@@ -8,7 +8,7 @@ English: [docs/GUIDE.md](../GUIDE.md)
 
 ## 필요한 것
 
-- macOS(애플 실리콘·인텔). 엔진은 맥용 실행 파일이라 파이썬이 필요 없습니다.
+- macOS(애플 실리콘·인텔) 또는 리눅스(x86_64·arm64). 윈도우는 지원하지 않습니다. 플러그인에 플랫폼별 엔진이 모두 실려 있고 이 컴퓨터에 맞는 것을 골라 쓰므로, 어디서든 설치 방법이 같고 파이썬도 필요 없습니다. 리눅스에서는 엔진 시험을 통과했지만 실제 세션에서는 아직 확인하지 않았습니다.
 - Claude Code. 2.1.322~2.1.325에서 확인했습니다.
 - Claude Code를 실행하는 셸의 PATH에 있는 `claude` 명령. 분석기가 새 턴마다 `claude -p`를 한 번씩 부르고 내 계정 사용량을 씁니다("분석 비용" 참고).
 - 저장소가 비공개인 동안에는 마켓플레이스를 받을 때 그 저장소에 대한 git 권한.
@@ -112,12 +112,13 @@ claude plugin marketplace remove nunchi
 엔진은 러스트(`crates/engine`)입니다. main 브랜치에는 소스만 있습니다. 엔진을 `bin/`에 빌드하고 받아 둔 저장소를 세션에 붙입니다.
 
 ```sh
-rustup target add aarch64-apple-darwin x86_64-apple-darwin
+rustup target add aarch64-apple-darwin x86_64-apple-darwin \
+  x86_64-unknown-linux-musl aarch64-unknown-linux-musl
 scripts/build-engine.sh
 claude --plugin-dir ~/src/nunchi
 ```
 
-플러그인이 설치되어 있어도 그 세션에서는 넘긴 폴더가 대신 붙고, 하나만 읽힙니다(Claude Code 2.1.325에서 확인). 엔진 시험은 `cargo test`입니다. 릴리스는 `.claude-plugin/plugin.json`과 같은 버전의 태그 `v<버전>`을 올려서 만듭니다. 그러면 워크플로가 엔진을 빌드해 마켓플레이스가 가리키는 `dist` 브랜치를 바꿉니다.
+플러그인이 설치되어 있어도 그 세션에서는 넘긴 폴더가 대신 붙고, 하나만 읽힙니다(Claude Code 2.1.325에서 확인). 맥에서는 이 스크립트가 엔진 세 개(맥 공용, 리눅스 x86_64·arm64)를 모두 만듭니다. 리눅스용은 `rust-lld`로 링크한 musl 정적 빌드입니다. 리눅스에서는 그 CPU용 하나만 만들고 그 musl 대상만 있으면 됩니다. 엔진 시험은 `cargo test`입니다. 릴리스는 `.claude-plugin/plugin.json`과 같은 버전의 태그 `v<버전>`을 올려서 만듭니다. 그러면 워크플로가 맥에서 엔진을 빌드하고 리눅스에서 시험한 뒤(arm64는 qemu로), 마켓플레이스가 가리키는 `dist` 브랜치를 바꿉니다. `ci/**` 브랜치를 올리면 같은 빌드와 시험을 배포 없이 돌립니다.
 
 ## 관제 화면에서 넘어올 때
 

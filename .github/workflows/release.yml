@@ -1,41 +1,105 @@
-# Release: build the engine and publish the plugin on the dist branch.
+# Release: build the engines and publish the plugin on the dist branch.
 #
 # Push a tag v<version> matching .claude-plugin/plugin.json. The marketplace
 # entry points at the dist branch (ref: dist), so users get the new version
 # with `claude plugin update nunchi@nunchi`. dist holds one commit with only
 # the files the plugin needs; each release replaces it.
+#
+# One plugin carries every engine (macOS universal, Linux x86_64 and arm64);
+# hooks/emit.sh picks the one for the machine, so installing is the same on
+# every platform. Windows is not supported.
+#
+# Pushing a ci/** branch, or running the workflow by hand, runs the build and
+# the tests without publishing.
 name: release
 
 on:
   push:
     tags: ["v*"]
+    branches: ["ci/**"]
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  dist:
+  build:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
 
       - name: Tag matches the plugin version
+        if: startsWith(github.ref, 'refs/tags/')
         run: |
           version=$(jq -r .version .claude-plugin/plugin.json)
           test "v$version" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME != plugin.json $version"; exit 1; }
-          echo "VERSION=$version" >> "$GITHUB_ENV"
 
       - name: Rust targets
-        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin x86_64-unknown-linux-musl aarch64-unknown-linux-musl
 
       - name: Test the engine
         run: cargo test --locked
 
-      - name: Build the universal engine
+      - name: Build the engines (macOS universal, Linux x86_64 and arm64)
         run: scripts/build-engine.sh
 
-      - name: The binary is built from these sources and has no dev commands
+      - name: The binaries are built from these sources and have no dev commands
         run: cargo test --locked --test shipped_binary
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: engines
+          path: bin/nunchi-engine*
+          if-no-files-found: error
+
+  linux:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust targets
+        run: rustup target add x86_64-unknown-linux-musl
+
+      - name: Test the engine on Linux (glibc, and musl as shipped)
+        run: |
+          cargo test --locked
+          cargo test --locked --target x86_64-unknown-linux-musl
+
+      - name: The engine builds on a Linux host
+        run: |
+          scripts/build-engine.sh
+          rm -f bin/nunchi-engine*
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: engines
+          path: bin
+
+      - name: The shipped Linux binaries are built from these sources and have no dev commands
+        run: |
+          chmod 755 bin/nunchi-engine*
+          cargo test --locked --test shipped_binary --test plugin_layout
+
+      - name: The x86_64 engine records a hook through emit.sh
+        run: scripts/ci-smoke.sh bin/nunchi-engine-linux-x86_64
+
+      - name: The arm64 engine records a hook (qemu)
+        run: |
+          sudo apt-get update -q && sudo apt-get install -yq qemu-user-static
+          scripts/ci-smoke.sh bin/nunchi-engine-linux-aarch64 qemu-aarch64-static
+
+  publish:
+    needs: [build, linux]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: engines
+          path: bin
 
       - name: Assemble the plugin
         run: scripts/make-dist.sh "$RUNNER_TEMP/dist"
@@ -45,9 +109,10 @@ jobs:
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          version=$(jq -r .version .claude-plugin/plugin.json)
           git init -q -b dist
           git add -A
           git -c user.name="github-actions[bot]" \
               -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
-              commit -q -m "nunchi $VERSION (${GITHUB_SHA::7})"
+              commit -q -m "nunchi $version (${GITHUB_SHA::7})"
           git push --force "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" dist:dist

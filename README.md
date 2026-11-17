@@ -16,8 +16,10 @@ Run this inside Claude Code:
 /plugin install nunchi --marketplace JeanTracker/nunchi
 ```
 
-macOS only. Nothing else to install: the plugin ships its own engine, so it needs no
-Python. While the repository is private, adding the marketplace needs git access to it.
+Runs on macOS (Apple silicon or Intel) and Linux (x86_64 or arm64); Windows is not
+supported. Installing is the same everywhere: the plugin ships an engine for each platform
+and picks the right one, so it needs no Python. On Linux the engine passes its tests in
+CI, but it has not yet been tried in a live session. While the repository is private, adding the marketplace needs git access to it.
 
 ## Use
 

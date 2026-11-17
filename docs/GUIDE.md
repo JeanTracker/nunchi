@@ -13,7 +13,10 @@ new turn in the background with `claude -p`.
 
 ## What you need
 
-- macOS (Apple silicon or Intel). The engine is a native binary; no Python is needed.
+- macOS (Apple silicon or Intel) or Linux (x86_64 or arm64). Windows is not supported.
+  The plugin ships a native engine for each of these and picks the one for your machine,
+  so installing is the same everywhere and no Python is needed. On Linux the engine
+  passes its tests in CI, but it has not yet been tried in a live session.
 - Claude Code. Tested with 2.1.322 to 2.1.325.
 - The `claude` command on the PATH of the shell you start Claude Code from. The analyzer
   calls `claude -p` once per new turn on your account's quota (see "Analysis cost").
@@ -163,15 +166,20 @@ The engine is Rust (`crates/engine`). The main branch holds sources only. Build 
 engine into `bin/` and attach your clone to a session:
 
 ```sh
-rustup target add aarch64-apple-darwin x86_64-apple-darwin
+rustup target add aarch64-apple-darwin x86_64-apple-darwin \
+  x86_64-unknown-linux-musl aarch64-unknown-linux-musl
 scripts/build-engine.sh
 claude --plugin-dir ~/src/nunchi
 ```
 
 With the plugin installed, the folder you pass replaces it for that session; only one copy
-loads (checked with Claude Code 2.1.325). `cargo test` runs the engine tests. Releases are cut by pushing a tag `v<version>` that matches
-`.claude-plugin/plugin.json`: a workflow builds the engine and replaces the `dist` branch,
-which the marketplace entry points at.
+loads (checked with Claude Code 2.1.325). On macOS the script builds all three engines
+(macOS universal, Linux x86_64 and arm64; the Linux ones are static musl builds linked
+with `rust-lld`). On Linux it builds only the one for that CPU and needs only its musl
+target. `cargo test` runs the engine tests. Releases are cut by pushing a tag `v<version>` that matches
+`.claude-plugin/plugin.json`: a workflow builds the engines on macOS, tests them on Linux (arm64 through
+qemu), and replaces the `dist` branch, which the marketplace entry points at. Pushing a
+`ci/**` branch runs the same build and tests without publishing.
 
 ## Upgrading from the control screen
 
