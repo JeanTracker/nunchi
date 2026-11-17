@@ -93,10 +93,10 @@ Before the first result the panel shows `눈치 켜짐 · 다음 응답이 끝�
 - `흐름` (flow): one paragraph on how the conversation has gone from the start.
 - `방금` (just now): the agent's summary of the last turn.
 
-**의사결정 (decisions).** Decisions you made, marked ✔, with the turn each was made in
-(the last three; `… n개 더` when there are more). The wording is the analyzer's summary,
-so the turn number lets you check it in the conversation. The section is left out when
-there are none.
+**의사결정 (decisions).** Decisions you made, marked ✔, newest first: what you decided in
+one line (or a short title when the analyzer wrote none), and the turn it was made in.
+The wording is the analyzer's summary, so the turn number lets you check it in the
+conversation. The section is left out when there are none.
 
 **에이전트 질문 (the agent's questions).** Decisions, confirmations or information the
 agent is waiting on, newest first. Each item has a number, a one-line summary, the turn it
@@ -109,6 +109,27 @@ may sit below the visible area; scroll the panel to reach it.
 **남은 요청 (open requests).** Your requests that are not done yet: ○ not handled, ◐ in
 progress (for example a merge request waiting for review), ⊘ the agent could not do it or
 deferred it. Each shows the turn it came from.
+
+**More and fewer.** Decisions, questions and open requests show three items each. When a
+list has more, its last line reads `… n개 더` (n more): click it to see five more of that
+list, and once it is fully open the same line reads `접기` (fold) and takes it back to
+three. `모두 접기` (fold all) at the bottom folds every list.
+
+Keys work once you have clicked the panel body:
+
+| Key | What it does |
+| --- | --- |
+| `]` | five more of all three lists |
+| `[` | five fewer of all three lists, down to three |
+| `Shift+]` (or `}`) | open everything, and open everything in new sessions too |
+| `Shift+[` (or `{`) | fold everything to three, and do the same in new sessions |
+
+The two shift keys show a short notice and save the choice in
+`~/.claude-control/mod.json`. Sessions started after that follow it; sessions already
+open keep theirs until they restart. What you open stays open while you work in that
+session, even as new analysis results come in, and each session keeps its own.
+Moving to the panel with `ctrl+x` then `tab` does not send these keys to it; click the
+panel instead. In VS Code the `… n개 더` lines can be clicked but the keys do nothing.
 
 **번호 풀이 (numbers explained).** When the last response cites plan numbers such as R17,
 §4.5, Phase 4c or 요구 이력 41, the panel looks them up in the project's `docs/*.md` and
