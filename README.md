@@ -40,7 +40,9 @@ Full guide: [docs/GUIDE.md](docs/GUIDE.md) (한국어: [docs/ko/GUIDE.md](docs/k
 Early development. Turning the panel off for a session (`/nunchi off`) and a status
 command are not built yet.
 
-The repository also holds a separate terminal app for watching several sessions at once
-(the control screen, `install.sh`). It is being reworked and will be documented later.
+An earlier version also shipped a separate terminal app for watching several sessions at
+once (the control screen, installed with `install.sh`). It has been removed and will be
+rebuilt in Rust. If you installed it, run `install.sh --uninstall` from that version
+before you update, so no hook is left pointing at a deleted script.
 
 nunchi is an independent project and is not affiliated with or endorsed by Anthropic.

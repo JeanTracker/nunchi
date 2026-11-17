@@ -1,8 +1,8 @@
 //! 정답 시나리오 다시 돌리기 (`cargo test --features dev`).
 //!
 //! tests/scenarios/*.json의 단계를 러스트 엔진으로 돌리고, 관제 홈에 남은 파일을 tests/golden/*.json과 비교한다.
-//! 정답은 파이썬 엔진이 만든 결과다(tests/test_conformance.py). 파이썬 엔진을 지운 뒤에도 같은 동작을 지킨다.
-//! 단계 실행과 자리표 바꾸기는 파이썬 엔진 시절 tests/test_conformance.py와 같다.
+//! 정답은 지운 파이썬 엔진이 만든 결과다(옛 tests/test_conformance.py). 파이썬이 없어진 뒤에도 같은 동작을 지킨다.
+//! 단계 실행과 자리표 바꾸기는 그 비교 시험과 같다.
 //! 동작을 일부러 바꿨으면 NUNCHI_UPDATE_GOLDEN=1 cargo test로 정답을 다시 쓰고, 바뀐 내용을 diff로 확인한다.
 #![cfg(feature = "dev")]
 

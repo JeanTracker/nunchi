@@ -238,12 +238,12 @@ test('with the control running, 관제로 leaves a goto and brings the control p
   await ui.unmount()
 })
 
-test('without the control, the tail says it is off and offers no button', async ($, on) => {
+test('without the control, the tail says nothing and offers no button (요구 이력 70)', async ($, on) => {
   const runs: string[][] = []
   withControl(on, runs, {}, false)
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect((await ui.find({ type: 'Text', text: /관제 꺼짐 · nunchi로 켜기/ }))).toBeTruthy()
+  expect((await ui.find({ type: 'Text', text: /관제/ }))).toBeFalsy()   // 지운 관제 화면을 켜라고 하지 않는다
   expect((await ui.find({ type: 'Text', text: /또는 ⌘숫자/ }))).toBeFalsy()
   await ui.unmount()
 })
@@ -292,7 +292,7 @@ test('more than three remaining requests end with how many more (요구 이력 6
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect((await ui.find({ type: 'Text', text: /남은 것 4/ }))).toBeTruthy()
   expect((await ui.find({ type: 'Text', text: /남은 일 4/ }))).toBeFalsy()
-  expect((await ui.find({ type: 'Text', text: /… 1개 더 · 관제 c/ }))).toBeTruthy()
+  expect((await ui.find({ type: 'Text', text: /… 1개 더$/ }))).toBeTruthy()   // 관제 c는 뺐다 (요구 이력 70)
   await ui.unmount()
 })
 

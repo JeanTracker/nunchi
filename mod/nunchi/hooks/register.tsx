@@ -1,7 +1,7 @@
 // 눈치 mod (REQUIREMENTS R17, SCREEN §11, BUILD_PLAN §4.4)
-// 관제가 쓴 분석 결과(<관제 홈>/sessions/<세션 ID>/analysis.json)를 읽기만 하고, 세션 옆 패널(좁으면 입력창 위 한 줄)에 보인다.
+// 분석기(nunchi-engine)가 쓴 분석 결과(<관제 홈>/sessions/<세션 ID>/analysis.json)를 읽기만 하고, 세션 옆 패널(좁으면 입력창 위 한 줄)에 보인다.
 // 분석은 하지 않는다. 분석 상태는 같은 폴더의 analysis_status.json에서 읽는다.
-// /nunchi로 켜면 세션 폴더에 want를 남긴다. 그러면 관제가 꺼져 있어도 응답이 끝날 때마다 분석기가 이 세션을 분석한다 (요구 이력 53).
+// /nunchi로 켜면 세션 폴더에 want를 남긴다. 그러면 응답이 끝날 때마다 분석기가 이 세션을 분석한다 (요구 이력 53).
 // 켜지 않았고 분석 결과도 없는 세션에서는 패널을 저절로 열지 않는다.
 import { atom, read, update } from 'claude-code'
 import type { Register, EngineInterface } from 'claude-code'
@@ -35,7 +35,7 @@ async function sessionDir($: EngineInterface): Promise<string> {
   return (await controlHome($)) + '/sessions/' + (await sessionId($))
 }
 
-// 관제 패널을 앞으로 가져온다 (관제 control_tui/adapters/iterm2_adapter.py FOCUS_SCRIPT와 같음. mod 복사본이 저장소를 못 볼 수 있어 여기에 둔다)
+// 관제 패널을 앞으로 가져온다 (요구 이력 56). 관제 화면은 지웠지만(요구 이력 70) 살아 있는 관제(control.json)가 있을 때만 쓰이므로 남겨 둔다
 const FOCUS_SCRIPT = `on run argv
   set targetId to item 1 of argv
   tell application "iTerm2"
@@ -134,7 +134,7 @@ export function buildView(analysis: any, status: any, tick: number, ratio: numbe
 
 // 넓게 그려지는 기호(… → ◆ ● ① ⚠ 등) 바로 뒤에 글자가 붙으면 한 칸 띄운다 (요구 이력 58).
 // iTerm이 영문 외 글자를 Noto Sans CJK KR로 그리면 이 기호들이 한 칸의 약 1.7배로 그려져 뒤 글자를 덮는다.
-// 범위는 관제의 control_tui/glyphs.py WIDE_RANGES와 같다. 괘선(─ │ ┊ └)은 터미널이 직접 그려 넣지 않는다.
+// 범위는 SCREEN §8 기호 겹침 실측에서 정했다(BUILD_PLAN §4.9). 괘선(─ │ ┊ └)은 터미널이 직접 그려 넣지 않는다.
 const WIDE = /[\u00a7\u00a9\u00b1\u00b6\u00bc-\u00be\u00d7\u00f7\u2010\u2014-\u2016\u2020\u2021\u2025-\u2027\u2030\u2035\u203b\u2042\u2047-\u2049\u2051\u2100-\u214f\u2190-\u23ff\u2460-\u24ff\u25a0-\u27bf]/
 export function gap(text: string): string {
   return text.replace(new RegExp(WIDE.source + '(?=[^\\s])', 'g'), m => m + ' ')
@@ -289,7 +289,7 @@ async function refresh($: EngineInterface) {
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
-    await $.command.register({ name: 'nunchi', description: '눈치 켜기: 이 세션을 분석하고 패널을 연다 (관제 없이도)' })
+    await $.command.register({ name: 'nunchi', description: '눈치 켜기: 이 세션을 분석하고 패널을 연다' })
     await refresh($)
     $.clock.every(1000, () => { void refresh($) })   // 분석 파일이 바뀌면 다시 그린다. '분석 중' 점도 1초마다
     return next(e)
@@ -309,7 +309,7 @@ export const register: Register = on => {
     const where = r.isPlaced ? '' : ' 창이 좁아 패널 대신 입력창 위 한 줄로 보입니다.'
     const v = await read($, view)
     if (was || v.basis > 0) return { text: '눈치 패널을 열었습니다.' + where }
-    return { text: '눈치를 켰습니다. 다음 응답이 끝나면 이 세션을 분석합니다(관제를 켜지 않아도 됩니다).' + where }
+    return { text: '눈치를 켰습니다. 다음 응답이 끝나면 이 세션을 분석합니다.' + where }
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
@@ -324,7 +324,7 @@ export const register: Register = on => {
     }
     const tail = v.control
       ? <Box flexDirection="row"><Button key="control" hotkey="1" onPress={() => { void toControl() }}>관제로</Button><Text dimColor>  또는 ⌘숫자</Text></Box>
-      : <Text dimColor>관제 꺼짐 · nunchi로 켜기</Text>
+      : null   // 관제 화면을 지워(요구 이력 70) 켜라고 하지 않는다
     paneDrawnAt = await $.clock.now()
     // viewport는 패널을 뺀 나머지 폭이라(실측 2026-11-12: 200칸 창에서 141), 창 전체 = 나머지 + 패널 + 경계로 본다
     const whole = (e.viewport?.columns ?? 0) + (e.props.placement === 'dock' ? cols + 2 : 0)
@@ -366,7 +366,7 @@ export const register: Register = on => {
             <Text dimColor>   “{ln(cutParts(a.quote, cols - 6))}”</Text>
           </Box>
         ))}
-        {v.askCount > v.asks.length ? <Text dimColor>   … {v.askCount - v.asks.length}개 더 · 관제 k</Text> : null}
+        {v.askCount > v.asks.length ? <Text dimColor>   … {v.askCount - v.asks.length}개 더</Text> : null}
         {v.blanketClosed ? <Text dimColor>   통째 승인으로 닫은 것 {v.blanketClosed}</Text> : null}
         <Text> </Text>
         <Text bold>지금까지</Text>
@@ -383,7 +383,7 @@ export const register: Register = on => {
         {v.left.map(x => (
           <Text><Text color="yellow"> {x.mark} </Text>{ln(cutParts(x.summary + (x.note ? ' — ' + x.note : ''), cols - 8))}<Text dimColor> #{x.turn}</Text></Text>
         ))}
-        {v.leftCount > v.left.length ? <Text dimColor>   … {v.leftCount - v.left.length}개 더 · 관제 c</Text> : null}
+        {v.leftCount > v.left.length ? <Text dimColor>   … {v.leftCount - v.left.length}개 더</Text> : null}
         {v.terms.length ? <Text> </Text> : null}
         {v.terms.length ? <Text><Text bold>번호 풀이</Text><Text dimColor>  이번 응답 · 문서 원문</Text></Text> : null}
         {v.terms.map(x => (

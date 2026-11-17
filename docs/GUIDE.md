@@ -126,8 +126,7 @@ outside your session; it does not add to the session's context. Settings live in
 ```
 
 - `analyze_scope`: `"off"` stops all analysis. `"all"` analyzes every session, turned on
-  or not. The default analyzes only sessions turned on with `/nunchi` (and the session
-  selected in the control screen, if you use it).
+  or not. The default analyzes only sessions turned on with `/nunchi`.
 - `analyze_model`: the model for analysis; empty uses the `claude` default.
 - `analyze_workers`: how many analyses may run at once (1 or 2). They share your
   account's quota.
@@ -174,9 +173,10 @@ loads (checked with Claude Code 2.1.325). `cargo test` runs the engine tests. Re
 `.claude-plugin/plugin.json`: a workflow builds the engine and replaces the `dist` branch,
 which the marketplace entry points at.
 
-## The control screen
+## Upgrading from the control screen
 
-The repository also contains the control screen: a terminal app you keep in one iTerm2
-pane to watch several sessions at once and send the next instruction from there. It is
-installed separately with `install.sh` and needs Python 3.11. It is being reworked, and
-this guide will cover it again later.
+Earlier versions also shipped the control screen: a terminal app you kept in one iTerm2
+pane to watch several sessions at once. It has been removed and will be rebuilt in Rust.
+If you installed it, run `install.sh --uninstall` from that version before you update
+your clone. It removes the hooks and the status line wrapper it put in
+`~/.claude/settings.json`; a hook that points at a deleted script blocks every session.
