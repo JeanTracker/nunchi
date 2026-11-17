@@ -5,7 +5,8 @@
     python3 scripts/fake_events.py normal    # 정상 응답 시나리오
     python3 scripts/fake_events.py compact   # 압축 시나리오
 
-실제 Claude Code 없이 hooks/emit.py에 같은 형식의 JSON을 넣어 준다.
+실제 Claude Code 없이 엔진의 훅(nunchi-engine hook)에 같은 형식의 JSON을 넣어 준다.
+엔진은 NUNCHI_ENGINE, bin/nunchi-engine, target/debug/nunchi-engine 차례로 찾는다.
 CONTROL_TUI_HOME을 지정하면 그 아래에 기록한다.
 """
 
@@ -15,7 +16,14 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-EMIT = ROOT / "hooks" / "emit.py"
+
+
+def engine() -> str:
+    import os
+    for cand in (os.environ.get("NUNCHI_ENGINE", ""), ROOT / "bin" / "nunchi-engine", ROOT / "target" / "debug" / "nunchi-engine"):
+        if cand and os.access(cand, os.X_OK):
+            return str(cand)
+    raise SystemExit("엔진이 없습니다. scripts/build-engine.sh 또는 cargo build로 만드세요.")
 
 
 def scenario(name: str, session_id: str):
@@ -46,7 +54,7 @@ def main() -> None:
     for event in scenario(name, session_id):
         payload = {"session_id": session_id, "cwd": "/tmp/fake-project",
                    "transcript_path": "/tmp/none.jsonl", **event}
-        subprocess.run([sys.executable, str(EMIT)], input=json.dumps(payload), text=True, check=False)
+        subprocess.run([engine(), "hook"], input=json.dumps(payload), text=True, check=False)
     print(f"기록 완료: {session_id}")
 
 

@@ -357,8 +357,8 @@ uninstall_all() {
     if [ -f "$SETTINGS" ] && grep -qF "$SRC/hooks/statusline.py" "$SETTINGS"; then
       die "statusLine이 아직 $SRC/hooks/statusline.py 를 부릅니다. $SETTINGS 의 statusLine을 직접 고친 뒤 다시 --uninstall 하세요. 폴더는 지우지 않고 멈춥니다."
     fi
-  elif [ -f "$SETTINGS" ] && grep -q 'hooks/emit.py' "$SETTINGS"; then
-    warn "$SETTINGS 에 nunchi 훅이 남아 있습니다. 같은 위치에 다시 설치한 뒤 --uninstall 하거나, 'hooks/emit.py'·'hooks/statusline.py' 항목을 직접 지우세요."
+  elif [ -f "$SETTINGS" ] && grep -qE 'hooks/emit\.(py|sh)' "$SETTINGS"; then
+    warn "$SETTINGS 에 nunchi 훅이 남아 있습니다. 같은 위치에 다시 설치한 뒤 --uninstall 하거나, 'hooks/emit.sh'·'hooks/emit.py'·'hooks/statusline.py' 항목을 직접 지우세요."
   fi
 
   step "명령 링크 정리"

@@ -1,6 +1,6 @@
 """세션 기록을 읽고 상태를 계산한다 (BUILD_PLAN §3.1, SCREEN §2 ①).
 
-- 입력: CONTROL_TUI_HOME/sessions/<id>/events.jsonl (hooks/emit.py가 쓴 기록)
+- 입력: CONTROL_TUI_HOME/sessions/<id>/events.jsonl (엔진의 훅 nunchi-engine hook이 쓴 기록)
 - 출력: 목록에 보일 세션 요약 (상태, 현재 도구, 도구 기록, 응답 도착 시각)
 """
 

@@ -1,6 +1,5 @@
 """Shift+Enter 줄바꿈, Shift+Tab 권한 모드 전환, 훅이 알려 준 모드 표시."""
 
-import importlib.util
 import json
 from pathlib import Path
 
@@ -114,18 +113,8 @@ def test_mode_order_matches_the_installed_claude_code():
 
 # ---------- 훅이 알려 준 모드 ----------
 
-def load_emit():
-    spec = importlib.util.spec_from_file_location("emit", ROOT / "hooks" / "emit.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
 
 
-def test_hook_record_keeps_the_permission_mode():
-    emit = load_emit()
-    rec = emit.build_record({"hook_event_name": "Stop", "session_id": "s1", "cwd": "/w",
-                             "permission_mode": "auto"}, {})
-    assert rec["data"]["permission_mode"] == "auto"
 
 
 @pytest.mark.asyncio

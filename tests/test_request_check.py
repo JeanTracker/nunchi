@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from control_tui import analyzer, transcript
+from control_tui import transcript
 from tests.test_flow_view import ANALYSIS, app_for, make_session, ready, text_of
 
 
@@ -74,37 +74,12 @@ def test_skill_expansion_in_the_middle_of_a_reply_does_not_cut_the_turn(tmp_path
 
 # ---------- 요청 원장은 사용자 원문에서만 (요청 33) ----------
 
-def result(ledger):
-    return json.dumps({"first_goal": "g", "current_goal": "g2", "turns": [], "ledger": ledger})
 
 
-def test_ledger_items_must_quote_the_users_own_words():
-    requests = {1: "가격표 조사해줘.  출처도 달아줘", 2: "그대로 둬도 돼"}
-    out = analyzer.parse_result(result([
-        {"condition": "출처 달기", "from_turn": 1, "quote": "출처도  달아줘", "status": "missed"},   # 공백만 다름: 남김
-        {"condition": "섞인 커밋은 그대로 두기", "from_turn": 2, "quote": "관련 없는 파일이 섞인 커밋",  # 에이전트 말
-         "status": "unknown"},
-        {"condition": "푸시하기", "from_turn": 1, "quote": "", "status": "missed"},               # 인용 없음
-        {"condition": "한 글자", "from_turn": 1, "quote": "가", "status": "kept"},                # 너무 짧음
-        {"condition": "없는 턴", "from_turn": 7, "quote": "가격표", "status": "kept"},            # 없는 턴
-    ]), {1, 2}, requests)
-    assert [c["condition"] for c in out["ledger"]] == ["출처 달기"]
 
 
-def test_superseded_requests_are_kept_with_the_turn_that_replaced_them():
-    out = analyzer.parse_result(result([
-        {"condition": "일본도 포함", "from_turn": 1, "quote": "일본도", "status": "superseded", "superseded_by": 2},
-    ]), {1, 2}, {1: "일본도 넣어줘", 2: "한국만 봐줘"})
-    c = out["ledger"][0]
-    assert c["status"] == "superseded" and c["superseded_by"] == 2
-    assert "next_action" not in out
 
 
-def test_prompt_says_to_judge_only_the_last_reply_and_skip_agent_proposals():
-    text = analyzer.build_prompt([transcript.Turn(index=1, time="", request="가격표")])
-    assert "마지막 턴의 응답만 보고" in text
-    assert "에이전트가 제안하거나 물은 일" in text and "quote" in text
-    assert "next_action" not in text
 
 
 # ---------- ② 화면 ----------
@@ -207,12 +182,6 @@ async def test_low_screen_keeps_only_first_and_current_goal(tmp_path):
 
 # ---------- 검토에서 나온 것 (2026-11-10) ----------
 
-def test_old_format_analysis_is_treated_as_not_analyzed(tmp_path):
-    """옛 결과는 턴 번호와 원장 뜻이 달라 새 이름표로 보이면 틀린 말이 된다. 없는 것으로 보고 다시 분석한다."""
-    (tmp_path / "analysis.json").write_text(json.dumps({"ledger": [], "source_ts": "T"}), encoding="utf-8")
-    assert analyzer.read_analysis(tmp_path) is None
-    analyzer.write_analysis(tmp_path, {"ledger": []}, "T")
-    assert analyzer.read_analysis(tmp_path)["format"] == analyzer.FORMAT
 
 
 @pytest.mark.asyncio

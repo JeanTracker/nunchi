@@ -1,4 +1,6 @@
-"""Phase 1 완료 확인 테스트: 수집 (emit, statusline, install_hooks, fake_events)."""
+"""Phase 1 완료 확인 테스트: 수집 (statusline, install_hooks, fake_events).
+
+훅 기록기는 러스트 엔진으로 옮겼다(요구 이력 68 R2). 그 시험은 crates/engine/tests(hook_records 시나리오, engine_details)."""
 
 import json
 import os
@@ -9,7 +11,6 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-EMIT = ROOT / "hooks" / "emit.py"
 STATUSLINE = ROOT / "hooks" / "statusline.py"
 INSTALL = ROOT / "scripts" / "install_hooks.py"
 FAKE = ROOT / "scripts" / "fake_events.py"
@@ -31,61 +32,6 @@ def run(script, stdin="", env=None, args=()):
 def payload(**kw):
     return json.dumps({"session_id": "s1", "cwd": "/work/a",
                        "transcript_path": "/none.jsonl", **kw})
-
-
-# ---------- emit.py ----------
-
-def test_emit_writes_one_line_per_event(home):
-    run(EMIT, payload(hook_event_name="UserPromptSubmit", prompt="안녕"), env={"CONTROL_TUI_HOME": str(home)})
-    lines = (home / "sessions" / "s1" / "events.jsonl").read_text(encoding="utf-8").splitlines()
-    assert len(lines) == 1
-    rec = json.loads(lines[0])
-    assert rec["event"] == "UserPromptSubmit"
-    assert rec["data"]["prompt"] == "안녕"
-    assert rec["cwd"] == "/work/a"
-
-
-def test_emit_takes_iterm_session_from_env(home):
-    run(EMIT, payload(hook_event_name="Stop"),
-        env={"CONTROL_TUI_HOME": str(home), "ITERM_SESSION_ID": "w0t1p0:ABCD"})
-    rec = json.loads((home / "sessions" / "s1" / "events.jsonl").read_text(encoding="utf-8"))
-    assert rec["iterm_session_id"] == "w0t1p0:ABCD"
-
-
-def test_emit_cuts_long_text_to_500_chars(home):
-    run(EMIT, payload(hook_event_name="UserPromptSubmit", prompt="가" * 2000),
-        env={"CONTROL_TUI_HOME": str(home)})
-    rec = json.loads((home / "sessions" / "s1" / "events.jsonl").read_text(encoding="utf-8"))
-    assert len(rec["data"]["prompt"]) == 500
-
-
-def test_analyzer_mode_records_nothing(home):
-    res = run(EMIT, payload(hook_event_name="Stop"),
-              env={"CONTROL_TUI_HOME": str(home), "CONTROL_TUI_ANALYZER": "1"})
-    assert res.returncode == 0
-    assert not (home / "sessions").exists()
-
-
-def test_bad_input_exits_zero_and_logs_error(home):
-    res = run(EMIT, "이건 JSON이 아님", env={"CONTROL_TUI_HOME": str(home)})
-    assert res.returncode == 0
-    assert (home / "errors.log").exists()
-
-
-def test_precompact_saves_transcript_copy(home, tmp_path):
-    transcript = tmp_path / "t.jsonl"
-    transcript.write_text('{"x": 1}\n', encoding="utf-8")
-    run(EMIT, payload(hook_event_name="PreCompact", transcript_path=str(transcript), trigger="manual"),
-        env={"CONTROL_TUI_HOME": str(home)})
-    assert (home / "sessions" / "s1" / "compact-1.jsonl").read_text(encoding="utf-8") == '{"x": 1}\n'
-
-
-def test_emit_is_fast_enough(home):
-    # 목표는 50ms지만, 파이썬 시작 시간이 포함되므로 여기서는 1초 안에 끝나는지만 본다.
-    import time
-    t0 = time.perf_counter()
-    run(EMIT, payload(hook_event_name="Stop"), env={"CONTROL_TUI_HOME": str(home)})
-    assert time.perf_counter() - t0 < 1.0
 
 
 # ---------- statusline.py ----------
@@ -221,7 +167,7 @@ def test_plugin_mode_drops_hooks_of_every_folder_and_keeps_others(tmp_path):
     assert res.returncode == 0, res.stderr
     assert "/elsewhere/nunchi/hooks/emit.py" in res.stderr       # 다른 폴더 것도 뺀다고 알린다
     after = json.loads(s.read_text(encoding="utf-8"))
-    assert "emit.py" not in json.dumps(after["hooks"])
+    assert "emit.py" not in json.dumps(after["hooks"]) and "emit.sh" not in json.dumps(after["hooks"])
     assert after["hooks"] == {"Stop": [{"hooks": [{"type": "command", "command": "say done"}]}]}
     assert "statusline.py" in after["statusLine"]["command"]     # 상태 표시줄 감싸기는 둔다
     assert "echo old" in after["statusLine"]["command"]
@@ -242,9 +188,31 @@ def test_plugin_mode_then_remove_restores_original(tmp_path):
 
 # ---------- fake_events.py ----------
 
-def test_fake_normal_scenario_writes_five_events(home):
-    res = run(FAKE, args=["normal"], env={"CONTROL_TUI_HOME": str(home)})
+@pytest.fixture(scope="module")
+def built_engine():
+    res = subprocess.run(["cargo", "build", "-q", "-p", "nunchi-engine", "--bin", "nunchi-engine"], cwd=ROOT,
+                         capture_output=True, text=True)
+    assert res.returncode == 0, res.stderr
+    return ROOT / "target" / "debug" / "nunchi-engine"
+
+
+def test_fake_normal_scenario_writes_five_events(home, built_engine):
+    res = run(FAKE, args=["normal"], env={"CONTROL_TUI_HOME": str(home), "NUNCHI_ENGINE": str(built_engine)})
     assert res.returncode == 0
     lines = (home / "sessions" / "fake-normal" / "events.jsonl").read_text(encoding="utf-8").splitlines()
     assert len(lines) == 5
     assert json.loads(lines[-1])["event"] == "Stop"
+
+
+def test_registering_again_replaces_this_folders_old_python_hook(tmp_path):
+    """예전 설치가 넣은 이 폴더의 emit.py 훅(파일은 지웠다)은 emit.sh로 바꾼다. 다른 폴더 것은 그대로 알린다 (요구 이력 68)"""
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import install_hooks
+    old = f"/x/python {ROOT}/hooks/emit.py"
+    s = tmp_path / "settings.json"
+    s.write_text(json.dumps({"hooks": {"Stop": [{"hooks": [{"type": "command", "command": old}]}]}}), encoding="utf-8")
+    run(INSTALL, args=["--settings", str(s), "--apply"])
+    cmds = [h["command"] for g in json.loads(s.read_text())["hooks"]["Stop"] for h in g["hooks"]]
+    assert cmds == [install_hooks.emit_command()] and "hooks/emit.sh" in cmds[0]
+    run(INSTALL, args=["--settings", str(s), "--remove", "--apply"])
+    assert "hooks" not in json.loads(s.read_text())

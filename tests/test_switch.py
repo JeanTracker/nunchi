@@ -4,7 +4,7 @@ import pytest
 
 from control_tui.app import ControlApp
 
-from tests.test_flow_chain import flow_analysis
+from tests.test_flow_screen import flow_analysis
 from tests.test_flow_view import app_for, make_session, ready, text_of
 
 ASKS = [

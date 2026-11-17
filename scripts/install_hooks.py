@@ -27,7 +27,7 @@ from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-EMIT = ROOT / "hooks" / "emit.py"
+EMIT = ROOT / "hooks" / "emit.sh"   # 엔진(bin/nunchi-engine)으로 넘기는 입구. 예전 emit.py는 지웠다 (요구 이력 68)
 STATUSLINE = ROOT / "hooks" / "statusline.py"
 
 # SubagentStart/SubagentStop은 등록하지 않는다 (R14, BUILD_PLAN §2.2).
@@ -35,14 +35,18 @@ EVENTS = [
     "SessionStart", "SessionEnd", "UserPromptSubmit", "PreToolUse", "PostToolUse",
     "PostToolUseFailure", "Stop", "Notification", "PreCompact", "PostCompact",
 ]
-MARK = "control_tui/hooks/emit.py"  # 우리 훅을 알아보는 표식 (경로 끝부분)
 
 
 ORIG_ENV = "CONTROL_TUI_ORIG_STATUSLINE"
 
 
 def emit_command() -> str:
-    return f"{shlex.quote(sys.executable)} {shlex.quote(str(EMIT))}"
+    return f"sh {shlex.quote(str(EMIT))}"
+
+
+def is_emit(command: str) -> bool:
+    """관제 훅 명령인지 (지금의 emit.sh, 예전 설치가 넣은 emit.py 모두)"""
+    return "hooks/emit.sh" in command or "hooks/emit.py" in command
 
 
 def statusline_command() -> str:
@@ -50,7 +54,7 @@ def statusline_command() -> str:
 
 
 def is_ours(command: str) -> bool:
-    return "hooks/emit.py" in command and str(ROOT) in command
+    return is_emit(command) and str(ROOT) in command
 
 
 def is_our_statusline(command: str) -> bool:
@@ -59,7 +63,7 @@ def is_our_statusline(command: str) -> bool:
 
 def is_settings_emit(command: str) -> bool:
     """settings.json에 넣은 관제 훅이면 폴더와 관계없이 참. 플러그인 훅(CLAUDE_PLUGIN_ROOT)은 settings.json에 오지 않는다."""
-    return "hooks/emit.py" in command and "CLAUDE_PLUGIN_ROOT" not in command
+    return is_emit(command) and "CLAUDE_PLUGIN_ROOT" not in command
 
 
 def other_installs(settings: dict) -> list:
@@ -69,18 +73,19 @@ def other_installs(settings: dict) -> list:
         for g in groups if isinstance(groups, list) else []:
             for h in g.get("hooks", []) if isinstance(g, dict) else []:
                 cmd = h.get("command", "") if isinstance(h, dict) else ""
-                if "hooks/emit.py" in cmd and not is_ours(cmd) and cmd not in found:
+                if is_emit(cmd) and not is_ours(cmd) and cmd not in found:
                     found.append(cmd)
     return found
 
 
 def merge_hooks(settings: dict) -> dict:
-    out = copy.deepcopy(settings)
+    # 이 폴더의 옛 명령(지운 emit.py를 부르는 것)은 빼고 지금 명령을 넣는다
+    out = remove_hooks(settings, match=lambda c: is_ours(c) and c != emit_command())
     hooks = out.setdefault("hooks", {})
     for event in EVENTS:
         groups = hooks.setdefault(event, [])
         already = any(
-            is_ours(h.get("command", ""))
+            h.get("command", "") == emit_command()
             for g in groups for h in g.get("hooks", [])
         )
         if not already:

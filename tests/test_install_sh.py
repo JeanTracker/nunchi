@@ -95,7 +95,7 @@ def test_uninstall_reverts_everything_and_keeps_checkout(sandbox):
     sh(sandbox, "--path")
     res = sh(sandbox, "--hooks", "--yes")
     assert res.returncode == 0, res.stderr
-    assert "emit.py" in sandbox["settings"].read_text(encoding="utf-8")
+    assert "hooks/emit.sh" in sandbox["settings"].read_text(encoding="utf-8")
 
     res = sh(sandbox, "--uninstall", "--yes")
     assert res.returncode == 0, res.stderr
@@ -111,7 +111,7 @@ def test_uninstall_stops_when_hook_removal_declined(sandbox):
     res = sh(sandbox, "--uninstall")          # tty도 --yes도 없음 → 묻지 못함
     assert res.returncode != 0
     assert (sandbox["home"] / "bin" / "nunchi").is_symlink()
-    assert "emit.py" in sandbox["settings"].read_text(encoding="utf-8")
+    assert "hooks/emit.sh" in sandbox["settings"].read_text(encoding="utf-8")
 
 
 def test_uninstall_stops_before_deleting_when_statusline_was_rewrapped(sandbox):
