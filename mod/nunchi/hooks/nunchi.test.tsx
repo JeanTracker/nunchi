@@ -37,7 +37,32 @@ const PANE = {
   props: { title: '눈치', isFocused: false, bodyColumns: 50, placement: 'dock', scroll: { offset: 0, bodyRows: 30 }, view: {} },
 } as const
 
-function engine(on: any, status: unknown, want = false, analysis: unknown = ANALYSIS, events = '') {
+// 패널 본문은 키를 받는 요소(Client)가 그린다 (요구 이력 75). 시험은 그 요소에 넘긴 줄을 읽는다:
+// 줄 전체 글과 조각 글을 Text로, 링크 조각을 Link로, … n개 더를 Button으로 찾고, 본문 밖(꼬리)은 그대로 찾는다.
+async function mountPane($: any, spec: any) {
+  const ui = await $.ui.mount(spec)
+  const nodes = async () => {
+    const out: any[] = []
+    const client = await ui.find({ type: 'Client' })
+    for (const r of (client?.props?.props?.rows ?? []) as any[]) {
+      if (r.more) { out.push({ type: 'Button', key: r.more === 'collapse' ? 'collapse' : 'more-' + r.more, text: r.label, props: {} }); continue }
+      out.push({ type: 'Text', text: r.s.map((x: any) => x.t).join(''), props: {} })
+      for (const x of r.s) out.push(x.href ? { type: 'Link', text: x.t, props: { href: x.href } } : { type: 'Text', text: x.t, props: {} })
+    }
+    return out
+  }
+  const hit = (n: any, q: any) => n.type === q.type && (q.key === undefined || n.key === q.key)
+    && (q.text === undefined || (q.text instanceof RegExp ? q.text.test(n.text) : n.text === q.text))
+  return {
+    find: async (q: any) => (await nodes()).find(n => hit(n, q)) ?? (await ui.find(q)),
+    findAll: async (q: any) => [...(await nodes()).filter(n => hit(n, q)), ...(await ui.findAll(q))],
+    press: (t: any) => ui.press(t),
+    key: (k: any) => ui.key(k),
+    unmount: () => ui.unmount(),
+  }
+}
+
+function engine(on: any, status: unknown, want = false, analysis: unknown = ANALYSIS, events = '', files: Record<string, string> = {}) {
   on('command.register', () => ({ value: { command: 'nunchi' } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('session.start', (_: unknown, e: any) => ({ cwd: e.cwd }))
@@ -47,6 +72,7 @@ function engine(on: any, status: unknown, want = false, analysis: unknown = ANAL
   on('clock.now', () => ({ value: 1000 }))
   on('fs.read', (_: unknown, e: any) => {
     const p = String(e.path ?? e)
+    for (const [end, text] of Object.entries(files)) if (p.endsWith(end)) return { value: text }
     if (p.endsWith('/sessions/abc/analysis.json')) return { value: JSON.stringify(analysis) }
     if (p.endsWith('/sessions/abc/analysis_status.json')) return { value: JSON.stringify(status) }
     if (p.endsWith('/sessions/abc/glossary.json')) return { value: JSON.stringify(GLOSS) }
@@ -59,7 +85,7 @@ function engine(on: any, status: unknown, want = false, analysis: unknown = ANAL
 test('the sections come in the order goal, decisions, questions, requests (요구 이력 71)', async ($, on) => {
   engine(on, { state: 'idle', turn: 0 })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
   const heads = (await ui.findAll({ type: 'Text', text: /^(목표|의사결정|에이전트 질문|남은 요청)(\s|$)/ }))
     .map(t => String(t.text).split(/\s/)[0] === '에이전트' ? '에이전트 질문' : String(t.text).split(/\s/)[0] === '남은' ? '남은 요청' : String(t.text).split(/\s/)[0])
   expect(heads.filter((h, k) => heads.indexOf(h) === k)).toEqual(['목표', '의사결정', '에이전트 질문', '남은 요청'])
@@ -72,7 +98,7 @@ test('the sections come in the order goal, decisions, questions, requests (요�
 test('the pane shows the goal, decisions, the agent\'s questions and open requests (요구 이력 71)', async ($, on) => {
   engine(on, { state: 'idle', turn: 0 })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
   expect((await ui.find({ type: 'Text', text: /에이전트 질문 2/ }))).toBeTruthy()
   expect((await ui.find({ type: 'Text', text: /1 폭 정하기 #3 · 일부 답함/ }))).toBeTruthy()      // 최근에 물은 것부터
   expect((await ui.find({ type: 'Text', text: /2 색 고르기 #1부터 답 없음/ }))).toBeTruthy()
@@ -96,7 +122,7 @@ test('a session with only its first turn analyzed shows the goal without a flow 
   const first = { ...ANALYSIS, last_turn: 1, flow: { ...ANALYSIS.flow, until: 1, steps: ANALYSIS.flow.steps.slice(0, 1) } }
   engine(on, { state: 'idle', turn: 0 }, false, first)
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
   expect((await ui.find({ type: 'Text', text: /흐름\s+#1/ }))).toBeFalsy()
   expect((await ui.find({ type: 'Text', text: /^목표/ }))).toBeTruthy()   // 목표가 덩어리 머리 줄이 됨 (요구 이력 71)
   await ui.unmount()
@@ -105,7 +131,7 @@ test('a session with only its first turn analyzed shows the goal without a flow 
 test('while the control analyzes, the head shows 분석 중', async ($, on) => {
   engine(on, { state: 'running', turn: 3 })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
   expect((await ui.find({ type: 'Text', text: /분석 중/ }))).toBeTruthy()
   await ui.unmount()
 })
@@ -114,7 +140,7 @@ test('while the control analyzes, the head shows 분석 중', async ($, on) => {
 test('a session not turned on says automatic analysis is off', async ($, on) => {
   engine(on, { state: 'idle', turn: 0 })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
   expect((await ui.find({ type: 'Text', text: /자동 분석 꺼짐 · \/nunchi로 켜기/ }))).toBeTruthy()
   await ui.unmount()
 })
@@ -122,7 +148,7 @@ test('a session not turned on says automatic analysis is off', async ($, on) => 
 test('a session turned on with /nunchi does not say it is off', async ($, on) => {
   engine(on, { state: 'idle', turn: 0 }, true)
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
   expect((await ui.find({ type: 'Text', text: /#3 기준/ }))).toBeTruthy()
   expect((await ui.find({ type: 'Text', text: /자동 분석 꺼짐/ }))).toBeFalsy()
   await ui.unmount()
@@ -131,7 +157,7 @@ test('a session turned on with /nunchi does not say it is off', async ($, on) =>
 test('on a narrow pane the summary wraps onto indented lines instead of being cut', async ($, on) => {
   engine(on, { state: 'idle', turn: 0 })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 24 }, surface: 'terminal' })
+  const ui = await mountPane($, { ...PANE, props: { ...PANE.props, bodyColumns: 24 }, surface: 'terminal' })
   expect((await ui.find({ type: 'Text', text: /^\s+CHANGELOG를 만들고$/ }))).toBeTruthy()
   expect((await ui.find({ type: 'Text', text: /^\s+폭을 물음$/ }))).toBeTruthy()          // 잘리지 않고 다음 줄로
   await ui.unmount()
@@ -140,7 +166,7 @@ test('on a narrow pane the summary wraps onto indented lines instead of being cu
 test('the glossary of the last answer shows at the bottom', async ($, on) => {
   engine(on, { state: 'idle', turn: 0 })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
   expect((await ui.find({ type: 'Text', text: /번호 풀이/ }))).toBeTruthy()
   expect((await ui.find({ type: 'Text', text: /^ R17$/ }))).toBeTruthy()
   expect((await ui.find({ type: 'Text', text: /세션 안\(mod\)에서 흐름을 빠르게/ }))).toBeTruthy()
@@ -174,7 +200,7 @@ test('a session that never turned nunchi on and has no analysis opens no pane', 
   bare(on, null, opened, written)
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   expect(opened.length).toBe(0)
-  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
   expect((await ui.find({ type: 'Text', text: /눈치 꺼짐 · \/nunchi로 켜면/ }))).toBeTruthy()
   await ui.unmount()
 })
@@ -187,7 +213,7 @@ test('/nunchi writes the want mark, opens the pane and says the next answer will
   expect(written.some(p => p.endsWith('/home/me/.claude-control/sessions/abc/want'))).toBe(true)
   expect(opened).toContain('nunchi')
   expect(String(r.text)).toMatch(/다음 응답이 끝나면 이 세션을 분석합니다/)
-  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
   expect((await ui.find({ type: 'Text', text: /눈치 켜짐 · 다음 응답이 끝나면 분석합니다/ }))).toBeTruthy()
   await ui.unmount()
 })
@@ -197,7 +223,7 @@ test('a turned-on session opens by itself and shows waiting and failure lines', 
   bare(on, { state: 'queued', turn: 0 }, opened, written, true)
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   expect(opened).toContain('nunchi')
-  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
   expect((await ui.find({ type: 'Text', text: /분석 대기/ }))).toBeTruthy()
   await ui.unmount()
 })
@@ -206,7 +232,7 @@ test('a failed analysis shows its reason', async ($, on) => {
   const opened: string[] = [], written: string[] = []
   bare(on, { state: 'failed', turn: 0, error: '시간 초과 (150초)' }, opened, written, true)
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
   expect((await ui.find({ type: 'Text', text: /분석 실패 · 시간 초과/ }))).toBeTruthy()
   await ui.unmount()
 })
@@ -241,7 +267,7 @@ test('with the control running, 관제로 leaves a goto and brings the control p
   const written: Record<string, string> = {}
   withControl(on, runs, written, true)
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
   expect((await ui.find({ type: 'Text', text: /또는 ⌘숫자/ }))).toBeTruthy()
   await ui.press({ key: 'control' })
   expect(runs.some(r => r[0] === 'kill' && r[2] === '4321')).toBe(true)
@@ -256,7 +282,7 @@ test('without the control, the tail says nothing and offers no button (요구 �
   const runs: string[][] = []
   withControl(on, runs, {}, false)
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
   expect((await ui.find({ type: 'Text', text: /관제/ }))).toBeFalsy()   // 지운 관제 화면을 켜라고 하지 않는다
   expect((await ui.find({ type: 'Text', text: /또는 ⌘숫자/ }))).toBeFalsy()
   await ui.unmount()
@@ -267,7 +293,7 @@ test('a stale control file (dead pid) does not write goto or run osascript', asy
   const written: Record<string, string> = {}
   withControl(on, runs, written, true, false)
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
   await ui.press({ key: 'control' })
   expect(Object.keys(written).some(p => p.endsWith('/goto'))).toBe(false)
   expect(runs.some(r => r[0] === 'osascript')).toBe(false)
@@ -278,7 +304,7 @@ test('a wide symbol touching the next letter gets one space after it (요구 이
   const touching = { ...ANALYSIS, flow: { ...ANALYSIS.flow, current_goal: { text: 'A→B …끝 ◆ 그대로 ─선', turn: 3 } } }
   engine(on, { state: 'idle', turn: 0 }, false, touching)
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
   expect((await ui.find({ type: 'Text', text: /^\s+A→ B … 끝 ◆ 그대로 ─선$/ }))).toBeTruthy()   // 괘선은 그대로
   await ui.unmount()
 })
@@ -289,7 +315,7 @@ test('links in the pane are drawn as Link elements a click opens (요구 이력 
     current_goal: { text: '시안 https://claude.ai/artifact/R8EpVcd9cueTtn7Ep2MS82 확인.', turn: 3 } } }
   engine(on, { state: 'idle', turn: 0 }, false, linked)
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 30 }, surface: 'terminal' })
+  const ui = await mountPane($, { ...PANE, props: { ...PANE.props, bodyColumns: 30 }, surface: 'terminal' })
   const hrefs = (await ui.findAll({ type: 'Link' })).map((l: any) => l.props?.href)
   expect(hrefs.filter((h: string) => h === 'https://claude.ai/artifact/R8EpVcd9cueTtn7Ep2MS82').length).toBe(2)  // 줄이 나뉘어도 조각마다 같은 주소
   expect(hrefs).toContain('https://example.com/g')
@@ -303,10 +329,10 @@ test('more than three remaining requests end with how many more (요구 이력 6
     ({ id: `R${i}`, from_turn: i, summary: `남은 일 ${i}`, state: 'deferred' })) } }
   engine(on, { state: 'idle', turn: 0 }, false, many)
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
   expect((await ui.find({ type: 'Text', text: /남은 요청 4/ }))).toBeTruthy()
   expect((await ui.find({ type: 'Text', text: /남은 일 4/ }))).toBeFalsy()
-  expect((await ui.find({ type: 'Text', text: /… 1개 더$/ }))).toBeTruthy()   // 관제 c는 뺐다 (요구 이력 70)
+  expect((await ui.find({ type: 'Button', key: 'more-left' }))?.text).toBe('… 1개 더')   // 관제 c는 뺐다 (요구 이력 70). 버튼이다 (요구 이력 74)
   await ui.unmount()
 })
 
@@ -321,7 +347,7 @@ test('the head says how many answers came after the analyzed one (요구 이력 
   ].map(e => JSON.stringify(e)).join('\n') + '\n'
   engine(on, { state: 'idle', turn: 0 }, false, at, ev)
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
   expect((await ui.find({ type: 'Text', text: /#3 기준 · 응답 3개 밀림/ }))).toBeTruthy()
   await ui.unmount()
 })
@@ -331,7 +357,7 @@ test('nothing is said when the analysis has seen the last answer', async ($, on)
   const ev = JSON.stringify({ ts: '2026-11-16T06:09:14.662Z', event: 'Stop' }) + '\n'
   engine(on, { state: 'idle', turn: 0 }, false, at, ev)
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
   expect((await ui.find({ type: 'Text', text: /밀림/ }))).toBeFalsy()
   await ui.unmount()
 })
@@ -341,7 +367,7 @@ test('a request still in progress stays in what is left with a half mark (요구
     { id: 'R1', from_turn: 2, by_turn: 4, summary: '약관 취소 버튼', state: 'in_progress', agent_quote: '병합은 하지 않았습니다' }] } }
   engine(on, { state: 'idle', turn: 0 }, false, prog)
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
   expect((await ui.find({ type: 'Text', text: /남은 요청 1/ }))).toBeTruthy()
   expect((await ui.find({ type: 'Text', text: /◐ 약관 취소 버튼 — 진행 중 #4/ }))).toBeTruthy()
   await ui.unmount()
@@ -376,4 +402,177 @@ test('a bare link stops before Korean particles, backticks and bold marks', asyn
   expect(hrefs('주소는 `https://x.com/a` 입니다')).toEqual(['https://x.com/a'])
   expect(hrefs('**https://x.com/a**에서 보세요')).toEqual(['https://x.com/a'])
   expect(hrefs('https://x.com/a?b=1&c=2.')).toEqual(['https://x.com/a?b=1&c=2'])
+})
+
+// 요구 이력 72: 의사결정은 정한 내용 한 줄을 먼저, 없으면 제목. 최근 것부터 (요구 이력 74)
+test('decisions show what was decided before the title, newest first (요구 이력 72·74)', async ($, on) => {
+  const steps = [
+    ...ANALYSIS.flow.steps,
+    { index: 4, grounded: true, label: '확정', summary: '폭 확정', agent_summary: '', title: '권장안으로 결정', decision: '폭은 40칸으로 두기로 함' },
+  ]
+  engine(on, { state: 'idle', turn: 0 }, false, { ...ANALYSIS, last_turn: 4, flow: { ...ANALYSIS.flow, until: 4, steps } })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /✔ 폭은 40칸으로 두기로 함\s+#4/ }))).toBeTruthy()
+  expect((await ui.find({ type: 'Text', text: /권장안으로 결정/ }))).toBeFalsy()
+  expect((await ui.find({ type: 'Text', text: /✔ 설치 절 확정\s+#2/ }))).toBeTruthy()   // decision이 없으면 제목
+  const order = (await ui.findAll({ type: 'Text', text: /^\s+✔ / })).map((x: any) => String(x.text ?? ''))
+  expect(order.findIndex(t => t.includes('#4'))).toBeLessThan(order.findIndex(t => t.includes('#2')))
+  await ui.unmount()
+})
+
+// 요구 이력 74: … n개 더는 버튼. 누를 때마다 5개씩, 다 펼치면 접기, 0은 모두 접기
+test('more opens five at a time, then folds back to three (요구 이력 74)', async ($, on) => {
+  const many = { ...ANALYSIS, flow: { ...ANALYSIS.flow, requests: [1, 2, 3, 4, 5, 6, 7, 8, 9].map(i =>
+    ({ id: `R${i}`, from_turn: i, summary: `남은 일 ${i}`, state: 'deferred' })) } }
+  engine(on, { state: 'idle', turn: 0 }, false, many)
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
+  const seen = async (i: number) => Boolean(await ui.find({ type: 'Text', text: new RegExp(`남은 일 ${i} `) }))
+  const label = async (key: string) => (await ui.find({ type: 'Button', key }))?.text
+  expect(await seen(3)).toBe(true)
+  expect(await seen(4)).toBe(false)
+  expect(await label('more-left')).toBe('… 6개 더')
+  expect(await label('collapse')).toBeUndefined()
+  await ui.press({ key: 'more-left' })
+  expect(await seen(8)).toBe(true)
+  expect(await seen(9)).toBe(false)
+  expect(await label('more-left')).toBe('… 1개 더')
+  expect(await label('collapse')).toBe('모두 접기')
+  await ui.press({ key: 'more-left' })
+  expect(await seen(9)).toBe(true)
+  expect(await label('more-left')).toBe('접기')
+  await ui.press({ key: 'more-left' })                 // 다 펼친 뒤 누르면 처음 3개로
+  expect(await seen(4)).toBe(false)
+  await ui.press({ key: 'more-left' })
+  await ui.press({ key: 'collapse' })                  // 모두 접기
+  expect(await seen(4)).toBe(false)
+  expect(await label('more-left')).toBe('… 6개 더')
+  expect(await label('collapse')).toBeUndefined()
+  await ui.unmount()
+})
+
+test('what was opened stays open when the pane is drawn again (요구 이력 74)', async ($, on) => {
+  const many = { ...ANALYSIS, flow: { ...ANALYSIS.flow, asks: [1, 2, 3, 4, 5, 6].map(i =>
+    ({ id: `Q${i}`, turn: i, last_turn: i, summary: `물음 ${i}`, quote: `물음 ${i}?`, state: 'open' })) } }
+  engine(on, { state: 'idle', turn: 0 }, false, many)
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  let ui = await mountPane($, { ...PANE, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /물음 1 #1/ }))).toBeFalsy()      // 최근 물은 것부터 3개
+  await ui.press({ key: 'more-asks' })
+  expect((await ui.find({ type: 'Text', text: /물음 1 #1/ }))).toBeTruthy()
+  await ui.unmount()
+  ui = await mountPane($, { ...PANE, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /물음 1 #1/ }))).toBeTruthy()
+  await ui.unmount()
+})
+
+test('what was opened stays open when a new analysis result comes in (요구 이력 74)', async ($, on) => {
+  const asks = [1, 2, 3, 4, 5, 6].map(i => ({ id: `Q${i}`, turn: i, last_turn: i, summary: `물음 ${i}`, quote: `물음 ${i}?`, state: 'open' }))
+  const live: any = { ...ANALYSIS, flow: { ...ANALYSIS.flow, asks } }
+  engine(on, { state: 'idle', turn: 0 }, true, live)
+  on('fs.write', () => ({ value: undefined }))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'more-asks' })
+  expect((await ui.find({ type: 'Text', text: /물음 1 #1/ }))).toBeTruthy()
+  live.flow = { ...live.flow, asks: [...asks, { id: 'Q7', turn: 7, last_turn: 7, summary: '물음 7', quote: '물음 7?', state: 'open' }] }
+  await $.command.run({ command: 'nunchi' } as any)        // 분석 결과를 다시 읽는다
+  expect((await ui.find({ type: 'Text', text: /에이전트 질문 7/ }))).toBeTruthy()
+  expect((await ui.find({ type: 'Text', text: /물음 7 #7/ }))).toBeTruthy()
+  expect((await ui.find({ type: 'Text', text: /물음 2 #2/ }))).toBeTruthy()   // 처음 3개(7·6·5)보다 많이 그대로
+  await ui.unmount()
+})
+
+test('fold all goes away once nothing is drawn past three (요구 이력 74)', async ($, on) => {
+  const asks = [1, 2, 3, 4, 5].map(i => ({ id: `Q${i}`, turn: i, last_turn: i, summary: `물음 ${i}`, quote: `물음 ${i}?`, state: 'open' }))
+  const live: any = { ...ANALYSIS, flow: { ...ANALYSIS.flow, asks } }
+  engine(on, { state: 'idle', turn: 0 }, true, live)
+  on('fs.write', () => ({ value: undefined }))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'more-asks' })
+  expect((await ui.find({ type: 'Button', key: 'collapse' }))?.text).toBe('모두 접기')
+  live.flow = { ...live.flow, asks: asks.map((a, k) => k < 3 ? { ...a, state: 'answered' } : a) }
+  await $.command.run({ command: 'nunchi' } as any)
+  expect((await ui.find({ type: 'Text', text: /에이전트 질문 2/ }))).toBeTruthy()
+  expect((await ui.find({ type: 'Button', key: 'collapse' }))).toBeFalsy()
+  await ui.unmount()
+})
+
+// 요구 이력 75: 본문을 클릭한 뒤 ] 펼치기, [ 줄이기 (세 덩어리 함께), Shift+] / } 모두 펼치기 저장, Shift+[ / { 모두 접기 저장
+function lots(n: number) {
+  const k = Array.from({ length: n }, (_, i) => i + 1)
+  return { ...ANALYSIS, last_turn: 3 + n, flow: { ...ANALYSIS.flow, until: 3 + n,
+    steps: [...ANALYSIS.flow.steps.filter(x => x.label !== '확정'), ...k.map(i => ({ index: 3 + i, grounded: true, label: '확정', summary: '', agent_summary: '', title: `결정 ${i}` }))],
+    asks: k.map(i => ({ id: `Q${i}`, turn: i, last_turn: i, summary: `물음 ${i}`, quote: '', state: 'open' })),
+    requests: k.map(i => ({ id: `R${i}`, from_turn: i, summary: `일 ${i}`, state: 'open' })) } }
+}
+async function counts(ui: any) {
+  const n = async (re: RegExp) => (await ui.findAll({ type: 'Text', text: re })).length
+  return [await n(/^\s+✔ 결정 \d+\s+#\d+$/), await n(/^ \d+ 물음 \d+ #\d+/), await n(/^ ○ 일 \d+ #\d+$/)]
+}
+
+test('] opens all three sections five more at a time and [ takes five back, never below three (요구 이력 75)', async ($, on) => {
+  engine(on, { state: 'idle', turn: 0 }, false, lots(12))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
+  expect(await counts(ui)).toEqual([3, 3, 3])
+  expect((await ui.find({ type: 'Text', text: /^\] 펼치기 · \[ 줄이기/ }))).toBeTruthy()
+  await ui.key({ key: ']' })
+  expect(await counts(ui)).toEqual([8, 8, 8])
+  await ui.key({ key: ']' })
+  await ui.key({ key: ']' })
+  expect(await counts(ui)).toEqual([12, 12, 12])   // 있는 만큼만
+  await ui.key({ key: '[' })
+  expect(await counts(ui)).toEqual([7, 7, 7])
+  await ui.key({ key: '[' })
+  await ui.key({ key: '[' })
+  expect(await counts(ui)).toEqual([3, 3, 3])      // 바닥은 처음 3개
+  await ui.unmount()
+})
+
+test('shift+] or } opens everything and saves it, shift+[ or { folds and saves (요구 이력 75)', async ($, on) => {
+  const written: Record<string, string> = {}, toasts: string[] = []
+  engine(on, { state: 'idle', turn: 0 }, false, lots(12))
+  on('fs.write', (_: unknown, e: any) => { written[String(e.path)] = String(e.text ?? ''); return { value: undefined } })
+  on('ui.toast', (_: unknown, e: any) => { toasts.push(String(e.text ?? e)); return { value: undefined } })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
+  const saved = () => JSON.parse(written['/home/me/.claude-control/mod.json'] ?? '{}').expand
+  await ui.key({ key: ']', shift: true })
+  expect(await counts(ui)).toEqual([12, 12, 12])
+  expect(saved()).toBe('all')
+  expect(toasts.some(t => /새 세션도 모두 펼친 채/.test(t))).toBe(true)
+  await ui.key({ key: '[' })                       // 모두 펼친 뒤 줄이기는 실제 개수에서
+  expect(await counts(ui)).toEqual([7, 7, 7])
+  await ui.key({ key: '{' })
+  expect(await counts(ui)).toEqual([3, 3, 3])
+  expect(saved()).toBe('none')
+  await ui.key({ key: '}' })
+  expect(saved()).toBe('all')
+  await ui.key({ key: '[', shift: true })
+  expect(saved()).toBe('none')
+  await ui.unmount()
+})
+
+test('a new session opens everything when everything was saved open (요구 이력 75)', async ($, on) => {
+  engine(on, { state: 'idle', turn: 0 }, false, lots(12), '', { '/home/me/.claude-control/mod.json': '{"expand":"all"}' })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
+  expect(await counts(ui)).toEqual([12, 12, 12])
+  await ui.unmount()
+})
+
+test('a surface without Client draws the same rows itself (요구 이력 75)', async ($, on) => {
+  engine(on, { state: 'idle', turn: 0 }, false, lots(5))
+  await $.session.start({ cwd: '/', surface: 'vscode', isInteractive: true })
+  const ui = await $.ui.mount({ ...PANE, surface: 'vscode' } as any)
+  expect((await ui.find({ type: 'Client' } as any))).toBeFalsy()
+  expect((await ui.find({ type: 'Text', text: /^목표\s+#3부터$/ }))).toBeTruthy()
+  expect((await ui.find({ type: 'Button', key: 'more-left' }))?.text).toBe('… 2개 더')
+  expect((await ui.find({ type: 'Text', text: /\] 펼치기/ }))).toBeFalsy()   // 키를 받지 못하니 안내하지 않는다
+  await ui.press({ key: 'more-left' })
+  expect((await ui.find({ type: 'Text', text: /일 5 #5/ }))).toBeTruthy()
+  await ui.unmount()
 })

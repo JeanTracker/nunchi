@@ -6,7 +6,8 @@
 import { atom, read, update } from 'claude-code'
 import type { Register, EngineInterface } from 'claude-code'
 
-import type { View, Left } from '../types'
+import type { View, Left, More } from '../types'
+import { drawRows, type Row, type Span } from './rows'
 
 const PANE = 'nunchi'
 const EMPTY: View = {
@@ -14,7 +15,43 @@ const EMPTY: View = {
   digest: '', digestTurn: 0, goal: '', goalTurn: 0, decisions: [], decisionCount: 0, recent: '', left: [], leftCount: 0, ratio: 0.4, tick: 0,
   terms: [], termsMore: 0, on: false, error: '', control: false, behind: 0,
 }
-const view = atom({ plugin: 'nunchi', key: 'view' } as const, EMPTY, { shape: 'view-8' })
+const view = atom({ plugin: 'nunchi', key: 'view' } as const, EMPTY, { shape: 'view-9' })
+// 펼친 수 (요구 이력 74): view와 따로 둔다. view는 분석 결과가 올 때마다 통째로 다시 쓰여 함께 두면 풀린다
+const NO_MORE: More = { decisions: 0, asks: 0, left: 0, all: false }
+const more = atom({ plugin: 'nunchi', key: 'more' } as const, NO_MORE, { shape: 'more-2' })
+const STEP = 5   // 한 번 누를 때 더 보이는 수
+
+// 펼친 수 바꾸기 (요구 이력 74·75). 모두 펼침은 개수가 아니라 표시라 목록이 늘어도 모두 보이고, 줄이기는 실제 개수에서 줄인다
+type Totals = { decisions: number; asks: number; left: number }
+const SECTIONS = ['decisions', 'asks', 'left'] as const
+export function moved(m: More, t: Totals, op: { op?: string; d?: number; k?: string }): More {
+  const room = (k: typeof SECTIONS[number]) => Math.max(0, t[k] - SHOWN)
+  const now = (k: typeof SECTIONS[number]) => m.all ? room(k) : Math.min(m[k], room(k))
+  const base: More = { decisions: now('decisions'), asks: now('asks'), left: now('left'), all: false }
+  if (op.op === 'all') return { ...base, all: true }
+  if (op.op === 'none' || op.op === 'more' && op.k === 'collapse') return NO_MORE
+  if (op.op === 'step') {
+    if (m.all && (op.d ?? 0) > 0) return m
+    for (const k of SECTIONS) base[k] = Math.max(0, Math.min(room(k), base[k] + STEP * Math.sign(op.d ?? 0)))
+    return base
+  }
+  if (op.op === 'more' && (SECTIONS as readonly string[]).includes(op.k ?? '')) {
+    const k = op.k as typeof SECTIONS[number]
+    base[k] = base[k] >= room(k) ? 0 : Math.min(room(k), base[k] + STEP)
+    return base
+  }
+  return m
+}
+const SAVED = '/mod.json'   // 새 세션에도 모두 펼칠지 (요구 이력 75). 사람이 고치는 config.json과 따로
+
+async function apply($: EngineInterface, op: { op?: string; d?: number; k?: string }) {
+  const v = await read($, view)
+  await update($, more, x => moved(x ?? NO_MORE, { decisions: v.decisionCount, asks: v.askCount, left: v.leftCount }, op))
+  if (op.op === 'all' || op.op === 'none') {
+    await $.fs.write((await controlHome($)) + SAVED, JSON.stringify({ expand: op.op }) + '\n')
+    $.ui.toast(op.op === 'all' ? '눈치: 모두 펼쳤습니다. 새 세션도 모두 펼친 채 엽니다' : '눈치: 모두 접었습니다. 새 세션도 처음 3개로 엽니다')
+  }
+}
 
 const SHOWN = 3
 const MAX_RATIO = 0.45   // Claude Code가 옆 패널에 허락하는 폭
@@ -97,7 +134,7 @@ export function buildView(analysis: any, status: any, tick: number, ratio: numbe
   const basis = flow.until ?? analysis.last_turn ?? 0
   const open = (flow.asks ?? []).filter((a: any) => a.state !== 'answered')
     .sort((a: any, b: any) => (b.last_turn ?? b.turn ?? 0) - (a.last_turn ?? a.turn ?? 0))
-  const asks = open.slice(0, SHOWN).map((a: any, k: number) => ({
+  const asks = open.map((a: any, k: number) => ({
     n: k + 1, summary: one(a.summary, 60), turn: a.turn ?? 0, quote: one(a.quote, 60),
     partial: a.state === 'partial', stale: (a.last_turn ?? a.turn ?? 0) < basis - 1,
   }))
@@ -109,8 +146,9 @@ export function buildView(analysis: any, status: any, tick: number, ratio: numbe
   }
   // 도구 실패(△)는 보이지 않는다: 도구 사용은 모으지도 보이지도 않는다 (요구 이력 48)
   // 의사결정 (요구 이력 71): 관계가 확정인 턴. 분석기의 요약이라 원문 대조가 없으므로 정한 턴을 함께 보인다
+  // 정한 내용 한 줄(decision)을 먼저, 없으면 제목 (요구 이력 72). 최근 것부터 놓아 펼친 것이 아래로 이어진다 (요구 이력 74)
   const decided = steps.filter((s: any) => s.label === '확정')
-  const decisions = decided.slice(-SHOWN).map((s: any) => ({ text: one(s.title || s.decision || s.summary, 80), turn: s.index ?? 0 }))
+  const decisions = decided.slice().reverse().map((s: any) => ({ text: one(s.decision || s.title || s.summary, 120), turn: s.index ?? 0 }))
   const last = steps.length ? steps[steps.length - 1] : null
   // 처음부터 이 턴까지 한 덩어리 정리: 분석기가 턴마다 써 둔 digest 중 마지막 것 (요구 이력 57, 추정)
   const digested = (flow.steps ?? []).filter((s: any) => s.digest).pop()
@@ -129,7 +167,7 @@ export function buildView(analysis: any, status: any, tick: number, ratio: numbe
     decisions,
     decisionCount: decided.length,
     recent: one(last?.agent_summary ?? '', 240),
-    left: left.slice(0, SHOWN),
+    left,
     leftCount: left.length,
   }
 }
@@ -293,6 +331,10 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: 'nunchi', description: '눈치 켜기: 이 세션을 분석하고 패널을 연다' })
     await refresh($)
+    // 저장해 둔 모두 펼침 (요구 이력 75): 이 세션에서 아직 펼치거나 접지 않았을 때만
+    const saved = await readJson($, (await controlHome($)) + SAVED)
+    const now = await read($, more)
+    if (saved?.expand === 'all' && !now.all && !now.decisions && !now.asks && !now.left) await update($, more, () => ({ ...NO_MORE, all: true }))
     $.clock.every(1000, () => { void refresh($) })   // 분석 파일이 바뀌면 다시 그린다. '분석 중' 점도 1초마다
     return next(e)
   })
@@ -314,11 +356,17 @@ export const register: Register = on => {
     return { text: '눈치를 켰습니다. 다음 응답이 끝나면 이 세션을 분석합니다.' + where }
   })
 
+  on('ui.message', async ($, e) => {
+    const d = (e as any).data
+    if (d && typeof d === 'object' && typeof d.op === 'string') await apply($, d)
+    return {}
+  })
+
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Text, Button, Link } = $.ui.resolve(e)
-    // 조각을 글자와 링크로 (요구 이력 60): 터미널은 OSC 8 링크로 그려 클릭하면 열린다
-    const ln = (line: Piece[]) => line.map(p => p.href ? <Link href={p.href}>{p.t}</Link> : p.t)
+    const els: any = $.ui.resolve(e)
+    const { Box, Text, Button, Client } = els
     const v = await read($, view)
+    const m = await read($, more)
     const cols = Math.max(20, e.props.bodyColumns ?? 50)
     const toControl = async () => {
       const problem = await goControl($)
@@ -335,72 +383,97 @@ export const register: Register = on => {
       askedColumns = want   // 창 폭의 비율로 다시 요청한다 (사용자가 끌어 정한 폭이 있으면 그것이 앞선다)
       void $.ui.open({ id: PANE, title: '눈치', columns: want })
     }
+    // 본문 줄 (요구 이력 75): 다 만든 줄을 키를 받는 본문(Client)에 넘긴다. Client가 없는 화면은 같은 줄을 여기서 그린다
+    // vscode·모바일 표에도 Client가 들어 있지만 빈 상자로 그린다(시험 2026-11-17): 화면 이름으로 고른다
+    const keys = !!Client && (e.surface === 'terminal' || e.surface === 'desktop')
+    const rows: Row[] = []
+    const row = (...s: Span[]) => { rows.push({ s: s.filter(x => x.t) }) }
+    const sp = (t: string, o: Omit<Span, 't'> = {}): Span => ({ t, ...o })
+    const parts = (line: Piece[], o: Omit<Span, 't' | 'href'> = {}): Span[] => line.map(p => p.href ? { t: p.t, href: p.href } : { t: p.t, ...o })
     const busy = v.state === 'running' || v.state === 'queued'
     const rebuilding = busy && v.latest > 0 && v.total > 0 && v.latest < v.total
     if (!v.goal && v.basis === 0) {   // 아직 분석 결과가 없다 (SCREEN §11)
-      const line = v.state === 'running' || v.state === 'queued' ? <Text color="yellow">{dots(v.tick, v.state)}</Text>
-        : v.state === 'failed' ? <Text color="red">분석 실패 · {v.error}</Text>
-        : v.on ? <Text dimColor>눈치 켜짐 · 다음 응답이 끝나면 분석합니다</Text>
-        : <Text dimColor>눈치 꺼짐 · /nunchi로 켜면 이 세션을 분석합니다</Text>
-      return (
-        <Box flexDirection="column">
-          <Text bold>눈치</Text>
-          {line}
-        </Box>
-      )
+      row(sp('눈치', { b: 1 }))
+      row(v.state === 'running' || v.state === 'queued' ? sp(dots(v.tick, v.state), { c: 'yellow' })
+        : v.state === 'failed' ? sp('분석 실패 · ' + v.error, { c: 'red' })
+        : v.on ? sp('눈치 켜짐 · 다음 응답이 끝나면 분석합니다', { d: 1 })
+        : sp('눈치 꺼짐 · /nunchi로 켜면 이 세션을 분석합니다', { d: 1 }))
+    } else {
+      // … n개 더 (요구 이력 74): 누를 때마다 그 덩어리만 5개씩, 다 펼치면 접기
+      const shownOf = (k: keyof Totals, total: number) => m.all ? total : Math.min(total, SHOWN + m[k])
+      const moreRow = (k: keyof Totals, total: number) => {
+        if (total <= SHOWN) return
+        const rest = total - shownOf(k, total)
+        rows.push({ more: k, label: rest > 0 ? `… ${rest}개 더` : '접기' })
+      }
+      row(sp('눈치', { b: 1 }), sp(` · #${v.basis} 기준`, { d: 1 }),
+        v.behind > 0 && !busy ? sp(` · 응답 ${v.behind}개 밀림`, { c: 'yellow' }) : sp(''),
+        rebuilding ? sp(`  ${v.basis <= 1 ? '흐름 처음부터 만드는 중' : '밀린 턴 반영 중'} #${v.latest}/#${v.total} ${dots(v.tick)}`, { c: 'yellow' })
+          : busy ? sp('  ' + dots(v.tick, v.state), { c: 'yellow' })
+          : v.state === 'failed' ? sp('  분석 실패 · ' + v.error, { c: 'red' })
+          : !v.on ? sp('  자동 분석 꺼짐 · /nunchi로 켜기', { c: 'yellow' }) : sp(''))
+      row(sp(' '))
+      // 차례 (요구 이력 71): 목표 → 의사결정 → 에이전트 질문 → 남은 요청
+      row(sp('목표', { b: 1 }), sp(v.goalTurn ? `  #${v.goalTurn}부터` : '', { d: 1 }))
+      for (const line of wrapParts(v.goal, cols - 4, 3)) row(sp('   '), ...parts(line))
+      if (v.digest) {
+        row(sp(` 흐름  #1–#${v.digestTurn}`, { d: 1 }))
+        for (const line of wrapParts(v.digest, cols - 4, 3)) row(sp('   ', { d: 1 }), ...parts(line, { d: 1 }))
+      }
+      if (v.recent) {
+        row(sp(' 방금', { d: 1 }))
+        for (const line of wrapParts(v.recent, cols - 4, 3)) row(sp('   ', { d: 1 }), ...parts(line, { d: 1 }))
+      }
+      if (v.decisions.length) {
+        row(sp(' '))
+        row(sp('의사결정 ', { b: 1 }), sp(String(v.decisionCount), { c: 'green' }))
+        for (const d of v.decisions.slice(0, shownOf('decisions', v.decisionCount))) {
+          const lines = wrapParts('✔ ' + d.text, cols - 12, 2)
+          lines.forEach((line, k) => row(sp('   '), sp(k ? '  ' : ''), ...parts(line),
+            k === lines.length - 1 && d.turn ? sp(`  #${d.turn}`, { d: 1 }) : sp('')))
+        }
+        moreRow('decisions', v.decisionCount)
+      }
+      row(sp(' '))
+      row(sp('에이전트 질문 ', { b: 1 }), sp(v.askCount ? String(v.askCount) : '없음', { c: v.askCount ? 'yellow' : 'green' }))
+      for (const a of v.asks.slice(0, shownOf('asks', v.askCount))) {
+        row(sp(` ${a.n} `, { c: 'yellow', b: 1 }), ...parts(cutParts(a.summary, cols - 12)),
+          sp(` #${a.turn}${a.stale ? '부터 답 없음' : ''}${a.partial ? ' · 일부 답함' : ''}`, { d: 1 }))
+        row(sp('   “', { d: 1 }), ...parts(cutParts(a.quote, cols - 6), { d: 1 }), sp('”', { d: 1 }))
+      }
+      moreRow('asks', v.askCount)
+      if (v.blanketClosed) row(sp(`   통째 승인으로 닫은 것 ${v.blanketClosed}`, { d: 1 }))
+      row(sp(' '))
+      row(sp('남은 요청 ', { b: 1 }), sp(v.leftCount ? String(v.leftCount) : '없음', { c: v.leftCount ? 'yellow' : 'green' }), sp(' 내 요청 중', { d: 1 }))
+      for (const x of v.left.slice(0, shownOf('left', v.leftCount)))
+        row(sp(` ${x.mark} `, { c: 'yellow' }), ...parts(cutParts(x.summary + (x.note ? ' — ' + x.note : ''), cols - 8)), sp(` #${x.turn}`, { d: 1 }))
+      moreRow('left', v.leftCount)
+      if (v.terms.length) {
+        row(sp(' '))
+        row(sp('번호 풀이', { b: 1 }), sp('  이번 응답 · 문서 원문', { d: 1 }))
+        for (const x of v.terms) {
+          row(sp(` ${x.id}`, { c: 'yellow' }))
+          ;(x.means.length ? x.means.slice(0, 2) : ['문서에 없음']).forEach((mean, k) => {
+            for (const line of wrapParts((x.means.length > 1 ? '①②'[k] + ' ' : '') + mean, cols - 4, 2))
+              row(sp('   '), ...parts(line, x.means.length ? {} : { d: 1 }))
+          })
+        }
+        if (v.termsMore) row(sp(`   … ${v.termsMore}개 더`, { d: 1 }))
+      }
+      const totals: Totals = { decisions: v.decisionCount, asks: v.askCount, left: v.leftCount }
+      const overflow = SECTIONS.some(k => totals[k] > SHOWN)
+      // 실제로 3개 넘게 그려진 덩어리가 있을 때만 (펼친 뒤 목록이 줄면 접을 것이 없다)
+      const expanded = SECTIONS.some(k => shownOf(k, totals[k]) > SHOWN)
+      row(sp(' '))
+      if (expanded) rows.push({ more: 'collapse', label: '모두 접기' })
+      if (overflow && keys) row(sp('] 펼치기 · [ 줄이기 · shift와 함께 누르면 새 세션에도 (패널을 클릭한 뒤)', { d: 1 }))
     }
+    const body = keys
+      ? <Client key="body" module="./body.tsx" props={{ rows }} />
+      : drawRows(rows, els, k => { void apply($, { op: 'more', k }) })
     return (
       <Box flexDirection="column">
-        <Text>
-          <Text bold>눈치</Text>
-          <Text dimColor> · #{v.basis} 기준</Text>
-          {v.behind > 0 && !busy ? <Text color="yellow"> · 응답 {v.behind}개 밀림</Text> : null}
-          {rebuilding ? <Text color="yellow">  {v.basis <= 1 ? '흐름 처음부터 만드는 중' : '밀린 턴 반영 중'} #{v.latest}/#{v.total} {dots(v.tick)}</Text>
-            : busy ? <Text color="yellow">  {dots(v.tick, v.state)}</Text>
-            : v.state === 'failed' ? <Text color="red">  분석 실패 · {v.error}</Text>
-            : !v.on ? <Text color="yellow">  자동 분석 꺼짐 · /nunchi로 켜기</Text> : null}
-        </Text>
-        <Text> </Text>
-        {/* 차례 (요구 이력 71): 목표 → 의사결정 → 에이전트 질문 → 남은 요청 */}
-        <Text><Text bold>목표</Text><Text dimColor>{v.goalTurn ? `  #${v.goalTurn}부터` : ''}</Text></Text>
-        {wrapParts(v.goal, cols - 4, 3).map(line => <Text>   {ln(line)}</Text>)}
-        {v.digest ? <Text dimColor> 흐름  #1–#{v.digestTurn}</Text> : null}
-        {v.digest ? wrapParts(v.digest, cols - 4, 3).map(line => <Text dimColor>   {ln(line)}</Text>) : null}
-        {v.recent ? <Text dimColor> 방금</Text> : null}
-        {v.recent ? wrapParts(v.recent, cols - 4, 3).map(line => <Text dimColor>   {ln(line)}</Text>) : null}
-        {v.decisions.length ? <Text> </Text> : null}
-        {v.decisions.length ? <Text><Text bold>의사결정 </Text><Text color="green">{String(v.decisionCount)}</Text></Text> : null}
-        {v.decisions.map(d => wrapParts('✔ ' + d.text, cols - 12, 2).map((line, k, all) =>
-          <Text>   {k ? '  ' : ''}{ln(line)}{k === all.length - 1 && d.turn ? <Text dimColor>  #{d.turn}</Text> : null}</Text>))}
-        {v.decisionCount > v.decisions.length ? <Text dimColor>   … {v.decisionCount - v.decisions.length}개 더</Text> : null}
-        <Text> </Text>
-        <Text><Text bold>에이전트 질문 </Text><Text color={v.askCount ? 'yellow' : 'green'}>{v.askCount ? String(v.askCount) : '없음'}</Text></Text>
-        {v.asks.map(a => (
-          <Box flexDirection="column">
-            <Text><Text color="yellow" bold> {a.n} </Text>{ln(cutParts(a.summary, cols - 12))}<Text dimColor> #{a.turn}{a.stale ? '부터 답 없음' : ''}{a.partial ? ' · 일부 답함' : ''}</Text></Text>
-            <Text dimColor>   “{ln(cutParts(a.quote, cols - 6))}”</Text>
-          </Box>
-        ))}
-        {v.askCount > v.asks.length ? <Text dimColor>   … {v.askCount - v.asks.length}개 더</Text> : null}
-        {v.blanketClosed ? <Text dimColor>   통째 승인으로 닫은 것 {v.blanketClosed}</Text> : null}
-        <Text> </Text>
-        <Text><Text bold>남은 요청 </Text><Text color={v.leftCount ? 'yellow' : 'green'}>{v.leftCount ? String(v.leftCount) : '없음'}</Text><Text dimColor> 내 요청 중</Text></Text>
-        {v.left.map(x => (
-          <Text><Text color="yellow"> {x.mark} </Text>{ln(cutParts(x.summary + (x.note ? ' — ' + x.note : ''), cols - 8))}<Text dimColor> #{x.turn}</Text></Text>
-        ))}
-        {v.leftCount > v.left.length ? <Text dimColor>   … {v.leftCount - v.left.length}개 더</Text> : null}
-        {v.terms.length ? <Text> </Text> : null}
-        {v.terms.length ? <Text><Text bold>번호 풀이</Text><Text dimColor>  이번 응답 · 문서 원문</Text></Text> : null}
-        {v.terms.map(x => (
-          <Box flexDirection="column">
-            <Text color="yellow"> {x.id}</Text>
-            {(x.means.length ? x.means.slice(0, 2) : ['문서에 없음']).map((m, k) =>
-              wrapParts((x.means.length > 1 ? '①②'[k] + ' ' : '') + m, cols - 4, 2).map(line =>
-                <Text dimColor={!x.means.length}>   {ln(line)}</Text>))}
-          </Box>
-        ))}
-        {v.termsMore ? <Text dimColor>   … {v.termsMore}개 더</Text> : null}
-        <Text> </Text>
+        {body}
         {tail}
       </Box>
     )

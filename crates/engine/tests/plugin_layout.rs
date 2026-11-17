@@ -170,3 +170,40 @@ fn only_other_platform_engines_count_as_missing() {
     let v: Value = serde_json::from_str(&out).unwrap();
     assert!(v["systemMessage"].as_str().unwrap().contains("scripts/build-engine.sh"), "{out}");
 }
+
+/// 배포용 폴더에 mod 모듈이 모두 실리는가 (요구 이력 75): register.tsx가 부르는 본문·줄 그리기 파일이 빠지면 설치본 패널이 뜨지 않는다.
+/// 저장소의 필요한 파일만 임시 폴더로 옮기고 가짜 엔진을 두어 make-dist.sh를 그대로 돌린다.
+#[test]
+fn dist_carries_every_mod_module_but_not_the_tests() {
+    let tmp = std::env::temp_dir().join(format!("nunchi-dist-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&tmp);
+    let src = tmp.join("src");
+    for rel in [".claude-plugin/plugin.json", "hooks/hooks.json", "hooks/emit.sh", "scripts/make-dist.sh",
+                "mod/nunchi/types/index.d.ts", "mod/nunchi/tsconfig.json", "README.md", "docs/GUIDE.md", "docs/ko/GUIDE.md"] {
+        std::fs::create_dir_all(src.join(rel).parent().unwrap()).unwrap();
+        std::fs::copy(repo().join(rel), src.join(rel)).unwrap();
+    }
+    let hooks_dir = repo().join("mod/nunchi/hooks");
+    std::fs::create_dir_all(src.join("mod/nunchi/hooks")).unwrap();
+    let mut modules = vec![];
+    for entry in std::fs::read_dir(&hooks_dir).unwrap() {
+        let name = entry.unwrap().file_name().into_string().unwrap();
+        if name.ends_with(".tsx") {
+            std::fs::copy(hooks_dir.join(&name), src.join("mod/nunchi/hooks").join(&name)).unwrap();
+            modules.push(name);
+        }
+    }
+    std::fs::create_dir_all(src.join("bin")).unwrap();
+    for e in ["nunchi-engine", "nunchi-engine-linux-x86_64", "nunchi-engine-linux-aarch64"] {
+        std::fs::write(src.join("bin").join(e), "#!/bin/sh\n").unwrap();
+    }
+    let out = tmp.join("out");
+    let st = Command::new("/bin/sh").arg(src.join("scripts/make-dist.sh")).arg(&out).output().unwrap();
+    assert!(st.status.success(), "{}", String::from_utf8_lossy(&st.stderr));
+    assert!(modules.iter().any(|m| m == "body.tsx") && modules.iter().any(|m| m == "rows.tsx"));
+    for m in &modules {
+        let shipped = out.join("mod/nunchi/hooks").join(m).is_file();
+        assert_eq!(shipped, !m.ends_with(".test.tsx"), "{m}");
+    }
+    let _ = std::fs::remove_dir_all(&tmp);
+}

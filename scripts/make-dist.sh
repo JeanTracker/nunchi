@@ -13,8 +13,13 @@ done
 rm -rf "$out"
 mkdir -p "$out"
 cd "$root"
+# mod 모듈은 시험(*.test.tsx)만 빼고 모두: register.tsx가 부르는 본문(body.tsx)과 줄 그리기(rows.tsx)도 함께 (요구 이력 75)
+mods=""
+for m in mod/nunchi/hooks/*.tsx; do
+  if [ "${m%.test.tsx}" = "$m" ]; then mods="$mods $m"; fi
+done
 for f in .claude-plugin/plugin.json hooks/hooks.json hooks/emit.sh \
-         mod/nunchi/hooks/register.tsx mod/nunchi/types/index.d.ts mod/nunchi/tsconfig.json \
+         $mods mod/nunchi/types/index.d.ts mod/nunchi/tsconfig.json \
          README.md docs/GUIDE.md docs/ko/GUIDE.md $engines; do
   mkdir -p "$out/$(dirname "$f")"
   cp -p "$f" "$out/$f"
