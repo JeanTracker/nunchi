@@ -6,7 +6,7 @@ set -eu
 root=$(cd "$(dirname "$0")/.." && pwd)
 cd "$root"
 for t in aarch64-apple-darwin x86_64-apple-darwin; do
-  cargo build --release --locked -p nunchi-engine --bin nunchi-engine --target "$t"
+  cargo build --release --locked --no-default-features -p nunchi-engine --bin nunchi-engine --target "$t"
 done
 mkdir -p bin
 lipo -create -output bin/nunchi-engine \

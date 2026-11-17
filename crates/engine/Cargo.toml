@@ -15,7 +15,9 @@ sha1_smol = "1"
 sha1_smol = "1"
 
 [features]
-# 개발·시험용 하위 명령(dev)과 가짜 claude. 배포용 실행 파일에는 넣지 않는다.
+# 개발·시험용 하위 명령(dev)과 가짜 claude. 기본으로 켜서 그냥 `cargo test`도 시나리오 시험을 빠뜨리지 않는다.
+# 배포용 실행 파일은 scripts/build-engine.sh가 --no-default-features로 만든다(tests/shipped_binary.rs가 확인).
+default = ["dev"]
 dev = []
 
 [[bin]]

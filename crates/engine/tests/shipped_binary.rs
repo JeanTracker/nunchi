@@ -12,4 +12,6 @@ fn shipped_binary_matches_the_sources() {
     let text = String::from_utf8_lossy(&out.stdout).to_string();
     let want = source_hash(&dir);
     assert!(text.contains(&format!("(src {want})")), "bin/nunchi-engine이 옛 소스로 만든 것: {text:?}, 지금 소스 {want}. scripts/build-engine.sh로 다시 만들 것");
+    let dev = std::process::Command::new(&shipped).arg("dev").output().unwrap();
+    assert_eq!(dev.status.code(), Some(2), "배포용 실행 파일에 시험용 dev 명령이 들어 있다 (--no-default-features로 만들 것)");
 }
