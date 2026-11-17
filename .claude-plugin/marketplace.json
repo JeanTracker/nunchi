@@ -9,7 +9,11 @@
   "plugins": [
     {
       "name": "nunchi",
-      "source": "./",
+      "source": {
+        "source": "github",
+        "repo": "JeanTracker/nunchi",
+        "ref": "dist"
+      },
       "description": "Side panel beside a Claude Code session, plus the hooks and background analyzer that fill it"
     }
   ]

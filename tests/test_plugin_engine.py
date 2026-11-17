@@ -73,4 +73,6 @@ def test_plugin_hooks_cover_every_event_once_and_point_at_files_that_exist():
     assert sorted(hooks["hooks"]) == sorted(install_hooks.EVENTS)
     for groups in hooks["hooks"].values():
         assert [h["command"] for g in groups for h in g["hooks"]] == ['sh "${CLAUDE_PLUGIN_ROOT}/hooks/emit.sh"']
-    assert [(p["name"], p["source"]) for p in market["plugins"]] == [(plugin["name"], "./")]
+    # 플러그인은 배포용 브랜치에서 받는다: 엔진 실행 파일이 함께 실린 곳 (요구 이력 69)
+    assert [(p["name"], p["source"]) for p in market["plugins"]] == [
+        (plugin["name"], {"source": "github", "repo": "JeanTracker/nunchi", "ref": "dist"})]

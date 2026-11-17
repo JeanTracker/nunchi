@@ -23,3 +23,6 @@ docs/SCREEN.md
 
 # Rust build output
 /target/
+
+# Engine binary: built by scripts/build-engine.sh, shipped on the dist branch only
+/bin/nunchi-engine

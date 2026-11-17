@@ -53,7 +53,7 @@ def test_control_requests_wake_the_worker_and_show_queued(tmp_path):
     q = worker.QueueAnalyzer(home, spawner=spawned.append)
     d = home / "sessions" / "s1"
     assert q.request("s1", d, str(tr), stop)
-    assert len(spawned) == 1 and spawned[0][1:3] == ["-m", "control_tui.worker"]
+    assert spawned == [worker.worker_command(home)]   # 명령 모양은 test_worker_command_prefers_the_rust_engine에서 (엔진을 빌드했는지에 따라 다름)
     assert q.status("s1") == {"state": "queued", "ahead": 0, "source_ts": stop}
     assert not q.request("s1", d, str(tr), stop)            # 이미 줄에 있으면 또 쓰지 않는다
     q.prioritize("s1")

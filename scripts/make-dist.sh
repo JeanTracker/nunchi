@@ -1,0 +1,21 @@
+#!/bin/sh
+# 배포용 브랜치(dist)에 올릴 플러그인 폴더를 만든다 (요구 이력 69, BUILD_PLAN §4.13).
+# 플러그인이 쓰는 파일과 엔진 실행 파일만 담는다: 소스, 파이썬, 시험은 넣지 않는다.
+#
+#   scripts/build-engine.sh && scripts/make-dist.sh OUT
+set -eu
+root=$(cd "$(dirname "$0")/.." && pwd)
+out=${1:?usage: make-dist.sh OUT}
+[ -x "$root/bin/nunchi-engine" ] || { echo "bin/nunchi-engine이 없습니다. scripts/build-engine.sh를 먼저 돌리세요." >&2; exit 1; }
+rm -rf "$out"
+mkdir -p "$out"
+cd "$root"
+for f in .claude-plugin/plugin.json hooks/hooks.json hooks/emit.sh \
+         mod/nunchi/hooks/register.tsx mod/nunchi/types/index.d.ts mod/nunchi/tsconfig.json \
+         README.md docs/GUIDE.md docs/ko/GUIDE.md bin/nunchi-engine; do
+  mkdir -p "$out/$(dirname "$f")"
+  cp -p "$f" "$out/$f"
+done
+[ -f LICENSE ] && cp -p LICENSE "$out/LICENSE"
+chmod 755 "$out/hooks/emit.sh" "$out/bin/nunchi-engine"
+echo "dist: $(cd "$out" && find . -type f | sort | tr '\n' ' ')"

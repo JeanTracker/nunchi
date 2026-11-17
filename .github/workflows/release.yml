@@ -1,0 +1,53 @@
+# Release: build the engine and publish the plugin on the dist branch.
+#
+# Push a tag v<version> matching .claude-plugin/plugin.json. The marketplace
+# entry points at the dist branch (ref: dist), so users get the new version
+# with `claude plugin update nunchi@nunchi`. dist holds one commit with only
+# the files the plugin needs; each release replaces it.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  dist:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag matches the plugin version
+        run: |
+          version=$(jq -r .version .claude-plugin/plugin.json)
+          test "v$version" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME != plugin.json $version"; exit 1; }
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Rust targets
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
+      - name: Test the engine
+        run: cargo test --locked
+
+      - name: Build the universal engine
+        run: scripts/build-engine.sh
+
+      - name: The binary is built from these sources and has no dev commands
+        run: cargo test --locked --test shipped_binary
+
+      - name: Assemble the plugin
+        run: scripts/make-dist.sh "$RUNNER_TEMP/dist"
+
+      - name: Publish the dist branch
+        working-directory: ${{ runner.temp }}/dist
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git init -q -b dist
+          git add -A
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -q -m "nunchi $VERSION (${GITHUB_SHA::7})"
+          git push --force "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" dist:dist
