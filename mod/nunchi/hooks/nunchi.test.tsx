@@ -712,3 +712,23 @@ test('the bottom buttons read More and Fewer in English (요구 이력 76·77)',
   expect((await ui.find({ type: 'Button', key: 'more-left' }))?.text).toBe('… 2 more')
   await ui.unmount()
 })
+
+test('the session start writes the analysis language for the engine, /nunchi puts it in want (요구 이력 76)', async ($, on) => {
+  const files = langEngine(on, { setting: 'japanese', analysis: null, files: { [MOD]: '{"noticed":true}' } })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  expect(files['/home/me/.claude-control/sessions/abc/lang']).toBe('japanese\n')
+  await $.command.run({ command: 'nunchi' } as any)
+  expect(JSON.parse(files['/home/me/.claude-control/sessions/abc/want']!).lang).toBe('japanese')
+  await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()
+})
+
+test('choosing a language rewrites want for a session not analyzed yet (요구 이력 76)', async ($, on) => {
+  const want = '/home/me/.claude-control/sessions/abc/want'
+  const files = langEngine(on, { setting: '한국어', analysis: null, answers: ['English'],
+    files: { [MOD]: '{"noticed":true}', [want]: '{"at":"x","by":"nunchi","lang":"ko"}' } })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.command.run({ command: 'nunchi', args: 'language' } as any)
+  expect(JSON.parse(files[want]!)).toEqual({ at: 'x', by: 'nunchi', lang: 'en' })
+  expect(files['/home/me/.claude-control/sessions/abc/lang']).toBe('en\n')
+  await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()
+})

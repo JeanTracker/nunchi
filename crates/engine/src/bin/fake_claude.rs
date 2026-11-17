@@ -22,6 +22,7 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     let prompt = args.iter().position(|a| a == "--").and_then(|i| args.get(i + 1)).cloned().unwrap_or_default();
     let new_turn = prompt.rsplit("=== 새 턴 ===\n").next().unwrap_or("");
+    let new_turn = new_turn.split("\n\n=== 출력 언어 ===").next().unwrap_or(new_turn); // ko가 아닌 세션의 끝 블록은 응답이 아니다 (요구 이력 76)
     let (head, resp) = new_turn.split_once("\n  응답: ").unwrap_or((new_turn, ""));
     let resp = resp.strip_suffix('\n').unwrap_or(resp);
     let (num, req) = head.trim_start_matches("[턴 ").split_once("] 요청: ").unwrap_or(("0", ""));

@@ -350,6 +350,11 @@ async function refresh($: EngineInterface) {
   if (!opened && enabled(await read($, view))) void openPane($)   // 켠 세션이나 관제가 분석한 세션만 저절로 연다
 }
 
+/** 엔진이 새 흐름을 만들 때 쓸 이 세션의 분석 언어 (요구 이력 76, BUILD_PLAN §4.14). Claude Code 설정은 프로젝트마다 다를 수 있어 세션 폴더에 둔다 */
+async function noteLang($: EngineInterface, lang: string): Promise<void> {
+  try { await $.fs.write((await sessionDir($)) + '/lang', lang + '\n') } catch { /* 세션 폴더가 아직 없으면 엔진은 ko로 본다 */ }
+}
+
 /** /nunchi language (요구 이력 76): 질문 창에서 고른다. Esc·-p(거절)면 바꾸지 않는다 */
 async function chooseLanguage($: EngineInterface): Promise<string> {
   const now = await language($)
@@ -366,6 +371,11 @@ async function chooseLanguage($: EngineInterface): Promise<string> {
   if (picked !== undefined && picked !== 'ko' && picked !== 'en') return T.unchanged   // 직접 쓴 글은 두 언어만 받는다
   await saveMod($, { language: picked })
   const after = await language($)
+  await noteLang($, after.analysis)
+  // 켰지만 아직 분석 전인 세션이 옛 언어로 분석되지 않게 want의 lang도 바꾼다
+  const dir = await sessionDir($)
+  const want = await readJson($, dir + '/want')
+  if (want && want.lang !== after.analysis) await $.fs.write(dir + '/want', JSON.stringify({ ...want, lang: after.analysis }) + '\n')
   await refresh($)
   const T2 = TEXT[after.ui]
   return picked === undefined ? T2.langFollow(langName(after.analysis)) : T2.langSet(langName(after.analysis))
@@ -375,6 +385,7 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const first = await language($)
     await $.command.register({ name: 'nunchi', description: TEXT[first.ui].command, argumentHint: '[language]' })
+    await noteLang($, first.analysis)
     await refresh($)
     $.clock.every(1000, () => { void refresh($) })   // 분석 파일이 바뀌면 다시 그린다. '분석 중' 점도 1초마다
     // 설치 뒤 첫 세션: 묻지 않고 정한 언어와 바꾸는 법을 한 번 알린다 (요구 이력 76). 다시 불러와도·다른 세션에서도 다시 띄우지 않는다
@@ -397,7 +408,8 @@ export const register: Register = on => {
     if (String((e as any).args ?? '').trim().toLowerCase() === 'language') return { text: await chooseLanguage($) }
     const dir = await sessionDir($)
     const was = (await readJson($, dir + '/want')) !== null
-    await $.fs.write(dir + '/want', JSON.stringify({ at: new Date(await $.clock.now()).toISOString(), by: 'nunchi' }) + '\n')
+    const lang = await language($)   // 이 세션을 처음 분석할 언어 (엔진이 흐름에 고정한다, 요구 이력 76)
+    await $.fs.write(dir + '/want', JSON.stringify({ at: new Date(await $.clock.now()).toISOString(), by: 'nunchi', lang: lang.analysis }) + '\n')
     await refresh($)
     const r = await openPane($)
     const T = TEXT[(await read($, view)).ui]

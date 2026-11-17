@@ -12,6 +12,7 @@ pub const RELATIONS: [&str; 8] = ["시작", "구체화", "재정의", "정정", 
 const STATES: [&str; 5] = ["addressed", "open", "deferred", "superseded", "in_progress"];
 const LEFT_STATES: [&str; 3] = ["open", "deferred", "in_progress"];
 const DIGEST_CUT: usize = 90;
+const DIGEST_CUT_WIDE: usize = 180; // ko가 아닌 세션 (요구 이력 76)
 const ASKS_SHOWN: usize = 30;
 const REQUESTS_SHOWN: usize = 80;
 const DIRECTIONS: [&str; 3] = ["넓힘", "좁힘", "옮김"];
@@ -21,6 +22,9 @@ const DOC_REQUEST_CUT: usize = 800;
 const DOC_RESPONSE_TAIL: usize = 600;
 const SIMILAR_DOCS: usize = 2;
 const TITLE_CUT: usize = 16;
+const TITLE_CUT_WIDE: usize = 32;
+const ASK_CUT: usize = 60; // 묻는 것의 summary
+const ASK_CUT_WIDE: usize = 100;
 const FALLBACK_CUT: usize = 60;
 
 pub const HEAD: &str = include_str!("flow_head.txt");
@@ -200,7 +204,10 @@ pub fn build_prompt(flow: &Value, turns: &[Turn], t: &Turn) -> String {
         t.index,
         py::take(py::strip(&t.request), REQUEST_CUT),
         if response.is_empty() { "(없음)" } else { response },
-    )
+    ) + &match lang_of(flow).as_str() {
+        "ko" => String::new(),
+        other => lang_block(other),
+    }
 }
 
 /// 모델 출력을 검사한다. 원문과 맞지 않는 인용이 하나라도 있으면 FlowError
@@ -275,7 +282,8 @@ pub fn parse_step(text: &str, flow: &Value, turns: &[Turn], t: &Turn) -> Result<
     step.insert("fp".into(), s(&fingerprint(t)));
     step.insert("grounded".into(), Value::Bool(true));
     step.insert("shift".into(), Value::Bool(shift));
-    step.insert("title".into(), s(&one(get(&tu, "title"), TITLE_CUT)));
+    let (title_cut, digest_cut, _) = cuts(&lang_of(flow));
+    step.insert("title".into(), s(&one(get(&tu, "title"), title_cut)));
     step.insert("decision".into(), s(&if label == s("확정") { one(get(&tu, "decision"), 200) } else { String::new() }));
     let mut goal_text = s(&one(get(&o, "current_goal"), 200));
     if !shift && !first {
@@ -303,7 +311,7 @@ pub fn parse_step(text: &str, flow: &Value, turns: &[Turn], t: &Turn) -> Result<
         step.insert("goal".into(), goal_text.clone());
         step.insert("prev_goal".into(), prev_goal.get("text").cloned().unwrap_or_else(|| s("")));
     }
-    step.insert("digest".into(), s(&one(get(&o, "digest"), DIGEST_CUT)));
+    step.insert("digest".into(), s(&one(get(&o, "digest"), digest_cut)));
     let mut result = Obj::new();
     result.insert("step".into(), Value::Object(step));
     result.insert("current_goal".into(), json!({"text": goal_text, "turn": goal_turn, "quote": one(Some(&goal_quote), 80)}));
@@ -396,7 +404,7 @@ pub fn parse_asks(o: &Value, flow: &Value, t: &Turn) -> Value {
                 Some(Value::String(k)) if ["결정", "확인", "정보"].contains(&k.as_str()) => k.clone(),
                 _ => "확인".into(),
             };
-            new.push(json!({"summary": one(get(n, "summary"), 60), "quote": one(get(n, "quote"), 80), "kind": kind}));
+            new.push(json!({"summary": one(get(n, "summary"), cuts(&lang_of(flow)).2), "quote": one(get(n, "quote"), 80), "kind": kind}));
         } else {
             dropped += 1;
         }
@@ -509,6 +517,61 @@ pub fn empty() -> Value {
     json!({"version": VERSION, "first_goal": {}, "current_goal": {}, "steps": [], "requests": [], "asks": [], "until": 0})
 }
 
+/// 분석 언어를 정한 빈 흐름 (요구 이력 76). ko면 키를 적지 않는다(없으면 ko: 지금까지의 흐름·기록된 사례와 같게)
+pub fn empty_in(lang: &str) -> Value {
+    let mut f = empty();
+    let lang = clean_lang(lang);
+    if lang != "ko" {
+        f["lang"] = Value::from(lang);
+    }
+    f
+}
+
+/// 흐름의 분석 언어: ko · en · 그 밖은 소문자 원래 값. 없으면 ko
+pub fn lang_of(flow: &Value) -> String {
+    clean_lang(get(flow, "lang").and_then(Value::as_str).unwrap_or(""))
+}
+
+/// mod가 넘긴 언어 값을 다듬는다: 빈 값·이상한 글은 ko, 40자까지
+pub fn clean_lang(lang: &str) -> String {
+    let l = lang.trim().to_lowercase();
+    let l: String = l.chars().filter(|c| !c.is_control() && *c != '"' && *c != '\\').take(40).collect();
+    if l.is_empty() || l == "ko" { "ko".into() } else { l }
+}
+
+/// claude -p `--settings`의 language 값 (분석기가 사용자 설정을 물려받지 않게 덮어쓴다)
+pub fn settings_language(lang: &str) -> String {
+    match lang {
+        "ko" => "한국어".into(),
+        "en" => "English".into(),
+        other => other.into(),
+    }
+}
+
+fn lang_label(lang: &str) -> String {
+    match lang {
+        "en" => "English".into(),
+        other => other.into(),
+    }
+}
+
+/// ko가 아닌 세션의 프롬프트 끝에 붙는 출력 언어 블록 (요구 이력 76, SCREEN §8 2026-11-17 언어)
+pub fn lang_block(lang: &str) -> String {
+    let name = lang_label(lang);
+    format!(
+        "\n\n=== 출력 언어 ===\n\
+- 다음 칸은 {name}로 쓴다: turn.summary, turn.agent_summary, turn.title, turn.decision, current_goal, first_goal, digest, goal_change.how, requests_new·requests_update의 summary, asks_new의 summary.\n\
+- quote, agent_quote, goal_quote, pending_quote, asks의 quote는 원문 글자 그대로 복사한다. 번역하지 마라. 대화가 한국어면 인용도 한국어 그대로다.\n\
+- label, direction, kind, state는 위 목록의 글자 그대로 쓴다(예: label은 \"확정\"처럼 한글 그대로).\n\
+- title은 {TITLE_CUT_WIDE}자 안, digest는 {DIGEST_CUT_WIDE}자 안, 묻는 것의 summary는 {ASK_CUT_WIDE}자 안.\n"
+    )
+}
+
+/// 글자 상한: 한글 기준값은 ko, 다른 언어는 같은 뜻을 담으려면 더 길다 (실험에서 영어 제목·정리가 잘림)
+fn cuts(lang: &str) -> (usize, usize, usize) {
+    if lang == "ko" { (TITLE_CUT, DIGEST_CUT, ASK_CUT) } else { (TITLE_CUT_WIDE, DIGEST_CUT_WIDE, ASK_CUT_WIDE) }
+}
+
 /// 옛 형식(1·2) 흐름을 지금 형식으로 옮겨 담는다 (요구 이력 44·45)
 pub fn migrate(flow: Option<&Value>, turns: &[Turn]) -> Option<Value> {
     let f = flow?;
@@ -551,7 +614,7 @@ pub fn valid_for(flow: &Value, turns: &[Turn]) -> bool {
 
 /// 흐름에 턴 t를 이어 적은 새 흐름. runner는 프롬프트를 받아 모델 출력을 돌려준다(실패는 Err로 그대로 올린다)
 pub fn advance<E>(flow: &Value, turns: &[Turn], t: &Turn, runner: &mut dyn FnMut(&str) -> Result<String, E>, tries: usize) -> Result<Value, E> {
-    let base = if truthy(flow) && opt_truthy(get(flow, "steps")) { flow.clone() } else { empty() };
+    let base = if truthy(flow) && opt_truthy(get(flow, "steps")) { flow.clone() } else { empty_in(&lang_of(flow)) };
     let prompt = build_prompt(&base, turns, t);
     let mut got: Option<Value> = None;
     for _ in 0..tries {
@@ -588,7 +651,7 @@ pub fn advance<E>(flow: &Value, turns: &[Turn], t: &Turn, runner: &mut dyn FnMut
             st.last_mut().unwrap()["requests_checked"] = Value::Bool(false);
         }
     }
-    for key in ["requests_from", "asks_from"] {
+    for key in ["requests_from", "asks_from", "lang"] {
         if let Some(v) = get(&base, key).filter(|v| truthy(v)) {
             new.insert(key.into(), v.clone());
         }

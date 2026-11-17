@@ -71,7 +71,7 @@
    "turn": 0,
    "at": "<time>",
    "pid": "<pid>",
-   "error": "claude 종료 코드 1",
+   "error": "exit:1",
    "source_ts": "<ts1>",
    "attempts": 2
   },

@@ -116,8 +116,8 @@ pub fn parse_turns(path: &Path, until_ts: &str) -> Result<Vec<Turn>, String> {
     if path.as_os_str().is_empty() || !path.exists() {
         return Ok(vec![]);
     }
-    let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
-    let text = String::from_utf8(bytes).map_err(|_| "대화 기록이 UTF-8이 아닙니다".to_string())?;
+    let bytes = std::fs::read(path).map_err(|_| "io".to_string())?;
+    let text = String::from_utf8(bytes).map_err(|_| "not-utf8".to_string())?;   // 실패 이유는 코드 (요구 이력 76)
     let limit = if until_ts.is_empty() { 0.0 } else { ts_value(until_ts) };
     let mut turns: Vec<Turn> = Vec::new();
     let mut segments: Vec<Vec<(Kind, String)>> = Vec::new(); // turns와 같은 순서

@@ -212,16 +212,19 @@ pub fn wake(home: &Path, workers: i64) -> bool {
 // ---------- claude -p ----------
 
 /// claude -p로 한 번 묻는다. 분석기 자신은 기록되지 않게 표시하고, 저장과 도구는 모두 끈다
-fn run_claude(prompt: &str, model: &str, shared: &Shared) -> Result<String, String> {
+/// 실패 이유는 코드로 남긴다: mod가 화면 언어로 옮긴다 (요구 이력 76). spawn·timeout:<초>·exit:<코드>·output·no-turns·not-utf8·io
+fn run_claude(prompt: &str, model: &str, lang: &str, shared: &Shared) -> Result<String, String> {
     let mut cmd = Command::new("claude");
     cmd.args(["-p", "--output-format", "json", "--no-session-persistence", "--disable-slash-commands", "--tools", ""]);
     if !model.is_empty() {
         cmd.args(["--model", model]);
     }
+    // 세션의 분석 언어로 Claude Code 언어 설정을 덮어쓴다: 덮어쓰지 않으면 사용자의 language를 물려받는다 (SCREEN §8 2026-11-17 언어)
+    cmd.arg("--settings").arg(json!({"language": flow::settings_language(lang)}).to_string());
     cmd.args(["--", prompt]).env("CONTROL_TUI_ANALYZER", "1");
     cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
     detach(&mut cmd);
-    let mut child = cmd.spawn().map_err(|e| format!("claude 실행 실패: {}", io_kind(&e)))?;
+    let mut child = cmd.spawn().map_err(|_| "spawn".to_string())?;
     shared.set_child(Some(child.id()));
     let mut out = child.stdout.take().unwrap();
     let mut err = child.stderr.take().unwrap();
@@ -249,26 +252,18 @@ fn run_claude(prompt: &str, model: &str, shared: &Shared) -> Result<String, Stri
     shared.set_child(None);
     let stdout = reader.join().unwrap_or_default();
     let _ = drain_err.join();
-    let Some(status) = status else { return Err(format!("시간 초과 ({TIMEOUT_SECONDS}초)")) };
+    let Some(status) = status else { return Err(format!("timeout:{TIMEOUT_SECONDS}")) };
     if !status.success() {
         let code = status.code().map(i64::from).unwrap_or_else(|| {
             use std::os::unix::process::ExitStatusExt;
             -(status.signal().unwrap_or(0) as i64)
         });
-        return Err(format!("claude 종료 코드 {code}"));
+        return Err(format!("exit:{code}"));
     }
-    let v: Value = serde_json::from_slice(&stdout).map_err(|_| "claude 출력을 읽지 못했습니다".to_string())?;
+    let v: Value = serde_json::from_slice(&stdout).map_err(|_| "output".to_string())?;
     match v.as_object() {
         Some(o) => Ok(o.get("result").map(py::str_of).unwrap_or_default()),
-        None => Err("claude 출력을 읽지 못했습니다".into()),
-    }
-}
-
-fn io_kind(e: &std::io::Error) -> &'static str {
-    match e.kind() {
-        std::io::ErrorKind::NotFound => "FileNotFoundError",
-        std::io::ErrorKind::PermissionDenied => "PermissionError",
-        _ => "OSError",
+        None => Err("output".into()),
     }
 }
 
@@ -491,7 +486,7 @@ fn run_job(sh: &Shared, job: &Job) {
 
 fn analyze(sh: &Shared, job: &Job) -> Result<(), String> {
     let turns = read_turns(sh, &job.transcript, &job.ts)?;
-    let Some(last) = turns.last() else { return Err("턴 기록이 없어 분석하지 않았습니다".into()) };
+    let Some(last) = turns.last() else { return Err("no-turns".into()) };
     let old = read_analysis(&job.dir);
     let same = old.as_ref().map(|o| py::truthy(o) && py::get(o, "source_ts") == Some(&Value::from(job.ts.as_str()))).unwrap_or(false);
     if !same {
@@ -506,7 +501,7 @@ fn analyze(sh: &Shared, job: &Job) -> Result<(), String> {
         if let Some(f) = old.as_ref().and_then(|o| py::get(o, "flow")).filter(|f| py::truthy(f)) {
             base.insert("flow".into(), f.clone());
         }
-        write_analysis(&job.dir, base, &job.ts, json!({}), last.index).map_err(|e| e.to_string())?;
+        write_analysis(&job.dir, base, &job.ts, json!({}), last.index).map_err(|_| "io".to_string())?;
     }
     let since = sh.m.lock().unwrap().since.clone();
     write_status(&job.dir, "running", last.index, &[("since", Value::from(since)), ("source_ts", Value::from(job.ts.as_str()))]);
@@ -516,11 +511,18 @@ fn analyze(sh: &Shared, job: &Job) -> Result<(), String> {
 }
 
 /// 목표 흐름을 새 턴만큼 이어 적는다. 한 턴마다 저장해 화면이 따라오게 한다
+/// 새 흐름의 분석 언어 (요구 이력 76): /nunchi가 쓴 want의 lang → mod가 세션 시작 때 적은 lang 파일 → ko
+fn session_lang(dir: &Path) -> String {
+    let from_want = store::read_obj(&dir.join("want")).get("lang").and_then(Value::as_str).map(String::from);
+    let from_file = || std::fs::read_to_string(dir.join("lang")).ok().map(|t| t.trim().to_string());
+    flow::clean_lang(&from_want.filter(|l| !l.trim().is_empty()).or_else(from_file).unwrap_or_default())
+}
+
 fn advance_flow(sh: &Shared, dir: &Path, turns: &[Turn]) -> Result<(), String> {
     let mut data = read_analysis(dir).unwrap_or_else(|| json!({}));
     let mut f = flow::migrate(py::get(&data, "flow"), turns).unwrap_or(Value::Null);
     if !flow::valid_for(&f, turns) {
-        f = flow::empty();
+        f = flow::empty_in(&session_lang(dir)); // 흐름을 새로 만들 때 이 세션의 분석 언어를 정한다 (요구 이력 76)
     }
     let rebuilt = !py::opt_truthy(py::get(&f, "steps"));
     let before = flow::shifts_count(&f);
@@ -538,7 +540,8 @@ fn advance_flow(sh: &Shared, dir: &Path, turns: &[Turn]) -> Result<(), String> {
             return Ok(());
         }
         write_status(dir, "running", t.index, &[("since", Value::from(since.as_str()))]);
-        let mut runner = |p: &str| run_claude(p, &sh.model, sh);
+        let lang = flow::lang_of(&f);
+        let mut runner = |p: &str| run_claude(p, &sh.model, &lang, sh);
         f = flow::advance(&f, turns, t, &mut runner, 2)?;
         if let Some(k) = kept.take() {
             let fell_back = py::list(py::get(&f, "steps")).last().map(|s| py::opt_truthy(py::get(s, "fallback"))).unwrap_or(false);
@@ -564,7 +567,7 @@ fn advance_flow(sh: &Shared, dir: &Path, turns: &[Turn]) -> Result<(), String> {
                                      "goal_changed": flow::shifts_count(&f) > before, "prev_source_ts": prev_ts});
             data["analyzed_at"] = Value::from(clock::now_us());
         }
-        store::write_json(&dir.join("analysis.json"), &data).map_err(|e| e.to_string())?;
+        store::write_json(&dir.join("analysis.json"), &data).map_err(|_| "io".to_string())?;
     }
     Ok(())
 }

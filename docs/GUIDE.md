@@ -75,9 +75,15 @@ install tells you once which language it picked.
 
 To change it, type `/nunchi language` and pick `한국어`, `English` or
 `Claude Code 설정 따르기` (follow the Claude Code setting). The panel switches right away,
-in every open session. Press Esc to leave it as it is. The summaries in the panel are
-written by the analysis and stay in the language they were written in; quoted words are
-always shown as they were said.
+in every open session. Press Esc to leave it as it is.
+
+The summaries in the panel (goal, flow, decisions, questions, requests) are written by
+the analysis, in the language picked when the session is first analyzed. A session keeps
+that language so its summaries never mix; new sessions use the new choice. If Claude Code
+is set to another language, such as Japanese, the labels are in English and the
+summaries in that language (only Korean and English are tested). Quoted words are always
+shown as they were said. When a session was analyzed in a different language from the
+one you picked, a line under the header says so.
 
 ## What the panel shows
 
