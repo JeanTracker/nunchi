@@ -12,11 +12,13 @@ export type View = {
   state: string          // idle · queued · running · none
   asks: Ask[]            // 에이전트 질문 (열린 것 모두, 최근 물은 것부터. 그릴 때 펼친 수만큼 자른다)
   askCount: number
-  blanketClosed: number  // 통째 승인으로 닫힌 것 수
   digest: string         // 처음부터 이 턴까지 흐름 한 덩어리 정리 (분석기 추정, 요구 이력 57)
   digestTurn: number     // 그 정리가 어느 턴까지인지
   goal: string           // 지금 목표
   goalTurn: number
+  firstGoal: string      // 처음 목표 (flow.first_goal). 지금 목표와 다른 턴일 때만 두 층으로 보인다 (요구 이력 82)
+  firstTurn: number
+  direction: string      // 지금 목표가 정해진 단계의 방향: 넓힘 · 좁힘 · 옮김 (엔진이 한글로 적음)
   decisions: { text: string; turn: number }[]   // 의사결정 (정한 내용, 없으면 제목, 그 턴. 최근 것부터 모두, 요구 이력 71·72·74)
   decisionCount: number  // 의사결정 전체 수
   recent: string         // 방금 한 일 (마지막 턴의 에이전트 요약)
@@ -30,6 +32,7 @@ export type View = {
   error: string          // 분석 실패 이유 한 줄
   control: boolean       // 관제가 켜져 있는지 (<관제 홈>/control.json, 요구 이력 56)
   behind: number         // 분석이 본 마지막 응답 뒤에 끝난 응답 수 (events.jsonl의 Stop, 요구 이력 65)
+  pending: boolean       // 분석이 본 마지막 응답 뒤에 사람이 보낸 발화가 있는지 (요구 이력 82)
   ui: 'ko' | 'en'        // 화면 언어 (요구 이력 76)
   want: string           // 지금 판정된 분석 언어: ko · en · 그 밖은 소문자 원래 값
   from: string           // 판정 출처: saved · claude · terminal · default

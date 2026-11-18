@@ -99,12 +99,15 @@ run `/nunchi language` again and pick the same language.
 
 The panel opens on the right when the window is 110 columns or wider and takes 40% of
 the window. In a narrower window a single line appears above the input box instead:
-`눈치 목표: … · 질문 n · 요청 n · #n 기준` (goal, the agent's open questions, your open
-requests, analysis basis). The labels below are the Korean ones, with the English panel's
+`눈치 목표: … · 질문 n · 요청 n · #n까지 반영` (goal, the agent's open questions, your open
+requests, the last answer analyzed). The labels below are the Korean ones, with the English panel's
 wording in parentheses, from top to bottom.
 
-**Header.** `눈치 · #12 기준` means the results are based on turn 12. Next to it you may
-see:
+**Header.** `눈치 · #12 응답까지 반영` (`through answer #12`) means the results cover your
+12th message and the agent's answer to it. Next to it you may see:
+
+- `새 요청 반영 전` (new request pending): you sent a message after that answer and the
+  results do not include it yet. Messages from other agents and sessions do not count.
 
 - `분석 대기...` (queued) or `분석 중...` (analyzing)
 - `흐름 처음부터 만드는 중 #3/#12` (building the flow from the start) or `밀린 턴 반영 중`
@@ -117,7 +120,11 @@ Before the first result the panel shows `눈치 켜짐 · 다음 응답이 끝�
 (on; analysis starts when the next response ends).
 
 **목표 (goal).** What the conversation is working on now, and from which turn
-(`#10부터`). Two dimmed lines follow, because they are the analyzer's estimate:
+(`#10부터`). When the goal has changed since the first turn, the first goal is shown
+dimmed on top (`목표  처음 #1`, `Goal  first #1`) and the current one below it
+(`지금  #10부터 · 옮김`, `Now  since #10 · moved on`; also `좁힘` narrowed and `넓힘` widened).
+The first goal is only where the session started, not necessarily its overall aim. Two
+dimmed lines follow, because they are the analyzer's estimate:
 
 - `흐름` (flow): one paragraph on how the conversation has gone from the start.
 - `방금` (just now): the agent's summary of the last turn.
@@ -131,8 +138,8 @@ conversation. The section is left out when there are none.
 agent is waiting on, newest first. Each item has a number, a one-line summary, the turn it
 was asked in, and the agent's own words in quotes. `#5부터 답 없음` means it has gone
 unanswered since turn 5; `일부 답함` means partly answered. An item closes when one of
-your messages answers it. Items closed by a blanket approval such as "go ahead as you
-suggest" are counted separately (`통째 승인으로 닫은 것`). In a short panel this section
+your messages answers it, including a blanket approval such as "go ahead as you
+suggest". In a short panel this section
 may sit below the visible area; scroll the panel to reach it.
 
 **남은 요청 (open requests).** Your requests that are not done yet: ○ not handled, ◐ in
@@ -145,12 +152,15 @@ and the same line then reads `접기` (Collapse) and takes it back to three. Wha
 stays open while you work in that session, even as new analysis results come in; each
 session keeps its own, and a new session starts with three.
 
-The goal, the flow summary and the last step show two lines each, so the lists below
-stay on the first screen.
+Long text wraps to the pane width. The goal shows up to four lines, the flow summary
+three, the last step two, each decision three, and each agent question and open request
+two; anything longer ends with `…`. Drag the pane edge wider to see more.
 
 **번호 풀이 (numbers explained).** When the last response cites plan numbers such as R17,
 §4.5, Phase 4c or 요구 이력 41, the panel looks them up in the project's `docs/*.md` and
-shows the original wording, up to five. This only works for documents written in that
+shows the original wording, up to five. Numbers the response already explains in plain
+words right before them, like `the open-requests list (R8)`, are left out, and the
+section disappears when all of them are. This only works for documents written in that
 table and heading style.
 
 Links in the panel (bare URLs and Markdown links) can be clicked.

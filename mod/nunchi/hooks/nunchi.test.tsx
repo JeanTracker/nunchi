@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { answersAfter, answerEnded, pieces as piecesOf } from './register.js'
+import { answersAfter, answerEnded, promptSent, humanPrompt, pieces as piecesOf } from './register.js'
 import { pick, norm, failText } from './lang.js'
 
 // SCREEN §11: 관제 분석 결과를 읽어 세션 옆 패널에 보인다
@@ -85,7 +85,7 @@ test('the pane shows the goal, decisions, the agent\'s questions and open reques
   expect((await ui.find({ type: 'Text', text: /1 폭 정하기 #3 · 일부 답함/ }))).toBeTruthy()      // 최근에 물은 것부터
   expect((await ui.find({ type: 'Text', text: /2 색 고르기 #1부터 답 없음/ }))).toBeTruthy()
   expect((await ui.find({ type: 'Text', text: /“폭은 몇 칸으로 할지 알려 주세요”/ }))).toBeTruthy()
-  expect((await ui.find({ type: 'Text', text: /통째 승인으로 닫은 것 1/ }))).toBeTruthy()
+  expect((await ui.find({ type: 'Text', text: /통째 승인/ }))).toBeFalsy()   // 내용·턴 없는 내부 용어 줄은 두지 않는다 (요구 이력 82)
   expect((await ui.find({ type: 'Text', text: /흐름\s+#1–#3/ }))).toBeTruthy()             // 처음부터 한 덩어리 정리 (요구 이력 57)
   expect((await ui.find({ type: 'Text', text: /^\s+설치 절을 정한 뒤 CHANGELOG를 요청함$/ }))).toBeTruthy()
   expect((await ui.find({ type: 'Text', text: /README 설치 절을 요청함/ }))).toBeFalsy()   // 마지막 정리 하나만
@@ -131,7 +131,7 @@ test('a session turned on with /nunchi does not say it is off', async ($, on) =>
   engine(on, { state: 'idle', turn: 0 }, true)
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   const ui = await mountPane($, { ...PANE, surface: 'terminal' })
-  expect((await ui.find({ type: 'Text', text: /#3 기준/ }))).toBeTruthy()
+  expect((await ui.find({ type: 'Text', text: /#3 응답까지 반영/ }))).toBeTruthy()
   expect((await ui.find({ type: 'Text', text: /자동 분석 꺼짐/ }))).toBeFalsy()
   await ui.unmount()
 })
@@ -332,7 +332,8 @@ test('the head says how many answers came after the analyzed one (요구 이력 
   engine(on, { state: 'idle', turn: 0 }, false, at, ev)
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   const ui = await mountPane($, { ...PANE, surface: 'terminal' })
-  expect((await ui.find({ type: 'Text', text: /#3 기준 · 응답 3개 밀림/ }))).toBeTruthy()
+  expect((await ui.find({ type: 'Text', text: /^눈치 · #3 응답까지 반영 · 응답 3개 밀림$/ }))).toBeTruthy()
+  expect((await ui.find({ type: 'Text', text: /^\s+자동 분석 꺼짐/ }))).toBeTruthy()   // 50칸보다 넓어 상태는 다음 줄로 (요구 이력 82)
   await ui.unmount()
 })
 
@@ -364,18 +365,18 @@ test('the events file is read again only after an answer ends, not every second'
   const fake: any = { clock: { now: async () => now }, fs: { read: async () => { reads++; return ev } } }
   answerEnded(-99999)   // 앞 테스트가 남긴 값을 지운다
   const since = '2026-11-16T05:57:07.474Z'
-  expect(await answersAfter(fake, '/d', since)).toBe(0)
+  expect((await answersAfter(fake, '/d', since)).behind).toBe(0)
   ev += JSON.stringify({ ts: '2026-11-16T06:08:00.000Z', event: 'PostToolUse' }) + '\n'
   ev += JSON.stringify({ ts: '2026-11-16T06:08:06.653Z', event: 'Stop' }) + '\n'
   now = 2000
-  expect(await answersAfter(fake, '/d', since)).toBe(0)       // 응답이 끝났다는 알림 전에는 다시 읽지 않는다
+  expect((await answersAfter(fake, '/d', since)).behind).toBe(0)       // 응답이 끝났다는 알림 전에는 다시 읽지 않는다
   expect(reads).toBe(1)
   answerEnded(now)
-  expect(await answersAfter(fake, '/d', since)).toBe(1)       // 응답이 끝나면 다시 센다
+  expect((await answersAfter(fake, '/d', since)).behind).toBe(1)       // 응답이 끝나면 다시 센다
   now = 9000
   await answersAfter(fake, '/d', since)
   expect(reads).toBe(2)                                       // 5초가 지나면 다시 읽지 않는다
-  expect(await answersAfter(fake, '/d', '2026-11-16T06:08:06.653Z')).toBe(0)   // 분석 기준이 바뀌면 다시 센다
+  expect((await answersAfter(fake, '/d', '2026-11-16T06:08:06.653Z')).behind).toBe(0)   // 분석 기준이 바뀌면 다시 센다
   expect(reads).toBe(3)
 })
 
@@ -568,7 +569,7 @@ test('with Claude Code set to English the pane is in English and quotes stay as 
   langEngine(on, { setting: 'English', files: { [MOD]: '{"noticed":true}' } })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   const ui = await mountPane($, { ...PANE, surface: 'terminal' })
-  expect((await ui.find({ type: 'Text', text: /^Nunchi · as of #3/ }))).toBeTruthy()
+  expect((await ui.find({ type: 'Text', text: /^Nunchi · through answer #3/ }))).toBeTruthy()
   for (const head of [/^Goal  since #3/, /^Decisions 1/, /^Agent questions 2/, /^Open requests 1 of mine/]) {
     expect((await ui.find({ type: 'Text', text: head }))).toBeTruthy()
   }
@@ -576,7 +577,7 @@ test('with Claude Code set to English the pane is in English and quotes stay as 
   expect((await ui.find({ type: 'Text', text: /partly answered/ }))).toBeTruthy()
   expect((await ui.find({ type: 'Text', text: /테스트 돌리기 — deferred/ }))).toBeTruthy()   // 요약은 분석 언어 그대로, 상태 이름만 화면 언어
   expect((await ui.find({ type: 'Text', text: /“폭은 몇 칸으로 할지 알려 주세요”/ }))).toBeTruthy()
-  for (const ko of [/^목표/, /^의사결정/, /^에이전트 질문/, /^남은 요청/, /기준/]) {
+  for (const ko of [/^목표/, /^의사결정/, /^에이전트 질문/, /^남은 요청/, /반영/]) {
     expect((await ui.find({ type: 'Text', text: ko }))).toBeFalsy()
   }
   await ui.unmount()
@@ -803,4 +804,187 @@ test('right after the reset, before any turn is written, the head already says r
   const ui = await mountPane($, { ...PANE, surface: 'terminal' })
   expect((await ui.find({ type: 'Text', text: /흐름 처음부터 만드는 중 #1\/#3/ }))).toBeTruthy()
   await ui.unmount()
+})
+
+// 요구 이력 80: 2줄·1줄로 자르면 결론과 할 일이 사라졌다. 덩어리마다 줄 수를 다시 정하고, 글자 수로 미리 자르지 않는다
+const LONG = {
+  ...ANALYSIS, last_turn: 6,
+  flow: {
+    ...ANALYSIS.flow, until: 6,
+    current_goal: { text: '눈치 패널 하단 안내를 상태바처럼 고정하고, 현재 세션 우선으로 펼치기·줄이기 키를 바꾸고, advisor 주도로 패널 디자인 리뷰하기', turn: 3 },
+    steps: [...ANALYSIS.flow.steps,
+      { index: 5, grounded: true, label: '확정', summary: '헤더', agent_summary: '', decision: 'APOLLOQA-36312는 네이티브 타이틀바 대신 웹 헤더를 유지하고 제목만 없애는 지금 결정으로 간다' },
+      { index: 6, grounded: true, label: '구체화', summary: '확인', agent_summary: '확인함' }],
+    requests: [{ id: 'R1', from_turn: 1, by_turn: 3, summary: 'CI 불일치 팝업에서 확인을 누르면 네이티브 브리지 logout 호출', state: 'in_progress' }],
+    asks: [{ id: 'Q1', turn: 2, last_turn: 2, summary: 'useHead 문서 제목을 화면에 둘지 뺄지', quote: '`useHead` 제목은 화면에 보이지 않으니 빼도 되지만, 검색 결과와 탭 이름에는 남습니다. 둘까요?', state: 'open' }],
+  },
+}
+
+async function lines($: any, on: any, cols: number): Promise<{ ui: any, all: string[] }> {
+  engine(on, { state: 'idle', turn: 0 }, true, LONG)
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await mountPane($, { ...PANE, props: { ...PANE.props, bodyColumns: cols }, surface: 'terminal' })
+  const all: string[] = (await ui.findAll({ type: 'Text' })).map((x: any) => String(x.text ?? ''))
+  return { ui, all }
+}
+
+test('at 46 columns the end of a decision, a request and a question still shows (요구 이력 80)', async ($, on) => {
+  const { ui, all } = await lines($, on, 46)
+  expect(all.some(t => /결정으로 간다\s+#5$/.test(t))).toBe(true)          // 결론과 턴이 보인다 (전에는 '유지하 …')
+  expect(all.some(t => /^\s+브리지 logout 호출 — 진행 중 #3$/.test(t))).toBe(true)   // 할 일이 끝까지 보인다 (전에는 '네이…')
+  expect(all.some(t => /뺄지/.test(t))).toBe(true)                          // '~할지' 어미가 남는다
+  expect(all.some(t => /#2부터 답 없음$/.test(t))).toBe(true)
+  expect(all.some(t => /상태바처럼 고정하고/.test(t)) && all.some(t => /^\s+리뷰하기$/.test(t))).toBe(true)   // 목표 4줄
+  const width = (t: string) => [...t].reduce((n, ch) => n + (/[가-힣]/.test(ch) ? 2 : 1), 0)
+  for (const t of all.filter(t => /^\s/.test(t))) expect(width(t)).toBeLessThanOrEqual(46)   // 본문 줄은 패널 폭을 넘지 않는다
+  await ui.unmount()
+})
+
+test('a wide pane shows a long quote whole instead of cutting it at 60 characters (요구 이력 80)', async ($, on) => {
+  const { ui, all } = await lines($, on, 120)
+  expect(all.some(t => /탭 이름에는 남습니다\. 둘까요\?”$/.test(t))).toBe(true)
+  await ui.unmount()
+})
+
+test('text past its line limit still ends with … and keeps the turn (요구 이력 80)', async ($, on) => {
+  const { ui, all } = await lines($, on, 24)
+  expect(all.some(t => /^\s+\S.* …\s+#5$/.test(t))).toBe(true)   // 3줄을 넘친 결정: 마지막 줄 끝이 …, 턴은 남는다
+  await ui.unmount()
+})
+
+test('a text that fills its lines exactly is not cut for the turn; the turn moves to the next line (요구 이력 80)', async ($, on) => {
+  // 46칸: 결정 글 폭 41칸. 3줄을 거의 채우는 글
+  const text = '가나다라마바사아자차 가나다라마바사아자차 가나다라마바사아자차 가나다라마바사아자차 가나다라마바사아자'   // [✔ 20] [20 20] [20 18] → 마지막 줄 39칸, 꼬리 5칸이 안 들어감
+  const steps = [...LONG.flow.steps.slice(0, 3), { index: 5, grounded: true, label: '확정', summary: 'x', agent_summary: '', decision: text }]
+  engine(on, { state: 'idle', turn: 0 }, true, { ...LONG, flow: { ...LONG.flow, steps } })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await mountPane($, { ...PANE, props: { ...PANE.props, bodyColumns: 46 }, surface: 'terminal' })
+  const all: string[] = (await ui.findAll({ type: 'Text' })).map((x: any) => String(x.text ?? ''))
+  expect(all.some(t => /가나다라마바사아자$/.test(t))).toBe(true)     // 글 끝까지, … 없이
+  expect(all.some(t => /^\s+#5$/.test(t))).toBe(true)                 // 턴은 다음 줄
+  await ui.unmount()
+})
+
+for (const cols of [24, 34]) test(`at ${cols} columns a long question tail keeps the summary and stays inside the pane (요구 이력 80)`, async ($, on) => {
+  const asks = [{ id: 'Q1', turn: 2, last_turn: 2, summary: '기획서와 다른 세 곳의 처리 방법', quote: '어떻게 할까요?', state: 'partial' }]
+  const width = (t: string) => [...t].reduce((n, ch) => n + (/[\uac00-\ud7a3]/.test(ch) ? 2 : 1), 0)
+  engine(on, { state: 'idle', turn: 0 }, true, { ...LONG, flow: { ...LONG.flow, asks } })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await mountPane($, { ...PANE, props: { ...PANE.props, bodyColumns: cols }, surface: 'terminal' })
+  const all: string[] = (await ui.findAll({ type: 'Text' })).map((x: any) => String(x.text ?? ''))
+  expect(all.some(t => /^ 1 기획서와/.test(t))).toBe(true)          // 요약이 지워지지 않는다
+  expect(all.some(t => /답 없음/.test(t)) && all.some(t => /일부 답함|답함$/.test(t))).toBe(true)
+  for (const t of all.filter(t => /^\s/.test(t))) expect(width(t)).toBeLessThanOrEqual(cols)
+  await ui.unmount()
+})
+
+// 요구 이력 82: 머리 줄 기준 시점, 새 요청 반영 전, 목표 두 층
+const prompt = (ts: string, text: string) => JSON.stringify({ ts, event: 'UserPromptSubmit', data: { prompt: text, permission_mode: 'default' } })
+
+test('a human prompt after the analyzed answer shows new request pending, even while analyzing (요구 이력 82)', async ($, on) => {
+  const at = { ...ANALYSIS, source_ts: '2026-11-18T01:00:00.000Z' }
+  const ev = [JSON.stringify({ ts: '2026-11-18T01:00:00.000Z', event: 'Stop' }), prompt('2026-11-18T01:05:00.000Z', '줄 수 조정이랑 글자 수 자르기 같이 고쳐줘')].join('\n') + '\n'
+  engine(on, { state: 'running', turn: 4 }, true, at, ev)
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
+  const all: string[] = (await ui.findAll({ type: 'Text' })).map((x: any) => String(x.text ?? ''))
+  expect(all.some(t => /^눈치 · #3 응답까지 반영 · 새 요청 반영 전/.test(t))).toBe(true)
+  await ui.unmount()
+})
+
+test('agent, cross-session, task and idle-notice prompts do not count as new requests (요구 이력 82)', async ($, on) => {
+  for (const p of ['<agent-message from="a1">\n[Subagent hand-back] …', '<cross-session-message from="x">hi', '<task-notification>\n<task-id>1</task-id>', '[Cross-session idle notice] peer is idle', '', '   '])
+    expect(humanPrompt(p)).toBe(false)
+  for (const p of ['그래. 패널 너비를 넓히면 볼 수 있어?', 'agent-message라는 말이 들어간 요청', '  앞에 빈칸이 있는 요청'])
+    expect(humanPrompt(p)).toBe(true)
+  const at = { ...ANALYSIS, source_ts: '2026-11-18T02:00:00.000Z' }
+  const ev = [prompt('2026-11-18T02:01:00.000Z', '<agent-message from="a1">\n[Subagent hand-back] done'), prompt('2026-11-18T01:59:00.000Z', '분석 전에 보낸 요청')].join('\n') + '\n'
+  engine(on, { state: 'idle', turn: 0 }, true, at, ev)
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /반영 전/ }))).toBeFalsy()
+  await ui.unmount()
+})
+
+test('a submitted prompt makes the events file read again, and a big file is read from its tail (요구 이력 82)', async () => {
+  let reads: any[] = []
+  let now = 50000
+  const since = '2026-11-18T03:00:00.000Z'
+  let ev = JSON.stringify({ ts: since, event: 'Stop' }) + '\n'
+  let size = 100
+  const fake: any = { clock: { now: async () => now }, fs: {
+    stat: async () => ({ size }),
+    read: async (_p: string, o?: any) => { reads.push(o ?? null); return o ? 'cut line\n' + ev : ev },
+  } }
+  answerEnded(-99999)
+  expect((await answersAfter(fake, '/d', since)).pending).toBe(false)
+  ev += prompt('2026-11-18T03:01:00.000Z', '새 요청') + '\n'
+  now = 51000
+  expect((await answersAfter(fake, '/d', since)).pending).toBe(false)   // 보냈다는 알림 전에는 다시 읽지 않는다
+  promptSent(now)
+  expect((await answersAfter(fake, '/d', since)).pending).toBe(true)    // 발화를 보내면 다시 읽는다
+  expect(reads.every(o => o === null)).toBe(true)                        // 작은 파일은 통째로
+  size = 5 * 1024 * 1024
+  promptSent(now)
+  const r = await answersAfter(fake, '/d', since)
+  expect(r.pending).toBe(true)
+  expect(reads[reads.length - 1]).toEqual({ offset: size - 3 * 1024 * 1024, length: 3 * 1024 * 1024 })   // 4 MiB 상한 안에서 끝부분만
+})
+
+const TWO = { ...ANALYSIS, flow: { ...ANALYSIS.flow,
+  first_goal: { text: '눈치 패널 노출 내용과 디자인을 UX 관점에서 리뷰하기', turn: 1 },
+  steps: ANALYSIS.flow.steps.map((x: any) => x.index === 3 ? { ...x, direction: '좁힘' } : x) } }
+
+test('the goal shows the first goal above the current one with its direction when their turns differ (요구 이력 82)', async ($, on) => {
+  engine(on, { state: 'idle', turn: 0 }, true, TWO)
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
+  const all: string[] = (await ui.findAll({ type: 'Text' })).map((x: any) => String(x.text ?? ''))
+  const at = (re: RegExp) => all.findIndex(t => re.test(t))
+  expect(at(/^목표\s+처음 #1$/)).toBeGreaterThanOrEqual(0)
+  expect(at(/^\s+눈치 패널 노출 내용과/)).toBeGreaterThan(at(/^목표\s+처음 #1$/))
+  expect(at(/^ 지금\s+#3부터 · 좁힘$/)).toBeGreaterThan(at(/^\s+눈치 패널 노출 내용과/))
+  expect(at(/^\s+CHANGELOG 만들기$/)).toBeGreaterThan(at(/^ 지금/))
+  await ui.unmount()
+})
+
+test('one goal layer when the first and current goals share a turn, even if their texts differ (요구 이력 82)', async ($, on) => {
+  const same = { ...TWO, flow: { ...TWO.flow, current_goal: { text: 'CHANGELOG 만들기', turn: 1 } } }
+  engine(on, { state: 'idle', turn: 0 }, true, same)
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /처음 #/ }))).toBeFalsy()
+  expect((await ui.find({ type: 'Text', text: /^목표\s+#1부터$/ }))).toBeTruthy()
+  await ui.unmount()
+})
+
+test('the two goal layers and the head read in English on an English screen (요구 이력 82)', async ($, on) => {
+  langEngine(on, { setting: 'English', analysis: TWO, files: { [MOD]: '{"noticed":true}' } })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /^Goal\s+first #1$/ }))).toBeTruthy()
+  expect((await ui.find({ type: 'Text', text: /^ Now\s+since #3 · narrowed$/ }))).toBeTruthy()
+  expect((await ui.find({ type: 'Text', text: /좁힘|처음|지금/ }))).toBeFalsy()
+  await ui.unmount()
+})
+
+test('submitting a prompt runs the hook, and the head then says a new request is pending (요구 이력 82)', async ($, on) => {
+  const since = '2026-11-18T04:00:00.000Z'
+  const files: Record<string, string> = { '/sessions/abc/events.jsonl': JSON.stringify({ ts: since, event: 'Stop' }) + '\n' }
+  engine(on, { state: 'idle', turn: 0 }, true, { ...ANALYSIS, source_ts: since }, '', files)
+  on('prompt.submit', (_: unknown, e: any) => ({ text: e.text }))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const pending = async () => {
+    const ui = await mountPane($, { ...PANE, surface: 'terminal' })
+    const got = !!(await ui.find({ type: 'Text', text: /새 요청 반영 전/ }))
+    await ui.unmount()
+    return got
+  }
+  expect(await pending()).toBe(false)
+  files['/sessions/abc/events.jsonl'] += prompt('2026-11-18T04:01:00.000Z', '새 요청') + '\n'
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })   // 다시 그려도
+  expect(await pending()).toBe(false)                                              // 알림 전에는 파일을 다시 읽지 않는다
+  await $.prompt.submit({ text: '새 요청' })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  expect(await pending()).toBe(true)                                               // 발화를 보내면 훅이 다시 읽게 한다
 })

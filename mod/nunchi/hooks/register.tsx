@@ -12,12 +12,12 @@ import { TEXT, pick, norm, langName, failText, columns, ASK_LANG, OPT_KO, OPT_EN
 
 const PANE = 'nunchi'
 const EMPTY: View = {
-  basis: 0, total: 0, latest: 0, state: 'none', asks: [], askCount: 0, blanketClosed: 0,
-  digest: '', digestTurn: 0, goal: '', goalTurn: 0, decisions: [], decisionCount: 0, recent: '', left: [], leftCount: 0, ratio: 0.4, tick: 0,
-  terms: [], termsMore: 0, on: false, error: '', control: false, behind: 0,
+  basis: 0, total: 0, latest: 0, state: 'none', asks: [], askCount: 0,
+  digest: '', digestTurn: 0, goal: '', goalTurn: 0, firstGoal: '', firstTurn: 0, direction: '', decisions: [], decisionCount: 0, recent: '', left: [], leftCount: 0, ratio: 0.4, tick: 0,
+  terms: [], termsMore: 0, on: false, error: '', control: false, behind: 0, pending: false,
   ui: 'ko', want: 'ko', from: 'default', flowLang: 'ko', analyzed: false, rebuilding: false,
 }
-const view = atom({ plugin: 'nunchi', key: 'view' } as const, EMPTY, { shape: 'view-10' })
+const view = atom({ plugin: 'nunchi', key: 'view' } as const, EMPTY, { shape: 'view-11' })
 // 펼친 수 (요구 이력 74): view와 따로 둔다. view는 분석 결과가 올 때마다 통째로 다시 쓰여 함께 두면 풀린다. 이 세션에만 (요구 이력 77)
 const NO_MORE: More = { decisions: 0, asks: 0, left: 0 }
 const more = atom({ plugin: 'nunchi', key: 'more' } as const, NO_MORE, { shape: 'more-3' })
@@ -116,7 +116,8 @@ async function readJson($: EngineInterface, path: string): Promise<any> {
   }
 }
 
-function one(text: unknown, cut = 200): string {
+// 글자 수 상한은 아주 긴 글을 막는 것뿐. 보이는 길이는 줄 수가 정하고, 잘리면 …가 보인다 (요구 이력 80)
+function one(text: unknown, cut = 1000): string {
   return String(text ?? '').split(/\s+/).join(' ').trim().slice(0, cut)
 }
 
@@ -127,7 +128,7 @@ export function enabled(v: View): boolean {
 
 export function buildView(analysis: any, status: any, tick: number, ratio: number, gloss: any = null, on = false, ui: Ui = 'ko'): View {
   const T = TEXT[ui]
-  const terms = (gloss?.items ?? []).map((x: any) => ({ id: one(x.id, 20), means: (x.means ?? []).map((m: any) => one(m, 120)) }))
+  const terms = (gloss?.items ?? []).map((x: any) => ({ id: one(x.id, 20), means: (x.means ?? []).map((m: any) => one(m)) }))
   const termsMore = Math.max(0, (gloss?.total ?? 0) - terms.length)
   const error = status?.state === 'failed' ? one(failText(one(status?.error, 200), ui), 60) : ''   // 엔진은 실패 이유를 코드로 남긴다 (요구 이력 76)
   const rebuilding = !!status?.rebuild && (status?.state === 'running' || status?.state === 'queued')
@@ -139,7 +140,7 @@ export function buildView(analysis: any, status: any, tick: number, ratio: numbe
   const open = (flow.asks ?? []).filter((a: any) => a.state !== 'answered')
     .sort((a: any, b: any) => (b.last_turn ?? b.turn ?? 0) - (a.last_turn ?? a.turn ?? 0))
   const asks = open.map((a: any, k: number) => ({
-    n: k + 1, summary: one(a.summary, 100), turn: a.turn ?? 0, quote: one(a.quote, 60),   // 요약 100: 영어 세션은 엔진이 100자까지 남긴다 (요구 이력 76)
+    n: k + 1, summary: one(a.summary), turn: a.turn ?? 0, quote: one(a.quote),
     partial: a.state === 'partial', stale: (a.last_turn ?? a.turn ?? 0) < basis - 1,
   }))
   const left: Left[] = []
@@ -152,7 +153,7 @@ export function buildView(analysis: any, status: any, tick: number, ratio: numbe
   // 의사결정 (요구 이력 71): 관계가 확정인 턴. 분석기의 요약이라 원문 대조가 없으므로 정한 턴을 함께 보인다
   // 정한 내용 한 줄(decision)을 먼저, 없으면 제목 (요구 이력 72). 최근 것부터 놓아 펼친 것이 아래로 이어진다 (요구 이력 74)
   const decided = steps.filter((s: any) => s.label === '확정')
-  const decisions = decided.slice().reverse().map((s: any) => ({ text: one(s.decision || s.title || s.summary, 120), turn: s.index ?? 0 }))
+  const decisions = decided.slice().reverse().map((s: any) => ({ text: one(s.decision || s.title || s.summary), turn: s.index ?? 0 }))
   const last = steps.length ? steps[steps.length - 1] : null
   // 처음부터 이 턴까지 한 덩어리 정리: 분석기가 턴마다 써 둔 digest 중 마지막 것 (요구 이력 57, 추정)
   const digested = (flow.steps ?? []).filter((s: any) => s.digest).pop()
@@ -167,14 +168,17 @@ export function buildView(analysis: any, status: any, tick: number, ratio: numbe
     state: status?.state ?? 'idle',
     asks,
     askCount: open.length,
-    blanketClosed: (flow.asks ?? []).filter((a: any) => a.state === 'answered' && a.by_blanket).length,
-    digest: digested && digested.index > 1 ? one(digested.digest, 240) : '',
+    digest: digested && digested.index > 1 ? one(digested.digest) : '',
     digestTurn: digested?.index ?? 0,
     goal: one(flow.current_goal?.text ?? analysis.current_goal ?? ''),
     goalTurn: flow.current_goal?.turn ?? 0,
+    // 처음 목표 (요구 이력 82): 지금 목표와 다른 턴일 때만 그린다. 큰 목표라는 보장이 없어 '처음'이라 부른다
+    firstGoal: one(flow.first_goal?.text ?? ''),
+    firstTurn: flow.first_goal?.turn ?? 0,
+    direction: String(steps.find((s: any) => s.shift && s.index === flow.current_goal?.turn)?.direction ?? ''),
     decisions,
     decisionCount: decided.length,
-    recent: one(last?.agent_summary ?? '', 240),
+    recent: one(last?.agent_summary ?? ''),
     left,
     leftCount: left.length,
   }
@@ -233,9 +237,12 @@ function cut(text: string, cols: number): string {
   return flat(cutParts(text, cols))
 }
 
-/** 칸 수(한글 2칸)에 맞춰 여러 줄로 감싼다. 넘치면 마지막 줄 끝을 …로 (요구 이력 50) */
-function wrapParts(text: string, cols: number, maxLines: number): Piece[][] {
-  const wide = (ch: string) => /[\u1100-\u115f\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe4f\uff00-\uff60\uffe0-\uffe6\u2714]/.test(ch) ? 2 : 1
+const wide = (ch: string) => /[\u1100-\u115f\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe4f\uff00-\uff60\uffe0-\uffe6\u2714]/.test(ch) ? 2 : 1
+const width = (t: string) => [...t].reduce((n, ch) => n + wide(ch), 0)
+
+/** 칸 수(한글 2칸)에 맞춰 여러 줄로 감싼다. 넘치면 마지막 줄 끝을 …로 (요구 이력 50).
+ *  tail: 넘쳐 자를 때 마지막 줄 끝에 비워 둘 꼬리(턴 번호 등)의 칸 수 (요구 이력 80) */
+function wrapParts(text: string, cols: number, maxLines: number, tail = 0): Piece[][] {
   const words: Piece[] = []   // 링크는 한 낱말 (빈칸이 없다)
   for (const p of pieces(text)) {
     if (p.href) words.push(p)
@@ -271,7 +278,7 @@ function wrapParts(text: string, cols: number, maxLines: number): Piece[][] {
   if (lines.length > maxLines) {
     const kept = lines.slice(0, maxLines)
     const last = kept[maxLines - 1] ?? []
-    const room = cols - 2
+    const room = cols - 2 - tail
     const trimmed: Piece[] = []
     let n = 0
     for (const p of last) for (const ch of p.t) {
@@ -283,6 +290,15 @@ function wrapParts(text: string, cols: number, maxLines: number): Piece[][] {
     return kept
   }
   return lines
+}
+/** 글을 감싸고 끝에 꼬리(턴 번호·꼬리표)를 붙인다 (요구 이력 80). 마지막 줄에 들어가면 그 줄 끝에, 아니면 다음 줄에.
+ *  글이 줄 수 안에 들어가면 꼬리 때문에 자르지 않는다. 꼬리가 폭의 절반보다 길면 자리를 비우지 않고 따로 감싼다 */
+function wrapTail(text: string, cols: number, maxLines: number, tail: string): { lines: Piece[][]; inline: boolean; tailLines: Piece[][] } {
+  const tw = width(tail)
+  const lines = wrapParts(text, cols, maxLines, tw <= cols / 2 ? tw : 0)
+  if (!lines.length) lines.push([])   // 요약이 비어도 번호·턴 줄은 그린다
+  const inline = !tail || width(flat(lines[lines.length - 1] ?? [])) + tw <= cols
+  return { lines, inline, tailLines: inline ? [] : wrapParts(tail.trim(), cols, 2) }
 }
 function wrap(text: string, cols: number, maxLines: number): string[] {
   return wrapParts(text, cols, maxLines).map(flat)
@@ -307,27 +323,49 @@ async function language($: EngineInterface, saved?: any) {
   return p
 }
 
-// 분석이 본 마지막 응답 뒤에 끝난 응답 수 (요구 이력 65). 훅이 모든 세션의 Stop을 events.jsonl에 남긴다.
-// 한 턴 안에서 이어 끝난 응답도 센다(그것도 아직 분석에 없는 내용, 요구 이력 64).
-// 파일에는 도구 기록도 쌓여 일하는 동안 매초 커지므로, 처음·이 세션 응답이 끝난 뒤 잠깐·분석 기준이 바뀔 때만 읽는다.
-const RECOUNT_MS = 5000      // 응답이 끝난 뒤 훅이 Stop을 적을 때까지 기다리는 동안 다시 센다
+// 분석이 본 마지막 응답 뒤에 끝난 응답 수 (요구 이력 65)와 사람이 보낸 발화가 있는지 (요구 이력 82).
+// 훅이 모든 세션의 Stop과 UserPromptSubmit을 events.jsonl에 남긴다. 한 턴 안에서 이어 끝난 응답도 센다(요구 이력 64).
+// 파일에는 도구 기록도 쌓여 일하는 동안 매초 커지므로, 처음·응답이 끝나거나 발화를 보낸 뒤 잠깐·분석 기준이 바뀔 때만 읽는다.
+const RECOUNT_MS = 5000      // 응답이 끝나거나 발화를 보낸 뒤 훅이 기록을 적을 때까지 기다리는 동안 다시 센다
+const TAIL = 3 * 1024 * 1024 // 파일이 크면 끝부분만 읽는다 ($.fs.read는 4 MiB까지)
 let countedSince: string | null = null
 let recountUntil = 0
-let behindCount = 0
+let counted: After = { behind: 0, pending: false }
+export type After = { behind: number; pending: boolean }
 export function answerEnded(now: number) { recountUntil = now + RECOUNT_MS }
-export async function answersAfter($: EngineInterface, dir: string, since: string): Promise<number> {
+export const promptSent = answerEnded
+/** 사람이 보낸 발화인지: 다른 에이전트·세션이 보낸 메시지와 알림도 UserPromptSubmit을 남긴다 (요구 이력 82) */
+export function humanPrompt(prompt: unknown): boolean {
+  const p = String(prompt ?? '').trimStart()
+  return !!p && !/^(<agent-message|<cross-session-message|<task-notification|\[Cross-session idle notice\])/.test(p)
+}
+async function readEvents($: EngineInterface, path: string): Promise<string> {
+  let size = 0
+  try { size = Number((await $.fs.stat(path))?.size ?? 0) } catch { size = 0 }
+  if (size <= TAIL) return String(await $.fs.read(path))
+  const text = String(await $.fs.read(path, { offset: size - TAIL, length: TAIL }))
+  return text.slice(text.indexOf('\n') + 1)   // 앞 조각 줄은 버린다
+}
+export async function answersAfter($: EngineInterface, dir: string, since: string): Promise<After> {
   const now = await $.clock.now()
-  if (since === countedSince && now > recountUntil) return behindCount
+  if (since === countedSince && now > recountUntil) return counted
   countedSince = since
   try {
-    const stops = String(await $.fs.read(dir + '/events.jsonl')).split('\n').filter(l => l.includes('"Stop"')).map(l => {
-      try { const e = JSON.parse(l); return e.event === 'Stop' ? String(e.ts ?? '') : '' } catch { return '' }
-    })
-    behindCount = since ? stops.filter(ts => ts && ts > since).length : 0
+    let behind = 0, pending = false
+    if (since) for (const l of (await readEvents($, dir + '/events.jsonl')).split('\n')) {
+      if (!l.includes('"Stop"') && !l.includes('"UserPromptSubmit"')) continue
+      try {
+        const e = JSON.parse(l)
+        if (!(String(e.ts ?? '') > since)) continue
+        if (e.event === 'Stop') behind++
+        else if (e.event === 'UserPromptSubmit' && humanPrompt(e.data?.prompt)) pending = true
+      } catch { /* 깨진 줄은 건너뛴다 */ }
+    }
+    counted = { behind, pending }
   } catch {
-    behindCount = 0
+    counted = { behind: 0, pending: false }
   }
-  return behindCount
+  return counted
 }
 
 async function refresh($: EngineInterface) {
@@ -339,10 +377,10 @@ async function refresh($: EngineInterface) {
     readJson($, dir + '/want'), readJson($, home + '/control.json'), readJson($, home + SAVED),
   ])
   const ratio = Math.min(MAX_RATIO, Math.max(0.2, Number(config?.mod_width_ratio) || 0.4))
-  const behind = await answersAfter($, dir, String(analysis?.source_ts ?? ''))
+  const { behind, pending } = await answersAfter($, dir, String(analysis?.source_ts ?? ''))
   const lang = await language($, saved)   // 1초마다 다시 정하므로 다른 세션에서 바꿔도 곧 따라온다
   await update($, view, old => ({ ...buildView(analysis, status, (old?.tick ?? 0) + 1, ratio, gloss, want !== null, lang.ui),
-    control: !!ctl?.iterm_session_id, behind, want: lang.analysis, from: lang.from }))
+    control: !!ctl?.iterm_session_id, behind, pending, want: lang.analysis, from: lang.from }))
   if (!opened && enabled(await read($, view))) void openPane($)   // 켠 세션이나 관제가 분석한 세션만 저절로 연다
 }
 
@@ -417,6 +455,14 @@ export const register: Register = on => {
     return next(e)
   })
 
+  // 발화를 보내면 기록을 다시 읽는다: 새 요청 반영 전 표시 (요구 이력 82)
+  on('prompt.submit', async ($, e, next) => {
+    promptSent(await $.clock.now())   // next(e)가 턴 끝까지 걸릴 수 있으니 먼저 연다
+    const r = await next(e)
+    promptSent(await $.clock.now())
+    return r
+  })
+
   on('turn.complete', async ($, e, next) => {
     if (!(e as any).agentId) answerEnded(await $.clock.now())   // 이 세션 응답이 끝남: 밀린 응답 수를 다시 센다 (하위 에이전트 끝은 빼고)
     return next(e)
@@ -483,22 +529,34 @@ export const register: Register = on => {
         const rest = total - shownOf(k, total)
         rows.push({ more: k, label: rest > 0 ? T.more(rest) : T.collapse })
       }
-      row(sp(T.title, { b: 1 }), sp(T.asOf(v.basis), { d: 1 }),
-        v.behind > 0 && !busy ? sp(T.behind(v.behind), { c: 'yellow' }) : sp(''),
-        rebuilding || (v.rebuilding && busy) ? sp(`  ${progress} ${dots(v.tick, 'running', v.ui).replace(/^[^.]*/, '')}`, { c: 'yellow' })
+      // 머리 (요구 이력 82): 어느 응답까지 반영했는지, 사람이 보낸 새 발화가 있으면 분석 중이어도 먼저 알린다
+      const lag = v.pending ? sp(T.pending, { c: 'yellow' }) : v.behind > 0 && !busy ? sp(T.behind(v.behind), { c: 'yellow' }) : sp('')
+      const status = rebuilding || (v.rebuilding && busy) ? sp(`  ${progress} ${dots(v.tick, 'running', v.ui).replace(/^[^.]*/, '')}`, { c: 'yellow' })
           : busy ? sp('  ' + dots(v.tick, v.state, v.ui), { c: 'yellow' })
           : v.state === 'failed' ? sp('  ' + T.failed + v.error, { c: 'red' })
-          : !v.on ? sp('  ' + T.autoOff, { c: 'yellow' }) : sp(''))
+          : !v.on ? sp('  ' + T.autoOff, { c: 'yellow' }) : sp('')
+      // 패널보다 넓으면 상태(분석 중 등)부터 다음 줄로, 그래도 넓으면 새 요청·밀림도 (요구 이력 82)
+      const fits = (xs: Span[]) => width(xs.map(x => x.t).join('')) <= cols
+      const next = (xs: Span[]) => xs.length && row(sp('  '), ...xs.map((x, k) => k ? x : { ...x, t: x.t.replace(/^\s*(· )?/, '') }))
+      const head = [sp(T.title, { b: 1 }), sp(T.asOf(v.basis), { d: 1 })]
+      if (fits([...head, lag, status])) row(...head, lag, status)
+      else if (fits([...head, lag])) { row(...head, lag); next([status].filter(x => x.t)) }
+      else { row(...head); next([lag, status].filter(x => x.t)) }
       // 화면과 이 세션의 분석 언어가 다르면 (요구 이력 76): 고른 분석 언어와 다를 때 다시 분석하는 법
       if (v.analyzed && v.flowLang !== v.want && !v.rebuilding) row(sp(T.langLine(langName(v.flowLang)), { c: 'yellow', d: 1 }))
       row(sp(' '))
       // 차례 (요구 이력 71): 목표 → 의사결정 → 에이전트 질문 → 남은 요청
-      row(sp(T.goal, { b: 1 }), sp(v.goalTurn ? T.since(v.goalTurn) : '', { d: 1 }))
-      // 목표·흐름·방금은 각 2줄까지: 목표 덩어리가 길어 아래 덩어리가 첫 화면에서 밀리지 않게 (요구 이력 77)
-      for (const line of wrapParts(v.goal, cols - 4, 2)) row(sp('   '), ...parts(line))
+      // 목표 두 층 (요구 이력 82): 처음 목표가 지금 목표와 다른 턴이면 위에 '처음'(흐리게 2줄), 아래 '지금'
+      if (v.firstGoal && v.firstTurn && v.goalTurn > v.firstTurn) {
+        row(sp(T.goal, { b: 1 }), sp(T.first(v.firstTurn), { d: 1 }))
+        for (const line of wrapParts(v.firstGoal, cols - 4, 2)) row(sp('   ', { d: 1 }), ...parts(line, { d: 1 }))
+        row(sp(T.now, { b: 1 }), sp(T.since(v.goalTurn) + T.dir(v.direction), { d: 1 }))
+      } else row(sp(T.goal, { b: 1 }), sp(v.goalTurn ? T.since(v.goalTurn) : '', { d: 1 }))
+      // 목표 4줄·흐름 3줄·방금 2줄 (요구 이력 80: 2줄로는 결론과 최신 단계가 잘렸다. 방금은 원문이 옆 대화창에 있다)
+      for (const line of wrapParts(v.goal, cols - 4, 4)) row(sp('   '), ...parts(line))
       if (v.digest) {
         row(sp(T.flow(v.digestTurn), { d: 1 }))
-        for (const line of wrapParts(v.digest, cols - 4, 2)) row(sp('   ', { d: 1 }), ...parts(line, { d: 1 }))
+        for (const line of wrapParts(v.digest, cols - 4, 3)) row(sp('   ', { d: 1 }), ...parts(line, { d: 1 }))
       }
       if (v.recent) {
         row(sp(T.recent, { d: 1 }))
@@ -508,25 +566,40 @@ export const register: Register = on => {
         row(sp(' '))
         row(sp(T.decisions, { b: 1 }), sp(String(v.decisionCount), { c: 'green' }))
         for (const d of v.decisions.slice(0, shownOf('decisions', v.decisionCount))) {
-          const lines = wrapParts('✔ ' + d.text, cols - 12, 2)
+          // 들여쓰기만 빼고 폭을 다 써서 3줄, #턴은 끝에 (요구 이력 80)
+          const tail = d.turn ? `  #${d.turn}` : ''
+          const { lines, inline, tailLines } = wrapTail('✔ ' + d.text, cols - 5, 3, tail)
           lines.forEach((line, k) => row(sp('   '), sp(k ? '  ' : ''), ...parts(line),
-            k === lines.length - 1 && d.turn ? sp(`  #${d.turn}`, { d: 1 }) : sp('')))
+            k === lines.length - 1 && inline ? sp(tail, { d: 1 }) : sp('')))
+          for (const line of tailLines) row(sp('     '), ...parts(line, { d: 1 }))
         }
         moreRow('decisions', v.decisionCount)
       }
       row(sp(' '))
       row(sp(T.asks, { b: 1 }), sp(v.askCount ? String(v.askCount) : T.none, { c: v.askCount ? 'yellow' : 'green' }))
       for (const a of v.asks.slice(0, shownOf('asks', v.askCount))) {
-        row(sp(` ${a.n} `, { c: 'yellow', b: 1 }), ...parts(cutParts(a.summary, cols - 12)),
-          sp(` #${a.turn}${a.stale ? T.stale : ''}${a.partial ? T.partial : ''}`, { d: 1 }))
+        // 요약은 2줄 감싸기, 턴과 꼬리표는 끝에 붙이고 안 들어가면 다음 줄 (요구 이력 80)
+        const lead = ` ${a.n} `
+        const tail = ` #${a.turn}${a.stale ? T.stale : ''}${a.partial ? T.partial : ''}`
+        const room = cols - width(lead)
+        const { lines, inline, tailLines } = wrapTail(a.summary, room, 2, tail)
+        lines.forEach((line, k) => row(k ? sp(' '.repeat(width(lead))) : sp(lead, { c: 'yellow', b: 1 }), ...parts(line),
+          k === lines.length - 1 && inline ? sp(tail, { d: 1 }) : sp('')))
+        for (const line of tailLines) row(sp(' '.repeat(width(lead))), ...parts(line, { d: 1 }))
         row(sp('   “', { d: 1 }), ...parts(cutParts(a.quote, cols - 6), { d: 1 }), sp('”', { d: 1 }))
       }
       moreRow('asks', v.askCount)
-      if (v.blanketClosed) row(sp(T.blanket(v.blanketClosed), { d: 1 }))
       row(sp(' '))
       row(sp(T.left, { b: 1 }), sp(v.leftCount ? String(v.leftCount) : T.none, { c: v.leftCount ? 'yellow' : 'green' }), sp(T.mine, { d: 1 }))
-      for (const x of v.left.slice(0, shownOf('left', v.leftCount)))
-        row(sp(` ${x.mark} `, { c: 'yellow' }), ...parts(cutParts(x.summary + (x.note ? ' — ' + x.note : ''), cols - 8)), sp(` #${x.turn}`, { d: 1 }))
+      for (const x of v.left.slice(0, shownOf('left', v.leftCount))) {
+        // 2줄 감싸기, #턴은 끝에 (요구 이력 80). 표시 ○◐⊘는 넓게 그려질 수 있어 4칸으로 본다
+        const tail = ` #${x.turn}`
+        const room = cols - 4
+        const { lines, inline, tailLines } = wrapTail(x.summary + (x.note ? ' — ' + x.note : ''), room, 2, tail)
+        lines.forEach((line, k) => row(k ? sp('   ') : sp(` ${x.mark} `, { c: 'yellow' }), ...parts(line),
+          k === lines.length - 1 && inline ? sp(tail, { d: 1 }) : sp('')))
+        for (const line of tailLines) row(sp('   '), ...parts(line, { d: 1 }))
+      }
       moreRow('left', v.leftCount)
       if (v.terms.length) {
         row(sp(' '))
