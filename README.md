@@ -9,6 +9,8 @@ open.
 
 > *Nunchi (눈치)* is the Korean art of quickly reading a situation and acting on it.
 
+![A Claude Code session with the nunchi panel on the right, showing the goal, the flow so far, one decision, two questions the agent is waiting on, and the open requests](docs/images/panel.png)
+
 ## Install
 
 Run this inside Claude Code:
