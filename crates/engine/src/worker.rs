@@ -360,7 +360,7 @@ impl Analyzer {
                 return false;
             }
             if let Some(existing) = read_analysis(dir) {
-                if py::get(&existing, "source_ts") == Some(&Value::from(ts)) && !flow_pending(&existing) {
+                if py::get(&existing, "source_ts") == Some(&Value::from(ts)) && !flow_pending(&existing) && !rebuild_asked(dir) {
                     return false;
                 }
             }
@@ -384,7 +384,7 @@ impl Analyzer {
             }
             self.shared.cv.notify_all();
         }
-        write_status(dir, "queued", 0, &[]);
+        write_status(dir, "queued", 0, &rebuild_mark(dir));
         true
     }
 
@@ -487,6 +487,7 @@ fn run_job(sh: &Shared, job: &Job) {
 fn analyze(sh: &Shared, job: &Job) -> Result<(), String> {
     let turns = read_turns(sh, &job.transcript, &job.ts)?;
     let Some(last) = turns.last() else { return Err("no-turns".into()) };
+    start_rebuild(&job.dir, &job.ts, last.index)?;
     let old = read_analysis(&job.dir);
     let same = old.as_ref().map(|o| py::truthy(o) && py::get(o, "source_ts") == Some(&Value::from(job.ts.as_str()))).unwrap_or(false);
     if !same {
@@ -504,13 +505,85 @@ fn analyze(sh: &Shared, job: &Job) -> Result<(), String> {
         write_analysis(&job.dir, base, &job.ts, json!({}), last.index).map_err(|_| "io".to_string())?;
     }
     let since = sh.m.lock().unwrap().since.clone();
-    write_status(&job.dir, "running", last.index, &[("since", Value::from(since)), ("source_ts", Value::from(job.ts.as_str()))]);
+    let mut extra = vec![("since", Value::from(since)), ("source_ts", Value::from(job.ts.as_str()))];
+    extra.extend(rebuild_mark(&job.dir));
+    write_status(&job.dir, "running", last.index, &extra);
     let r = advance_flow(sh, &job.dir, &turns);
     write_status(&job.dir, "idle", 0, &[]);
     r
 }
 
 /// 목표 흐름을 새 턴만큼 이어 적는다. 한 턴마다 저장해 화면이 따라오게 한다
+// ---------- 다시 분석 (요구 이력 76, BUILD_PLAN §4.14) ----------
+
+const REBUILD_MARK: &str = "rebuild"; // 세션 폴더: {"lang", "at"}. 분석기가 그 세션을 맡아 초기화할 때 지운다
+const REBUILD_BACKUP: &str = "analysis.prev.json"; // 다시 분석이 끝날 때까지 남기는 이전 결과
+
+fn rebuild_asked(dir: &Path) -> bool {
+    dir.join(REBUILD_MARK).exists()
+}
+
+/// 상태 파일에 다시 분석 중임을 적는다: mod가 `흐름 처음부터 만드는 중`을 고른다
+fn rebuild_mark(dir: &Path) -> Vec<(&'static str, Value)> {
+    if rebuild_asked(dir) || dir.join(REBUILD_BACKUP).exists() { vec![("rebuild", Value::Bool(true))] } else { vec![] }
+}
+
+/// 표시가 있으면: 이전 결과를 백업하고, 새 언어의 빈 흐름으로 처음부터. 표시는 지워 10턴씩 나눠 도는 동안 다시 초기화하지 않는다
+fn start_rebuild(dir: &Path, ts: &str, last_turn: i64) -> Result<(), String> {
+    if !rebuild_asked(dir) {
+        return Ok(());
+    }
+    let mark = store::read_obj(&dir.join(REBUILD_MARK));
+    let lang = flow::clean_lang(mark.get("lang").and_then(Value::as_str).unwrap_or(""));
+    if let Some(old) = read_analysis(dir) {
+        if !dir.join(REBUILD_BACKUP).exists() {
+            store::write_json(&dir.join(REBUILD_BACKUP), &old).map_err(|_| "io".to_string())?;
+        }
+    }
+    let mut base = Map::new();
+    base.insert("first_goal".into(), Value::from(""));
+    base.insert("current_goal".into(), Value::from(""));
+    base.insert("turns".into(), json!([]));
+    base.insert("last_response_summary".into(), Value::from(""));
+    base.insert("ledger".into(), json!([]));
+    base.insert("forgotten".into(), json!([]));
+    base.insert("flow".into(), flow::empty_in(&lang));
+    write_analysis(dir, base, ts, json!({}), last_turn).map_err(|_| "io".to_string())?;
+    let _ = std::fs::remove_file(dir.join(REBUILD_MARK));
+    Ok(())
+}
+
+/// `nunchi-engine rebuild <세션 ID> <언어>`: 그 세션을 새 언어로 처음부터 다시 분석해 달라고 남기고 분석기를 깨운다.
+/// 초기화는 분석기가 그 세션을 맡은 뒤에 한다(돌던 분석이 덮어쓰지 않게). 0 성공, 1 기록 없음
+pub fn rebuild_main(args: &[String]) -> i32 {
+    let (Some(sid), Some(lang)) = (args.first(), args.get(1)) else {
+        eprintln!("usage: nunchi-engine rebuild SESSION LANG");
+        return 2;
+    };
+    if sid.is_empty() || sid.contains('/') || sid.contains("..") {
+        return 2;
+    }
+    let home = store::home_dir();
+    let dir = home.join("sessions").join(sid);
+    let tp = events_field(&dir, "transcript_path").unwrap_or_default();
+    let last_stop = std::fs::read_to_string(dir.join("events.jsonl")).unwrap_or_default().lines()
+        .filter_map(|l| serde_json::from_str::<Value>(l).ok())
+        .filter(|v| py::get(v, "event") == Some(&Value::from("Stop")))
+        .filter_map(|v| py::get(&v, "ts").map(py::str_of)).last();
+    let ts = last_stop.or_else(|| read_analysis(&dir).and_then(|a| py::get(&a, "source_ts").map(py::str_of))).unwrap_or_default();
+    if tp.is_empty() || ts.is_empty() {
+        eprintln!("no record for {sid}");
+        return 1;
+    }
+    let mark = json!({"lang": flow::clean_lang(lang), "at": clock::now_us()});
+    if store::write_json(&dir.join(REBUILD_MARK), &mark).is_err() || enqueue(&home, sid, &tp, &ts, true, "nunchi").is_err() {
+        return 1;
+    }
+    write_status(&dir, "queued", 0, &[("rebuild", Value::Bool(true))]);
+    wake(&home, store::load_settings(&home).analyze_workers);
+    0
+}
+
 /// 새 흐름의 분석 언어 (요구 이력 76): /nunchi가 쓴 want의 lang → mod가 세션 시작 때 적은 lang 파일 → ko
 fn session_lang(dir: &Path) -> String {
     let from_want = store::read_obj(&dir.join("want")).get("lang").and_then(Value::as_str).map(String::from);
@@ -539,7 +612,9 @@ fn advance_flow(sh: &Shared, dir: &Path, turns: &[Turn]) -> Result<(), String> {
         if sh.stopped() {
             return Ok(());
         }
-        write_status(dir, "running", t.index, &[("since", Value::from(since.as_str()))]);
+        let mut extra = vec![("since", Value::from(since.as_str()))];
+        extra.extend(rebuild_mark(dir));
+        write_status(dir, "running", t.index, &extra);
         let lang = flow::lang_of(&f);
         let mut runner = |p: &str| run_claude(p, &sh.model, &lang, sh);
         f = flow::advance(&f, turns, t, &mut runner, 2)?;
@@ -568,6 +643,11 @@ fn advance_flow(sh: &Shared, dir: &Path, turns: &[Turn]) -> Result<(), String> {
             data["analyzed_at"] = Value::from(clock::now_us());
         }
         store::write_json(&dir.join("analysis.json"), &data).map_err(|_| "io".to_string())?;
+    }
+    // 다시 분석이 끝까지 따라잡으면 이전 결과 백업을 지운다 (요구 이력 76). 중간에 멈추면 남겨 둔다
+    let until = py::int_or(py::get(&f, "until"), 0).unwrap_or(0);
+    if turns.last().map(|t| until >= t.index).unwrap_or(false) {
+        let _ = std::fs::remove_file(dir.join(REBUILD_BACKUP));
     }
     Ok(())
 }
@@ -634,7 +714,7 @@ pub fn drain(home: &Path) -> usize {
             let ts = item.ts();
             let existing = read_analysis(&sdir);
             if let Some(e) = &existing {
-                if py::truthy(e) && py::get(e, "source_ts") == item.v.get("source_ts") && !flow_pending(e) && !an.busy_with(&sid) {
+                if py::truthy(e) && py::get(e, "source_ts") == item.v.get("source_ts") && !flow_pending(e) && !an.busy_with(&sid) && !rebuild_asked(&sdir) {
                     drop_item(item);
                     release(home, &sid);
                     mine.remove(&sid);

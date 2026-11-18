@@ -53,10 +53,14 @@ fn main() {
             println!("nunchi-engine {} (src {})", env!("CARGO_PKG_VERSION"), env!("NUNCHI_SOURCE_HASH"));
             0
         }
+        Some("rebuild") => {
+            on_panic(1, "worker");
+            worker::rebuild_main(&args[1..])
+        }
         #[cfg(feature = "dev")]
         Some("dev") => nunchi_engine::dev::main(&args[1..]),
         _ => {
-            eprintln!("usage: nunchi-engine hook | worker --home DIR");
+            eprintln!("usage: nunchi-engine hook | worker --home DIR | rebuild SESSION LANG");
             2
         }
     };

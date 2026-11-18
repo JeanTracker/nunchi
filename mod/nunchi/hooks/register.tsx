@@ -8,7 +8,7 @@ import type { Register, EngineInterface } from 'claude-code'
 
 import type { View, Left, More } from '../types'
 import { drawRows, type Row, type Span } from './rows'
-import { TEXT, pick, norm, langName, failText, columns, ASK_LANG, OPT_KO, OPT_EN, OPT_FOLLOW, type Ui } from './lang'
+import { TEXT, pick, norm, langName, failText, columns, ASK_LANG, OPT_KO, OPT_EN, OPT_FOLLOW, ASK_REBUILD, OPT_KEEP, OPT_REBUILD, type Ui } from './lang'
 
 const PANE = 'nunchi'
 const EMPTY: View = {
@@ -372,7 +372,26 @@ async function chooseLanguage($: EngineInterface): Promise<string> {
   if (want && want.lang !== after.analysis) await $.fs.write(dir + '/want', JSON.stringify({ ...want, lang: after.analysis }) + '\n')
   await refresh($)
   const T2 = TEXT[after.ui]
-  return picked === undefined ? T2.langFollow(langName(after.analysis)) : T2.langSet(langName(after.analysis))
+  const said = picked === undefined ? T2.langFollow(langName(after.analysis)) : T2.langSet(langName(after.analysis))
+  // 이 세션이 이미 다른 언어로 분석돼 있으면 이어서 묻는다 (요구 이력 76). 비용이 들지 않는 '그대로 두기'가 먼저:
+  // 창이 뜬 채 종료하면 첫 항목이 답으로 들어온 것을 봤다 (SCREEN §8 2026-11-17 언어)
+  const v = await read($, view)
+  if (!v.analyzed || v.flowLang === after.analysis) return said
+  const was = langName(v.flowLang), to = langName(after.analysis)
+  let again = ''
+  try {
+    again = await $.ui.ask(ASK_REBUILD(after.ui, was, to, v.total || v.basis), [OPT_KEEP(after.ui, to), OPT_REBUILD(after.ui)])
+  } catch { /* Esc: 그대로 둔다 */ }
+  if (again !== OPT_REBUILD(after.ui)) return said + T2.langKept(was)
+  return said + ((await askRebuild($, after.analysis)) ? T2.langRebuild(to) : T2.rebuildFailed)
+}
+
+/** 엔진에 다시 분석을 맡긴다: 플러그인의 훅 입구(emit.sh)가 이 컴퓨터용 엔진을 골라 넘긴다. 초기화는 분석기가 그 세션을 맡은 뒤에 한다 */
+async function askRebuild($: EngineInterface, lang: string): Promise<boolean> {
+  const r = await $.process.run(['sh', $.plugin.root + '/hooks/emit.sh', 'rebuild', await sessionId($), lang]).catch(() => null)
+  if (!r || r.exitCode !== 0) return false
+  await refresh($)
+  return true
 }
 
 export const register: Register = on => {

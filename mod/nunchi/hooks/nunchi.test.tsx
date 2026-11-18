@@ -702,3 +702,60 @@ test('choosing a language rewrites want for a session not analyzed yet (요구 �
   expect(files['/home/me/.claude-control/sessions/abc/lang']).toBe('en\n')
   await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()
 })
+
+// ---------- 다시 분석 (요구 이력 76 L3) ----------
+
+test('choosing another language for an analyzed session asks whether to rebuild, keep first (요구 이력 76)', async ($, on) => {
+  const asked: any[] = []
+  langEngine(on, { setting: '한국어', answers: ['English', null], asked, files: { [MOD]: '{"noticed":true}' } })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const r = await $.command.run({ command: 'nunchi', args: 'language' } as any)
+  const q = asked[1]?.questions?.[0]
+  expect(q?.question).toBe('This session is analyzed in 한국어. Rebuild it in English? (3 answers · at least 3 analysis calls)')
+  expect(q?.options?.map((x: any) => x.label ?? x)).toEqual(['Keep it (new sessions in English)', 'Rebuild now'])
+  expect(String(r.text)).toMatch(/This session keeps its 한국어 analysis/)   // Esc는 그대로 두기
+  await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()
+})
+
+test('rebuild now hands the session to the engine through emit.sh (요구 이력 76)', async ($, on) => {
+  const runs: string[][] = []
+  langEngine(on, { setting: '한국어', answers: ['English', 'Rebuild now'], runs, files: { [MOD]: '{"noticed":true}' } })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const r = await $.command.run({ command: 'nunchi', args: 'language' } as any)
+  const call = runs.find(a => a.includes('rebuild'))!
+  expect(call[0]).toBe('sh')
+  expect(call[1]).toMatch(/\/hooks\/emit\.sh$/)
+  expect(call.slice(2)).toEqual(['rebuild', 'abc', 'en'])
+  expect(String(r.text)).toMatch(/Rebuilding this session in English from the start/)
+  await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()
+})
+
+test('no rebuild question when the session is already in that language or not analyzed (요구 이력 76)', async ($, on) => {
+  const asked: any[] = []
+  langEngine(on, { setting: '한국어', answers: ['한국어'], asked, files: { [MOD]: '{"noticed":true}' } })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.command.run({ command: 'nunchi', args: 'language' } as any)
+  expect(asked.length).toBe(1)
+  await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()
+})
+
+test('while rebuilding the head says it is rebuilding from the start (요구 이력 76)', async ($, on) => {
+  langEngine(on, { setting: 'English', status: { state: 'running', turn: 2, rebuild: true },
+    analysis: { ...ANALYSIS, last_turn: 3, flow: { ...ANALYSIS.flow, lang: 'en', until: 1, steps: ANALYSIS.flow.steps.slice(0, 1) } },
+    files: { [MOD]: '{"noticed":true}' } })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /Rebuilding from the start #2\/#3/ }))).toBeTruthy()
+  expect((await ui.find({ type: 'Text', text: /^analysis:/ }))).toBeFalsy()
+  await ui.unmount()
+})
+
+test('right after the reset, before any turn is written, the head already says rebuilding (요구 이력 76)', async ($, on) => {
+  langEngine(on, { setting: '한국어', status: { state: 'running', turn: 1, rebuild: true },
+    analysis: { last_turn: 3, flow: { version: 3, lang: 'en', until: 0, steps: [], requests: [], asks: [] } },
+    files: { [MOD]: '{"noticed":true}' } })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /흐름 처음부터 만드는 중 #1\/#3/ }))).toBeTruthy()
+  await ui.unmount()
+})

@@ -207,3 +207,40 @@ fn dist_carries_every_mod_module_but_not_the_tests() {
     }
     let _ = std::fs::remove_dir_all(&tmp);
 }
+
+// 다시 분석 (요구 이력 76): mod가 `sh emit.sh rebuild <세션> <언어>`로 부른다. 입력은 읽지 않는다 (mod는 표준 입력을 주지 않음)
+impl Plugin {
+    fn rebuild(&self) -> (i32, std::time::Duration) {
+        let started = std::time::Instant::now();
+        let mut c = Command::new("/bin/sh").arg(self.dir.join("hooks/emit.sh")).args(["rebuild", "s1", "en"]).env_clear()
+            .env("PATH", self.dir.join("empty-path")).stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().unwrap();
+        let _keep_open = c.stdin.take();   // 표준 입력을 열어 둔 채: 읽으려 들면 끝나지 않는다
+        loop {
+            if let Some(st) = c.try_wait().unwrap() {
+                return (st.code().unwrap_or(-1), started.elapsed());
+            }
+            if started.elapsed() > std::time::Duration::from_secs(5) {
+                let _ = c.kill();
+                return (-9, started.elapsed());
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+    }
+}
+
+#[test]
+fn rebuild_goes_straight_to_the_engine() {
+    let p = Plugin::new("rebuild");
+    let called = p.dir.join("called");
+    p.engine(&format!("printf '%s ' \"$@\" > '{}'\n", called.display()));
+    assert_eq!(p.rebuild().0, 0);
+    assert_eq!(std::fs::read_to_string(called).unwrap(), "rebuild s1 en ");
+}
+
+#[test]
+fn rebuild_without_an_engine_fails_at_once() {
+    let p = Plugin::new("rebuild-none");
+    let (code, took) = p.rebuild();
+    assert_eq!(code, 1);
+    assert!(took < std::time::Duration::from_secs(2), "입력을 기다리지 않는다: {took:?}");
+}

@@ -85,6 +85,14 @@ summaries in that language (only Korean and English are tested). Quoted words ar
 shown as they were said. When a session was analyzed in a different language from the
 one you picked, a line under the header says so.
 
+If you pick a language while the current session was analyzed in another one, a second
+question follows: `그대로 두기` (keep it; new sessions use the new language) comes first,
+then `지금 다시 분석` (rebuild now). Rebuilding analyzes the whole session again from the
+first turn, one `claude -p` call per turn, and the header reads `흐름 처음부터 만드는 중
+#k/#n` (rebuilding from the start) until it is done. The previous result is kept as
+`analysis.prev.json` in the session folder until the rebuild finishes. To rebuild later,
+run `/nunchi language` again and pick the same language.
+
 ## What the panel shows
 
 The panel opens on the right when the window is 110 columns or wider and takes 40% of

@@ -170,3 +170,81 @@ fn titles_and_digests_get_more_room_outside_korean() {
     assert_eq!(parsed_title("en", long), "32|180");
 }
 
+
+// ---------- 다시 분석 (요구 이력 76 L3) ----------
+
+fn many_turns(n: usize) -> Vec<Value> {
+    (1..=n).flat_map(|i| [user(&format!("{i}번째 요청: 파일 {i}을 고쳐줘"), &format!("2026-11-17T01:{:02}:00.000Z", i)),
+                          answer(&format!("파일 {i}을 고쳤습니다. 시험도 통과했습니다."), &format!("2026-11-17T01:{:02}:10.000Z", i))]).collect()
+}
+
+impl Run {
+    fn events(&self, last_ts: &str) {
+        let tp = self.d.join("t.jsonl");
+        std::fs::write(self.d.join("home/sessions/s1/events.jsonl"),
+            json!({"event": "Stop", "ts": last_ts, "transcript_path": tp, "session_id": "s1"}).to_string() + "\n").unwrap();
+    }
+    fn rebuild(&self, lang: &str) -> i32 {
+        Command::new(ENGINE).args(["rebuild", "s1", lang]).env("CONTROL_TUI_HOME", self.d.join("home")).env("CONTROL_TUI_WORKER", "0")
+            .stdin(Stdio::null()).status().unwrap().code().unwrap_or(-1)
+    }
+    fn drain(&self) {
+        let ok = Command::new(ENGINE).args(["worker", "--home"]).arg(self.d.join("home"))
+            .env("PATH", format!("{}:{}", self.d.join("fakebin").display(), std::env::var("PATH").unwrap()))
+            .env("CONTROL_TUI_REPLY_WAIT", "0").env("FAKE_CLAUDE_STATE", self.d.join("fake"))
+            .env_remove("FAKE_CLAUDE_SCRIPT").env_remove("CONTROL_TUI_ANALYZER")
+            .stdin(Stdio::null()).status().unwrap().success();
+        assert!(ok);
+    }
+    fn file(&self, name: &str) -> PathBuf {
+        self.d.join("home/sessions/s1").join(name)
+    }
+    fn calls(&self) -> usize {
+        std::fs::read_to_string(self.d.join("fake/log")).unwrap_or_default().lines().count()
+    }
+}
+
+#[test]
+fn rebuild_starts_over_in_the_new_language_and_cleans_up() {
+    let r = Run::new("rebuild", &two_turns(), json!({"on": true}));
+    r.analyze("2026-11-17T01:02:10.500Z");
+    assert_eq!(r.flow().get("lang"), None);
+    let before = r.calls();
+    r.events("2026-11-17T01:02:10.500Z");
+    assert_eq!(r.rebuild("en"), 0);
+    assert!(r.file("rebuild").exists(), "초기화는 분석기가 맡은 뒤에 한다");
+    let status: Value = serde_json::from_str(&std::fs::read_to_string(r.file("analysis_status.json")).unwrap()).unwrap();
+    assert_eq!((status["state"].as_str(), status["rebuild"].as_bool()), (Some("queued"), Some(true)));
+    r.drain();
+    let f = r.flow();
+    assert_eq!((f["until"].as_i64(), f["lang"].as_str()), (Some(2), Some("en")), "같은 응답 시각이어도 처음부터 다시 적는다");
+    assert_eq!(r.calls() - before, 2, "턴마다 한 번");
+    assert!(!r.file("rebuild").exists());
+    assert!(!r.file("analysis.prev.json").exists(), "끝까지 따라잡으면 백업을 지운다");
+    assert_eq!(r.settings_arg(), json!({"language": "English"}));
+    let status: Value = serde_json::from_str(&std::fs::read_to_string(r.file("analysis_status.json")).unwrap()).unwrap();
+    assert_eq!(status.get("rebuild"), None, "끝난 뒤 상태에는 다시 분석 표시가 없다");
+}
+
+#[test]
+fn a_long_rebuild_resets_once_and_keeps_going_past_ten_turns() {
+    let rows = many_turns(12);
+    let r = Run::new("rebuild-long", &rows, json!({"on": true}));
+    r.analyze("2026-11-17T01:12:10.500Z");
+    assert_eq!(r.flow()["until"], 12);
+    let before = r.calls();
+    r.events("2026-11-17T01:12:10.500Z");
+    assert_eq!(r.rebuild("en"), 0);
+    r.drain();
+    let f = r.flow();
+    assert_eq!((f["until"].as_i64(), f["lang"].as_str()), (Some(12), Some("en")));
+    assert_eq!(r.calls() - before, 12, "10턴씩 나눠 돌아도 초기화는 한 번");
+}
+
+#[test]
+fn rebuild_without_any_record_fails_without_touching_the_session() {
+    let r = Run::new("rebuild-none", &two_turns(), json!({"on": true}));
+    assert_eq!(r.rebuild("en"), 1);
+    assert!(!r.file("rebuild").exists());
+    assert!(!r.d.join("home/queue/s1.json").exists());
+}
