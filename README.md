@@ -20,7 +20,7 @@ Run this inside Claude Code:
 Runs on macOS (Apple silicon or Intel) and Linux (x86_64 or arm64); Windows is not
 supported. Installing is the same everywhere: the plugin ships an engine for each platform
 and picks the right one, so it needs no Python. On Linux the engine passes its tests in
-CI, but it has not yet been tried in a live session. While the repository is private, adding the marketplace needs git access to it.
+CI, but it has not yet been tried in a live session.
 
 ## Use
 
@@ -36,7 +36,7 @@ claude plugin marketplace update nunchi && claude plugin update nunchi@nunchi
 claude plugin uninstall nunchi@nunchi && claude plugin marketplace remove nunchi
 ```
 
-Full guide: [docs/GUIDE.md](docs/GUIDE.md) (한국어: [docs/ko/GUIDE.md](docs/ko/GUIDE.md))
+Full guide: [docs/GUIDE.md](docs/GUIDE.md)
 
 ## Status
 
@@ -47,5 +47,9 @@ An earlier version also shipped a separate terminal app for watching several ses
 once (the control screen, installed with `install.sh`). It has been removed and will be
 rebuilt in Rust. If you installed it, run `install.sh --uninstall` from that version
 before you update, so no hook is left pointing at a deleted script.
+
+## License
+
+[MIT](LICENSE)
 
 nunchi is an independent project and is not affiliated with or endorsed by Anthropic.

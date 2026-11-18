@@ -20,11 +20,12 @@ for m in mod/nunchi/hooks/*.tsx; do
 done
 for f in .claude-plugin/plugin.json hooks/hooks.json hooks/emit.sh \
          $mods mod/nunchi/types/index.d.ts mod/nunchi/tsconfig.json \
-         README.md docs/GUIDE.md docs/ko/GUIDE.md $engines; do
+         LICENSE README.md docs/GUIDE.md $engines; do
   mkdir -p "$out/$(dirname "$f")"
   cp -p "$f" "$out/$f"
 done
-[ -f LICENSE ] && cp -p LICENSE "$out/LICENSE"
+# README의 화면 그림 (README가 docs/images/를 상대 경로로 가리킨다)
+if [ -d docs/images ]; then cp -Rp docs/images "$out/docs/"; fi
 chmod 755 "$out/hooks/emit.sh"
 for e in $engines; do chmod 755 "$out/$e"; done
 echo "dist: $(cd "$out" && find . -type f | sort | tr '\n' ' ')"

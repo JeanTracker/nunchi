@@ -179,7 +179,7 @@ fn dist_carries_every_mod_module_but_not_the_tests() {
     let _ = std::fs::remove_dir_all(&tmp);
     let src = tmp.join("src");
     for rel in [".claude-plugin/plugin.json", "hooks/hooks.json", "hooks/emit.sh", "scripts/make-dist.sh",
-                "mod/nunchi/types/index.d.ts", "mod/nunchi/tsconfig.json", "README.md", "docs/GUIDE.md", "docs/ko/GUIDE.md"] {
+                "mod/nunchi/types/index.d.ts", "mod/nunchi/tsconfig.json", "LICENSE", "README.md", "docs/GUIDE.md"] {
         std::fs::create_dir_all(src.join(rel).parent().unwrap()).unwrap();
         std::fs::copy(repo().join(rel), src.join(rel)).unwrap();
     }
@@ -200,6 +200,7 @@ fn dist_carries_every_mod_module_but_not_the_tests() {
     let out = tmp.join("out");
     let st = Command::new("/bin/sh").arg(src.join("scripts/make-dist.sh")).arg(&out).output().unwrap();
     assert!(st.status.success(), "{}", String::from_utf8_lossy(&st.stderr));
+    assert!(out.join("LICENSE").is_file(), "LICENSE must ship with the plugin");
     assert!(modules.iter().any(|m| m == "rows.tsx"));   // register.tsx가 import하는 형제 모듈도 실린다 (body.tsx는 요구 이력 77에서 없앰)
     for m in &modules {
         let shipped = out.join("mod/nunchi/hooks").join(m).is_file();

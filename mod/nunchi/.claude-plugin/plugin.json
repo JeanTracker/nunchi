@@ -5,5 +5,8 @@
   "author": {
     "name": "JeanTracker"
   },
+  "homepage": "https://github.com/JeanTracker/nunchi",
+  "repository": "https://github.com/JeanTracker/nunchi",
+  "license": "MIT",
   "types": "./types/index.d.ts"
 }
