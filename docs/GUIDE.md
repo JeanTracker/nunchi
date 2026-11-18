@@ -129,13 +129,11 @@ may sit below the visible area; scroll the panel to reach it.
 progress (for example a merge request waiting for review), ⊘ the agent could not do it or
 deferred it. Each shows the turn it came from.
 
-**More and fewer.** Decisions, questions and open requests show three items each. When a
-list has more, its last line reads `… n개 더` (n more): click it to see five more of that
-list, and once it is fully open the same line reads `접기` (Collapse) and takes it back to
-three. While any list has more than three, the bottom of the panel has two buttons:
-`펼치기` (More) shows five more of all three lists, `줄이기` (Fewer) shows five fewer, down
-to three. What you open stays open while you work in that session, even as new analysis
-results come in; each session keeps its own, and a new session starts with three.
+**More and collapse.** Decisions, questions and open requests show three items each. When
+a list has more, its last line reads `… n개 더` (n more): click it to open the whole list,
+and the same line then reads `접기` (Collapse) and takes it back to three. What you open
+stays open while you work in that session, even as new analysis results come in; each
+session keeps its own, and a new session starts with three.
 
 The goal, the flow summary and the last step show two lines each, so the lists below
 stay on the first screen.

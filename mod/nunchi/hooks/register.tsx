@@ -21,23 +21,17 @@ const view = atom({ plugin: 'nunchi', key: 'view' } as const, EMPTY, { shape: 'v
 // 펼친 수 (요구 이력 74): view와 따로 둔다. view는 분석 결과가 올 때마다 통째로 다시 쓰여 함께 두면 풀린다. 이 세션에만 (요구 이력 77)
 const NO_MORE: More = { decisions: 0, asks: 0, left: 0 }
 const more = atom({ plugin: 'nunchi', key: 'more' } as const, NO_MORE, { shape: 'more-3' })
-const STEP = 5   // 한 번 누를 때 더 보이는 수
 
-// 펼친 수 바꾸기 (요구 이력 74·77). 덩어리별 `… n개 더`는 그 덩어리만, 맨 아래 펼치기·줄이기는 세 덩어리 함께 5개씩
+// 펼친 수 바꾸기 (요구 이력 74·78). `… n개 더`는 그 덩어리를 한 번에 모두 펼치고, 다 펼친 뒤의 `접기`는 처음 3개로
 type Totals = { decisions: number; asks: number; left: number }
 const SECTIONS = ['decisions', 'asks', 'left'] as const
 export function moved(m: More, t: Totals, op: { op?: string; d?: number; k?: string }): More {
   const room = (k: typeof SECTIONS[number]) => Math.max(0, t[k] - SHOWN)
   const now = (k: typeof SECTIONS[number]) => Math.min(m[k], room(k))
   const base: More = { decisions: now('decisions'), asks: now('asks'), left: now('left') }
-  if (op.op === 'step' || op.op === 'more' && (op.k === 'expand' || op.k === 'shrink')) {
-    const d = op.op === 'step' ? Math.sign(op.d ?? 0) : op.k === 'expand' ? 1 : -1
-    for (const k of SECTIONS) base[k] = Math.max(0, Math.min(room(k), base[k] + STEP * d))
-    return base
-  }
   if (op.op === 'more' && (SECTIONS as readonly string[]).includes(op.k ?? '')) {
     const k = op.k as typeof SECTIONS[number]
-    base[k] = base[k] >= room(k) ? 0 : Math.min(room(k), base[k] + STEP)
+    base[k] = base[k] >= room(k) ? 0 : room(k)
     return base
   }
   return m
@@ -458,7 +452,7 @@ export const register: Register = on => {
         : v.on ? sp(T.onWaiting, { d: 1 })
         : sp(T.offIdle, { d: 1 }))
     } else {
-      // … n개 더 (요구 이력 74): 누를 때마다 그 덩어리만 5개씩, 다 펼치면 접기
+      // … n개 더 (요구 이력 74·78): 누르면 그 덩어리를 모두 펼치고, 다 펼치면 접기
       const shownOf = (k: keyof Totals, total: number) => Math.min(total, SHOWN + m[k])
       const moreRow = (k: keyof Totals, total: number) => {
         if (total <= SHOWN) return
@@ -521,12 +515,6 @@ export const register: Register = on => {
           })
         }
         if (v.termsMore) row(sp('   ' + T.more(v.termsMore), { d: 1 }))
-      }
-      // 맨 아래 펼치기·줄이기 (요구 이력 77): 세 덩어리를 함께 5개씩. 넘치는 덩어리가 없으면 두지 않는다
-      const totals: Totals = { decisions: v.decisionCount, asks: v.askCount, left: v.leftCount }
-      if (SECTIONS.some(k => totals[k] > SHOWN)) {
-        row(sp(' '))
-        rows.push({ btns: [{ k: 'expand', label: T.expand }, { k: 'shrink', label: T.shrink }] })
       }
     }
     const body = drawRows(rows, els, k => { void apply($, { op: 'more', k }) })
