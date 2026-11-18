@@ -131,11 +131,11 @@ const EN_T: T = {
 
 export const TEXT: Record<Ui, T> = { ko: KO_T, en: EN_T }
 
-// 질문 창 (요구 이력 76). 두 언어를 함께 써서 화면 언어가 아직 맞지 않아도 읽힌다
-export const ASK_LANG = (now: string, from: string) => `눈치 언어 / Nunchi language? 지금: ${now}${from}`
+// 질문 창 (요구 이력 76·79). 설명과 '설정 따르기'는 화면 언어로(한국어 화면이 아니면 영어), 언어 이름은 그 언어로
+export const ASK_LANG = (ui: Ui, now: string, from: string) => ui === 'ko' ? `눈치 언어를 고르세요. 지금: ${now}${from}` : `Choose the Nunchi language. Now: ${now}${from}`
 export const OPT_KO = '한국어'
 export const OPT_EN = 'English'
-export const OPT_FOLLOW = 'Claude Code 설정 따르기'
+export const OPT_FOLLOW = (ui: Ui) => ui === 'ko' ? 'Claude Code 설정 따르기' : 'Follow the Claude Code setting'
 export const ASK_REBUILD = (ui: Ui, was: string, to: string, turns: number) => ui === 'ko'
   ? `이 세션은 ${was}로 분석돼 있습니다. ${to}로 다시 분석할까요? (응답 ${turns}개 · 분석 호출 ${turns}회 이상)`
   : `This session is analyzed in ${was}. Rebuild it in ${to}? (${turns} answers · at least ${turns} analysis calls)`

@@ -158,8 +158,10 @@ export function buildView(analysis: any, status: any, tick: number, ratio: numbe
   const digested = (flow.steps ?? []).filter((s: any) => s.digest).pop()
   return {
     ...base,
-    flowLang: norm(flow.lang) || 'ko',   // 이 세션의 분석 언어. 엔진은 ko면 적지 않는다 (요구 이력 76)
-    analyzed: true,
+    // 이 세션의 분석 언어. 엔진은 ko면 적지 않는다 (요구 이력 76).
+    // 첫 분석은 흐름 없는 결과를 먼저 적으니, 흐름이 생기기 전에는 언어를 모르는 것으로 둔다
+    flowLang: analysis.flow ? norm(flow.lang) || 'ko' : EMPTY.flowLang,
+    analyzed: !!analysis.flow,
     basis,
     total: analysis.last_turn ?? 0,
     state: status?.state ?? 'idle',
@@ -354,14 +356,15 @@ async function chooseLanguage($: EngineInterface): Promise<string> {
   const now = await language($)
   const T = TEXT[now.ui]
   const from = now.from === 'claude' ? T.fromClaude : ''
-  const opts = now.analysis === 'en' ? [OPT_EN, OPT_KO, OPT_FOLLOW] : [OPT_KO, OPT_EN, OPT_FOLLOW]   // 지금 언어가 맨 위
+  const follow = OPT_FOLLOW(now.ui)
+  const opts = now.analysis === 'en' ? [OPT_EN, OPT_KO, follow] : [OPT_KO, OPT_EN, follow]   // 지금 언어가 맨 위
   let answer: string
   try {
-    answer = await $.ui.ask(ASK_LANG(langName(now.analysis), from), opts)
+    answer = await $.ui.ask(ASK_LANG(now.ui, langName(now.analysis), from), opts)
   } catch {
     return T.unchanged + ' ' + T.langNow(langName(now.analysis), from)
   }
-  const picked = answer === OPT_KO ? 'ko' : answer === OPT_EN ? 'en' : answer === OPT_FOLLOW ? undefined : norm(answer)
+  const picked = answer === OPT_KO ? 'ko' : answer === OPT_EN ? 'en' : answer === follow ? undefined : norm(answer)
   if (picked !== undefined && picked !== 'ko' && picked !== 'en') return T.unchanged   // 직접 쓴 글은 두 언어만 받는다
   await saveMod($, { language: picked })
   const after = await language($)
@@ -396,6 +399,8 @@ async function askRebuild($: EngineInterface, lang: string): Promise<boolean> {
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
+    // 분석기 자신의 claude -p는 건너뛴다: 훅과 같은 표시 (hook.rs). 안 그러면 분석 호출마다 빈 세션 폴더가 생긴다
+    if ((await $.env.get('CONTROL_TUI_ANALYZER')) === '1') return next(e)
     const first = await language($)
     await $.command.register({ name: 'nunchi', description: TEXT[first.ui].command, argumentHint: '[language]' })
     await noteLang($, first.analysis)

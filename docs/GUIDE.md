@@ -73,9 +73,11 @@ language setting (`/config`, the response language): Korean when it is Korean, E
 otherwise. With no setting, the terminal's `LANG` decides. The first session after you
 install tells you once which language it picked.
 
-To change it, type `/nunchi language` and pick `한국어`, `English` or
-`Claude Code 설정 따르기` (follow the Claude Code setting). The panel switches right away,
-in every open session. Press Esc to leave it as it is.
+To change it, type `/nunchi language` and pick `English`, `한국어` or
+`Follow the Claude Code setting`. The question is in the panel's language (on a Korean
+panel the last choice reads `Claude Code 설정 따르기`); the language names are always
+written in their own language. The panel switches right away, in every open session.
+Press Esc to leave it as it is.
 
 The summaries in the panel (goal, flow, decisions, questions, requests) are written by
 the analysis, in the language picked when the session is first analyzed. A session keeps
@@ -86,10 +88,10 @@ shown as they were said. When a session was analyzed in a different language fro
 one you picked, a line under the header says so.
 
 If you pick a language while the current session was analyzed in another one, a second
-question follows: `그대로 두기` (keep it; new sessions use the new language) comes first,
-then `지금 다시 분석` (rebuild now). Rebuilding analyzes the whole session again from the
-first turn, one `claude -p` call per turn, and the header reads `흐름 처음부터 만드는 중
-#k/#n` (rebuilding from the start) until it is done. The previous result is kept as
+question follows, in the panel's language: `Keep it` (`그대로 두기`; new sessions use the
+new language) comes first, then `Rebuild now` (`지금 다시 분석`). Rebuilding analyzes the
+whole session again from the first turn, one `claude -p` call per turn, and the header
+reads `Rebuilding from the start #k/#n` (`흐름 처음부터 만드는 중 #k/#n`) until it is done. The previous result is kept as
 `analysis.prev.json` in the session folder until the rebuild finishes. To rebuild later,
 run `/nunchi language` again and pick the same language.
 

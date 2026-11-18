@@ -590,6 +590,29 @@ test('when the session was analyzed in another language the head says how to reb
   await ui.unmount()
 })
 
+test('the analyzer\'s own claude -p leaves no session folder and no notice (요구 이력 76)', async ($, on) => {
+  // 분석 호출마다 session.start가 돌아 lang만 든 빈 세션 폴더가 쌓였다 (L4 실제 확인에서 찾음). 훅처럼 분석기 자신은 건너뛴다
+  const toasts: string[] = []
+  const files = langEngine(on, { setting: '한국어', env: { CONTROL_TUI_ANALYZER: '1' }, toasts })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: false })
+  expect(Object.keys(files)).toEqual([])
+  expect(toasts).toEqual([])
+})
+
+test('while the first analysis has written no flow yet, no language line and no rebuild question (요구 이력 76)', async ($, on) => {
+  // 엔진은 첫 분석에서 흐름 없는 결과를 먼저 적는다. 흐름이 없으면 언어를 모르니 한국어로 치지 않는다 (L4 실제 확인에서 찾음)
+  const asked: any[] = []
+  const { flow: _, ...noFlow } = ANALYSIS as any
+  langEngine(on, { setting: 'English', analysis: { ...noFlow, last_turn: 1 }, status: { state: 'running', turn: 1 },
+    answers: ['한국어'], asked, files: { [MOD]: '{"noticed":true}' } })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /^analysis:/ }))).toBeFalsy()
+  await $.command.run({ command: 'nunchi', args: 'language' } as any)
+  expect(asked.length).toBe(1)
+  await ui.unmount()
+})
+
 test('no language line when the session is already in the chosen language, and Japanese shows English labels (요구 이력 76)', async ($, on) => {
   langEngine(on, { setting: 'japanese', files: { [MOD]: '{"noticed":true}' },
     analysis: { ...ANALYSIS, flow: { ...ANALYSIS.flow, lang: 'japanese' } } })
@@ -625,7 +648,7 @@ test('/nunchi language asks with the current language first and saves the choice
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   const r = await $.command.run({ command: 'nunchi', args: 'language' } as any)
   const q = asked[0]?.questions?.[0]
-  expect(q?.question).toBe('눈치 언어 / Nunchi language? 지금: 한국어 (Claude Code 설정)')
+  expect(q?.question).toBe('눈치 언어를 고르세요. 지금: 한국어 (Claude Code 설정)')
   expect(q?.options?.map((x: any) => x.label ?? x)).toEqual(['한국어', 'English', 'Claude Code 설정 따르기'])
   expect(JSON.parse(files[MOD]!)).toEqual({ noticed: true, expand: 'all', language: 'en' })
   expect(String(r.text)).toMatch(/^Nunchi language: English/)
@@ -634,8 +657,30 @@ test('/nunchi language asks with the current language first and saves the choice
   await ui.unmount()
 })
 
+test('on an English screen the language question is all English except the language names (요구 이력 79)', async ($, on) => {
+  const asked: any[] = []
+  langEngine(on, { env: { LANG: 'en_US.UTF-8' }, files: { [MOD]: '{"noticed":true}' }, answers: [null], asked })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.command.run({ command: 'nunchi', args: 'language' } as any)
+  const q = asked[0]?.questions?.[0]
+  expect(q?.question).toBe('Choose the Nunchi language. Now: English')
+  expect(q?.options?.map((x: any) => x.label ?? x)).toEqual(['English', '한국어', 'Follow the Claude Code setting'])
+  await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()
+})
+
+test('a language with no screen text of its own asks in English (요구 이력 79)', async ($, on) => {
+  const asked: any[] = []
+  langEngine(on, { setting: 'japanese', files: { [MOD]: '{"noticed":true}' }, answers: [null], asked })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.command.run({ command: 'nunchi', args: 'language' } as any)
+  const q = asked[0]?.questions?.[0]
+  expect(String(q?.question)).toMatch(/^Choose the Nunchi language\. Now: .* \(Claude Code setting\)$/)
+  expect(q?.options?.map((x: any) => x.label ?? x)).toContain('Follow the Claude Code setting')
+  await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()
+})
+
 test('following Claude Code removes the saved choice, and Esc changes nothing (요구 이력 76)', async ($, on) => {
-  const files = langEngine(on, { setting: '한국어', files: { [MOD]: '{"noticed":true,"language":"en"}' }, answers: ['Claude Code 설정 따르기', null] })
+  const files = langEngine(on, { setting: '한국어', files: { [MOD]: '{"noticed":true,"language":"en"}' }, answers: ['Follow the Claude Code setting', null] })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   const r = await $.command.run({ command: 'nunchi', args: 'language' } as any)
   expect(JSON.parse(files[MOD]!)).toEqual({ noticed: true })
