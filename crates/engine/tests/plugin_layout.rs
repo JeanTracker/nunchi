@@ -39,9 +39,9 @@ fn plugin_hooks_cover_every_event_once_and_point_at_files_that_exist() {
             .flat_map(|g| g["hooks"].as_array().unwrap().iter().map(|h| h["command"].as_str().unwrap())).collect();
         assert_eq!(cmds, vec![r#"sh "${CLAUDE_PLUGIN_ROOT}/hooks/emit.sh""#]);
     }
-    // 플러그인은 엔진 실행 파일이 함께 실린 배포용 브랜치에서 받는다 (요구 이력 69)
+    // 플러그인은 엔진 실행 파일이 함께 실린 배포용 브랜치에서, SSH 키 없이 HTTPS로 받는다 (요구 이력 69·83)
     let entries: Vec<(Value, Value)> = market["plugins"].as_array().unwrap().iter().map(|p| (p["name"].clone(), p["source"].clone())).collect();
-    assert_eq!(entries, vec![(plugin["name"].clone(), json!({"source": "github", "repo": "JeanTracker/nunchi", "ref": "dist"}))]);
+    assert_eq!(entries, vec![(plugin["name"].clone(), json!({"source": "url", "url": "https://github.com/JeanTracker/nunchi.git", "ref": "dist"}))]);
 }
 
 /// emit.sh가 이 컴퓨터에서 고를 엔진 이름, 그리고 고르면 안 되는 다른 플랫폼용 이름들.

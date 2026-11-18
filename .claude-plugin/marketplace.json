@@ -10,8 +10,8 @@
     {
       "name": "nunchi",
       "source": {
-        "source": "github",
-        "repo": "JeanTracker/nunchi",
+        "source": "url",
+        "url": "https://github.com/JeanTracker/nunchi.git",
         "ref": "dist"
       },
       "description": "Side panel beside a Claude Code session, plus the hooks and background analyzer that fill it"
