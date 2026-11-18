@@ -12,6 +12,7 @@ fn turn(v: &Value) -> Turn {
         request: v["request"].as_str().unwrap_or("").into(),
         response: v["response"].as_str().unwrap_or("").into(),
         final_response: v["final_response"].as_str().unwrap_or("").into(),
+        added: v["added"].as_array().map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect()).unwrap_or_default(),
     }
 }
 

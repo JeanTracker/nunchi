@@ -19,6 +19,7 @@ const DIRECTIONS: [&str; 3] = ["넓힘", "좁힘", "옮김"];
 const QUOTE_MIN: usize = 2;
 const REQUEST_CUT: usize = 3000;
 const DOC_REQUEST_CUT: usize = 800;
+const ADDED_CUT: usize = 800; // 덧붙인 말 한 줄 (요구 이력 81)
 const DOC_RESPONSE_TAIL: usize = 600;
 const SIMILAR_DOCS: usize = 2;
 const TITLE_CUT: usize = 16;
@@ -196,13 +197,14 @@ pub fn build_prompt(flow: &Value, turns: &[Turn], t: &Turn) -> String {
     let or_none = |v: String, empty: bool| if empty { "(없음)".to_string() } else { v };
     let response = py::strip(&t.response);
     format!(
-        "{HEAD}\n=== 지난 흐름 ===\n{}\n\n=== 지난 묻는 것 (아직 답이 다 오지 않은 것) ===\n{}\n\n=== 지난 요청 기록 ===\n{}\n\n=== 찾아 온 원문 ===\n{}\n\n=== 새 턴 ===\n[턴 {}] 요청: {}\n  응답: {}\n",
+        "{HEAD}\n=== 지난 흐름 ===\n{}\n\n=== 지난 묻는 것 (아직 답이 다 오지 않은 것) ===\n{}\n\n=== 지난 요청 기록 ===\n{}\n\n=== 찾아 온 원문 ===\n{}\n\n=== 새 턴 ===\n[턴 {}] 요청: {}{}\n  응답: {}\n",
         py::dumps(&past),
         or_none(py::dumps(&Value::Array(asks.to_vec())), asks.is_empty()),
         or_none(py::dumps(&Value::Array(past_requests.to_vec())), past_requests.is_empty()),
         or_none(docs.join("\n"), docs.is_empty()),
         t.index,
         py::take(py::strip(&t.request), REQUEST_CUT),
+        t.added.iter().map(|a| format!("\n  {}", py::take(a, ADDED_CUT))).collect::<String>(),   // 덧붙인 요청·질문 창 답 (요구 이력 81)
         if response.is_empty() { "(없음)" } else { response },
     ) + &match lang_of(flow).as_str() {
         "ko" => String::new(),
@@ -228,7 +230,7 @@ pub fn parse_step(text: &str, flow: &Value, turns: &[Turn], t: &Turn) -> Result<
     if !in_list(Some(&label), &RELATIONS) {
         return err("관계 이름이 정해진 것이 아닙니다");
     }
-    if !contains(get(&tu, "quote"), &t.request) {
+    if !contains(get(&tu, "quote"), &t.said()) {
         return err("요청 인용이 원문에 없습니다");
     }
     let mut agent_quote = match get(&tu, "agent_quote") {
@@ -265,7 +267,7 @@ pub fn parse_step(text: &str, flow: &Value, turns: &[Turn], t: &Turn) -> Result<
         Some(v) if truthy(v) => v.clone(),
         _ => s(""),
     };
-    if !contains(Some(&goal_quote), &goal_src.request) {
+    if !contains(Some(&goal_quote), &goal_src.said()) {
         if !shift && !first && opt_truthy(prev_goal.get("quote")) {
             goal_quote = prev_goal["quote"].clone();
         } else {
@@ -302,7 +304,7 @@ pub fn parse_step(text: &str, flow: &Value, turns: &[Turn], t: &Turn) -> Result<
         if !in_list(get(&ch, "direction"), &DIRECTIONS) {
             return err("방향이 넓힘·좁힘·옮김이 아닙니다");
         }
-        if !contains(get(&ch, "quote"), &t.request) {
+        if !contains(get(&ch, "quote"), &t.said()) {
             return err("방향 근거 인용이 원문에 없습니다");
         }
         step.insert("direction".into(), ch["direction"].clone());
@@ -361,7 +363,7 @@ pub fn parse_requests(o: &Value, flow: &Value, t: &Turn) -> Value {
             _ => "open".to_string(),
         };
         let aq = get(item, "agent_quote").filter(|v| truthy(v));
-        if !contains(get(item, "quote"), &t.request) || (state != "open" && aq.is_some() && !contains(aq, &t.response)) {
+        if !contains(get(item, "quote"), &t.said()) || (state != "open" && aq.is_some() && !contains(aq, &t.response)) {
             dropped += 1;
             continue;
         }
@@ -419,7 +421,7 @@ pub fn parse_asks(o: &Value, flow: &Value, t: &Turn) -> Value {
         if u.is_object()
             && known_id(known, get(u, "id")).is_some()
             && in_list(get(u, "state"), &["answered", "partial"])
-            && contains(get(u, "quote"), &t.request)
+            && contains(get(u, "quote"), &t.said())
         {
             updates.push(json!({"id": u["id"], "state": u["state"], "quote": one(get(u, "quote"), 80),
                                 "blanket": opt_truthy(get(u, "blanket"))}));

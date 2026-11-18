@@ -22,6 +22,71 @@ pub struct Turn {
     pub request: String,
     pub response: String,
     pub final_response: String,
+    /// 그 턴에 사용자가 더 한 말 (요구 이력 81): 작업 중에 덧붙인 요청, 질문 창에서 고른 답.
+    /// request와 따로 두어 지문(요청 앞 40자)과 턴 번호가 바뀌지 않는다
+    pub added: Vec<String>,
+}
+
+impl Turn {
+    /// 요청 인용을 찾을 글: 요청과 덧붙인 말
+    pub fn said(&self) -> String {
+        if self.added.is_empty() { self.request.clone() } else { format!("{}\n{}", self.request, self.added.join("\n")) }
+    }
+}
+
+const ADDED_MARK: &str = "(작업 중에 덧붙인 요청) ";
+const PICKED_MARK: &str = "(질문 창에서 고름) ";
+const QUESTION_CUT: usize = 200;
+
+/// 줄바꿈과 겹친 빈칸을 빈칸 하나로
+fn one_line(s: &str) -> String {
+    s.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// 작업 중에 사람이 입력한 요청: 기록에는 대기 명령 첨부로만 남는다 (요구 이력 81).
+/// 에이전트 메시지·작업 알림·다른 세션 메시지는 origin이 human이 아니다
+fn queued_request(rec: &Value) -> Option<String> {
+    let a = py::get(rec, "attachment")?;
+    if py::get(a, "type") != Some(&Value::from("queued_command")) || py::opt_truthy(py::get(a, "isMeta")) {
+        return None;
+    }
+    if py::get(a, "origin").and_then(|o| py::get(o, "kind")) != Some(&Value::from("human")) {
+        return None;
+    }
+    let text = text_of(py::get(a, "prompt"))?;
+    let text = py::strip(&text);
+    if text.is_empty() || is_command_record(text) { None } else { Some(format!("{ADDED_MARK}{text}")) }
+}
+
+/// 질문 창에서 고른 답 (요구 이력 81): 도구 결과 줄의 toolUseResult.answers. 오류(Esc 등)나 답이 없으면 없음
+fn picked_answers(rec: &Value, content: Option<&Value>) -> Vec<String> {
+    let blocks = py::list(content);
+    let results: Vec<&Value> = blocks.iter().filter(|b| py::get(b, "type") == Some(&Value::from("tool_result"))).collect();
+    if results.is_empty() || results.iter().any(|b| py::opt_truthy(py::get(b, "is_error"))) {
+        return vec![];
+    }
+    let Some(r) = py::get(rec, "toolUseResult") else { return vec![] };
+    let Some(Value::Object(answers)) = py::get(r, "answers") else { return vec![] };
+    let notes = py::get(r, "annotations").and_then(Value::as_object);
+    let mut asked: Vec<(String, String)> = py::list(py::get(r, "questions"))
+        .iter()
+        .filter_map(|q| Some((py::get(q, "question")?.as_str()?.to_string(), py::get(q, "header").and_then(Value::as_str).unwrap_or("").to_string())))
+        .collect();
+    for k in answers.keys() {
+        if !asked.iter().any(|(q, _)| q == k) {
+            asked.push((k.clone(), String::new()));
+        }
+    }
+    let mut out = vec![];
+    for (q, header) in asked {
+        let Some(a) = answers.get(&q).map(py::str_of).filter(|a| !py::strip(a).is_empty()) else { continue };
+        let question = py::take(&one_line(&q), QUESTION_CUT);
+        let head = if header.is_empty() { String::new() } else { format!("{header}: ") };
+        let note = notes.and_then(|n| n.get(&q)).and_then(|n| py::get(n, "notes")).map(py::str_of).filter(|n| !py::strip(n).is_empty());
+        let note = note.map(|n| format!(" (메모: {})", one_line(&n))).unwrap_or_default();
+        out.push(format!("{PICKED_MARK}{head}{question} → {}{note}", one_line(&a)));
+    }
+    out
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -142,7 +207,33 @@ pub fn parse_turns(path: &Path, until_ts: &str) -> Result<Vec<Turn>, String> {
         let content = py::get(&rec, "message").and_then(|m| m.as_object()).and_then(|m| m.get("content"));
         let is_meta = py::opt_truthy(py::get(&rec, "isMeta"));
 
+        if kind == "attachment" {
+            if let Some(text) = queued_request(&rec) {
+                match turns.last_mut() {
+                    Some(t) => {
+                        // 응답이 끝났거나 알림이 끼어 닫힌 턴이면 다시 연다: 이 요청에 대한 응답이 그 턴에 붙어
+                        // 응답이 자라고, 엔진이 마지막 턴을 다시 분석한다(grown). 턴 번호는 그대로
+                        t.added.push(text);
+                        current = true;
+                    }
+                    None => {
+                        let time = py::get(&rec, "timestamp").filter(|v| py::truthy(v)).map(py::str_of).unwrap_or_default();
+                        turns.push(Turn { index: 1, time, request: text[ADDED_MARK.len()..].to_string(), ..Default::default() });
+                        segments.push(Vec::new());
+                        current = true;
+                    }
+                }
+            }
+            continue;
+        }
         if kind == "user" {
+            let picked = picked_answers(&rec, content);
+            if !picked.is_empty() {
+                if let Some(t) = turns.last_mut() {
+                    t.added.extend(picked);
+                }
+                continue;
+            }
             let Some(text) = text_of(content) else { continue };
             let command_request = if is_from_human(&rec) && !is_meta { command_with_args(&text) } else { String::new() };
             if current {

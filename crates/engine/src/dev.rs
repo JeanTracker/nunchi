@@ -9,7 +9,7 @@ fn turns_json(path: &str, until: &str) -> Value {
         Ok(turns) => Value::Array(
             turns
                 .iter()
-                .map(|t| json!({"index": t.index, "request": t.request, "response": t.response, "final_response": t.final_response}))
+                .map(|t| json!({"index": t.index, "request": t.request, "response": t.response, "final_response": t.final_response, "added": t.added}))
                 .collect(),
         ),
         Err(e) => json!({"error": e}),
