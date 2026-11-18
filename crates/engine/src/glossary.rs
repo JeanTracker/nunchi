@@ -290,9 +290,92 @@ pub fn build(cwd: &str) -> Vec<(String, Vec<String>)> {
     terms
 }
 
+/// 응답이 이미 풀어 쓴 번호 (요구 이력 82): 그 번호가 나온 모든 자리가 `…일상 말(번호)`이면 풀이가 있다고 본다.
+/// 표 줄·코드 블록·인라인 코드 안, 여러 번호를 묶은 괄호, 문장 끝 인용(`…했습니다(번호)`)은 풀이로 보지 않는다
+pub fn glossed(text: &str) -> Vec<String> {
+    let s: Vec<char> = text.chars().collect();
+    // 줄마다: 코드 블록 안인지, 표 줄인지
+    let mut skip = vec![false; s.len()];
+    let mut fence = false;
+    let mut k = 0;
+    while k < s.len() {
+        let end = s[k..].iter().position(|&c| c == '\n').map(|x| k + x).unwrap_or(s.len());
+        let line: String = s[k..end].iter().collect();
+        let t = line.trim_start();
+        let is_fence = t.starts_with("```") || t.starts_with("~~~");
+        let off = fence || is_fence || t.starts_with('|');
+        if is_fence { fence = !fence; }
+        let mut tick = false;   // 인라인 코드
+        for j in k..end {
+            if s[j] == '`' { tick = !tick; }
+            skip[j] = off || tick;
+        }
+        k = end + 1;
+    }
+    let line_of = |i: usize| -> (usize, usize) {
+        let a = s[..i].iter().rposition(|&c| c == '\n').map(|x| x + 1).unwrap_or(0);
+        let b = s[i..].iter().position(|&c| c == '\n').map(|x| i + x).unwrap_or(s.len());
+        (a, b)
+    };
+    let one_at = |i: usize, end: usize| -> bool {
+        if skip[i] { return false; }
+        let (a, b) = line_of(i);
+        // 괄호 안이 이 번호 하나뿐 (앞에 문서 이름은 붙어도 된다)
+        let Some(open) = s[a..i].iter().rposition(|&c| c == '(' || c == '（').map(|x| a + x) else { return false };
+        let Some(close) = s[end..b].iter().position(|&c| c == ')' || c == '）').map(|x| end + x) else { return false };
+        let inner: String = s[open + 1..close].iter().collect();
+        let num: String = s[i..end].iter().collect();
+        let mut rest = inner.trim().strip_suffix(num.as_str()).map(|x| x.trim_end().to_string());
+        if let Some(r) = &rest {
+            let r = r.trim_end_matches(".md");
+            if !r.is_empty() && !["SCREEN", "BUILD_PLAN", "REQUIREMENTS", "docs/SCREEN", "docs/BUILD_PLAN", "docs/REQUIREMENTS"].contains(&r) {
+                rest = None;
+            }
+        }
+        if rest.is_none() { return false; }
+        // 괄호 바로 앞(빈칸 허용)이 풀이 말: 한글·영문자·닫는 따옴표·굵게(**). 문장 끝(다·요·음·까)은 인용
+        let mut j = open;
+        while j > a && py::is_space(s[j - 1]) { j -= 1; }
+        if j == a { return false; }
+        let c = s[j - 1];
+        let word = ('가'..='힣').contains(&c) || c.is_ascii_alphabetic() || "”’\"'*".contains(c);
+        word && !"다요음까".contains(c)
+    };
+    let mut seen: Vec<(String, bool)> = Vec::new();
+    let mut i = 0;
+    while i < s.len() {
+        match match_at(&s, i) {
+            Some((key, end)) => {
+                let g = one_at(i, end);
+                match seen.iter_mut().find(|(k, _)| *k == key) {
+                    Some(x) => x.1 = x.1 && g,
+                    None => seen.push((key, g)),
+                }
+                i = end;
+            }
+            None => i += 1,
+        }
+    }
+    seen.into_iter().filter(|(_, g)| *g).map(|(k, _)| k).collect()
+}
+
+/// mod가 읽는 번호 풀이: 응답이 이미 풀어 쓴 번호를 빼고 5개로 자른다. 남은 수가 total, 뺀 수는 0보다 클 때만 hidden (요구 이력 82)
+pub fn explain_shown(text: &str, cwd: &str) -> Value {
+    let hide = glossed(text);
+    let ids: Vec<(String, String)> = find(text).into_iter().filter(|(k, _)| !hide.contains(k)).collect();
+    let mut got = explain_ids(&ids, cwd);
+    if !hide.is_empty() {
+        got["hidden"] = Value::from(hide.len());
+    }
+    got
+}
+
 /// {"items": [{"id", "means"}], "total"}
 pub fn explain(text: &str, cwd: &str) -> Value {
-    let ids = find(text);
+    explain_ids(&find(text), cwd)
+}
+
+fn explain_ids(ids: &[(String, String)], cwd: &str) -> Value {
     if ids.is_empty() {
         return json!({"items": [], "total": 0});
     }

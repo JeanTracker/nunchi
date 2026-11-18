@@ -679,7 +679,7 @@ fn write_glossary(dir: &Path) {
     };
     let last = turns.last();
     let body = last.map(|t| if t.final_response.is_empty() { t.response.clone() } else { t.final_response.clone() }).unwrap_or_default();
-    let mut got = glossary::explain(&body, &cwd);
+    let mut got = glossary::explain_shown(&body, &cwd);   // 응답이 이미 풀어 쓴 번호는 뺀다 (요구 이력 82)
     got["turn"] = Value::from(last.map(|t| t.index).unwrap_or(0));
     let _ = store::write_json(&dir.join("glossary.json"), &got);
 }
