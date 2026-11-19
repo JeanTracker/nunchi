@@ -42,8 +42,8 @@ Full guide: [docs/GUIDE.md](docs/GUIDE.md)
 
 ## Status
 
-Early development. Turning the panel off for a session (`/nunchi off`) and a status
-command are not built yet.
+Early development. `/nunchi off` stops analyzing a session and `/nunchi status` shows
+its state; see the guide for all commands.
 
 An earlier version also shipped a separate terminal app for watching several sessions at
 once (the control screen, installed with `install.sh`). It has been removed and will be

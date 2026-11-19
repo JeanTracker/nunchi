@@ -48,7 +48,7 @@ export function settingsName(code: string): string {
 
 const KO_T = {
   title: '눈치',
-  command: '눈치 켜기: 이 세션을 분석하고 패널을 연다 · language로 언어 바꾸기',
+  command: '눈치 켜기: 이 세션을 분석하고 패널을 연다 · off 끄기 · status 상태 · language 언어',
   queued: '분석 대기', running: '분석 중',
   failed: '분석 실패 · ',
   onWaiting: '눈치 켜짐 · 다음 응답이 끝나면 분석합니다',
@@ -63,9 +63,22 @@ const KO_T = {
   goal: '목표', since: (n: number) => `  #${n}부터`,
   first: (n: number) => `  처음 #${n}`, now: ' 지금', dir: (d: string) => d ? ` · ${d}` : '',
   flow: (n: number) => ` 흐름  #1–#${n}`, recent: ' 방금',
-  decisions: '의사결정 ',
+  decisions: '결정 사항 ',   // 정해진 내용 (요구 이력 89: 의사결정은 정하는 행위라 바꿈)
   asks: '에이전트 질문 ', none: '없음',
-  stale: '부터 답 없음', partial: ' · 일부 답함',
+  partial: ' · 일부 답함', firstAsked: (n: number) => ` · 처음 #${n}`, pastAsks: (n: number) => `지난 질문 ${n}개`,
+  proposed: ' · 제안 승인', known: '알려진 문제 ', handled: '처리 결과 ', expand: '펼치기', shorten: '줄이기',
+  changed: (t: number, from: string, to: string, now = '') => from && to ? `결정 #${t} 바뀜: ${from} → ${to}` : now ? `결정 #${t} 바뀜 → ${now}` : `결정 #${t} 바뀜`,   // 바뀐 부분을 못 따면 새 결정 문장
+  broke: (t: string, kind: string, what: string) => `결정 #${t} ${kind === '빠뜨림' ? '빠뜨림' : '어김'}${what ? ': ' + what : ''}`,
+  fixed: (t: string, what: string) => `결정 #${t} 고침${what ? ': ' + what : ''}`,
+  warnTag: (at: number, kind: string) => ` · #${at} ${kind === '빠뜨림' ? '빠뜨림' : '어김'}`,
+  openWarn: (n: number, since: number, now: number) => `열린 빠뜨림 ${n}` + (since && since < now ? ` · #${since}부터` : ''),
+  copyPrompt: '프롬프트 복사', copied: '복사했습니다 · 입력창에 붙여 넣으세요', copyFailed: '복사하지 못했습니다 · 아래 글을 끌어서 복사하세요',
+  // 프롬프트 (요구 이력 90): 열린 빠뜨림을 모두 한 글에. 에이전트는 눈치 번호를 모르니 결정 내용 · 어긋난 점 · 에이전트가 쓴 말을 담는다
+  prompt: (xs: { text: string; at: number; kind: string; what: string; quote?: string }[]) => {
+    const said = (q?: string) => q ? ` (네가 쓴 말: "${q}")` : ''
+    if (xs.length === 1) return `앞서 정한 결정이 지켜지지 않았어. 결정: "${xs[0]!.text}". ${xs[0]!.kind === '빠뜨림' ? '빠진 점' : '어긋난 점'}: ${xs[0]!.what}${said(xs[0]!.quote)}. 결정대로 고쳐 줘.`
+    return `앞서 정한 결정 ${xs.length}개가 지켜지지 않았어. 결정대로 고쳐 줘.\n` + xs.map((x, k) => `${k + 1}) 결정: "${x.text}" / ${x.kind === '빠뜨림' ? '빠진 점' : '어긋난 점'}: ${x.what}${said(x.quote)}`).join('\n')
+  },
   left: '남은 요청 ', mine: ' 내 요청 중',
   deferred: '못 했거나 미룸', inProgress: '진행 중',
   terms: '번호 풀이', termsNote: '  이번 응답 · 문서 원문', noDoc: '문서에 없음',
@@ -86,12 +99,25 @@ const KO_T = {
   langRebuild: (name: string) => ` 이 세션을 ${name}로 처음부터 다시 분석합니다.`,
   rebuildFailed: ' 다시 분석을 시작하지 못했습니다. 세션을 다시 시작한 뒤 해 보세요.',
   unchanged: '눈치 언어를 바꾸지 않았습니다.',
+  // 끄기·상태·사용법·훅 없음 (요구 이력 62·84)
+  turnedBack: '눈치를 다시 켰습니다. 다음 응답이 끝나면 이어서 분석합니다.',
+  turnedOff: (n: number) => `눈치를 껐습니다. 이 세션은 더 분석하지 않습니다${n > 0 ? `(결과는 #${n} 응답까지 반영한 그대로 남깁니다)` : ''}. 다시 켜려면 /nunchi`,
+  offNoRebuild: ' 꺼져 있어 다시 분석하지 않습니다. /nunchi로 켠 뒤 /nunchi language',
+  noHook: '훅 기록 없음 · 세션 다시 시작 (claude --resume)',
+  noHookReply: ' 다만 이 세션에는 훅 기록이 없어 분석이 돌지 않습니다. 세션을 다시 시작하세요(claude --resume).',
+  unknown: (arg: string) => `모르는 명령입니다: ${arg}`,
+  usage: ['/nunchi            켜기 · 패널 열기', '/nunchi off        끄기 · 패널 닫기', '/nunchi status     지금 상태', '/nunchi language   언어 바꾸기'],
+  stNunchi: '눈치  ', stOn: '켜짐 · 응답이 끝날 때마다 분석', stOff: '꺼짐 · /nunchi로 다시 켜기', stNever: '켜지 않음 · /nunchi로 켜기',
+  stAnalysis: '분석  ', stAsOf: (n: number, hm: string) => `#${n} 응답까지 반영${hm ? ' · ' + hm : ''}`, stNone: '아직 없음',
+  stState: '상태  ', stIdle: '쉼', stRunning: (k: number) => `분석 중${k ? ' #' + k : ''}`,
+  stHook: '훅    ', stHooked: '기록 있음', stHookMissing: '기록 없음 · 세션 다시 시작 (claude --resume)', stHookUnknown: '아직 모름 · 첫 응답이 끝나면 확인',
+  stLang: '언어  ',
 }
 type T = typeof KO_T
 
 const EN_T: T = {
   title: 'Nunchi',
-  command: 'Turn on Nunchi: analyze this session and open the panel · language to switch languages',
+  command: 'Turn on Nunchi: analyze this session and open the panel · off · status · language',
   queued: 'Queued', running: 'Analyzing',
   failed: 'Analysis failed · ',
   onWaiting: 'Nunchi on · analyzes after the next answer',
@@ -108,7 +134,19 @@ const EN_T: T = {
   flow: (n: number) => ` Flow  #1–#${n}`, recent: ' Just now',
   decisions: 'Decisions ',
   asks: 'Agent questions ', none: 'none',
-  stale: ' · no answer since', partial: ' · partly answered',
+  partial: ' · partly answered', firstAsked: (n: number) => ` · first #${n}`, pastAsks: (n: number) => `${n} earlier question${n === 1 ? '' : 's'}`,
+  proposed: ' · approved proposal', known: 'Known issues ', handled: 'Handled ', expand: 'Full text', shorten: 'Shorten',
+  changed: (t: number, from: string, to: string, now = '') => from && to ? `Decision #${t} changed: ${from} → ${to}` : now ? `Decision #${t} changed → ${now}` : `Decision #${t} changed`,
+  broke: (t: string, kind: string, what: string) => `Decision #${t} ${kind === '빠뜨림' ? 'missed' : 'broken'}${what ? ': ' + what : ''}`,
+  fixed: (t: string, what: string) => `Decision #${t} fixed${what ? ': ' + what : ''}`,
+  openWarn: (n: number, since: number, now: number) => `${n} open miss${n === 1 ? '' : 'es'}` + (since && since < now ? ` · since #${since}` : ''),
+  warnTag: (at: number, kind: string) => ` · ${kind === '빠뜨림' ? 'missed' : 'broken'} in #${at}`,
+  copyPrompt: 'Copy prompt', copied: 'Copied · paste it into the prompt', copyFailed: 'Could not copy · drag to copy the text below',
+  prompt: (xs: { text: string; at: number; kind: string; what: string; quote?: string }[]) => {
+    const said = (q?: string) => q ? ` (you wrote: "${q}")` : ''
+    if (xs.length === 1) return `An earlier decision was not followed. Decision: "${xs[0]!.text}". ${xs[0]!.kind === '빠뜨림' ? 'What was missed' : 'What went wrong'}: ${xs[0]!.what}${said(xs[0]!.quote)}. Please fix it to match the decision.`
+    return `${xs.length} earlier decisions were not followed. Please fix them to match the decisions.\n` + xs.map((x, k) => `${k + 1}) Decision: "${x.text}" / ${x.kind === '빠뜨림' ? 'Missed' : 'Broken'}: ${x.what}${said(x.quote)}`).join('\n')
+  },
   left: 'Open requests ', mine: ' of mine',
   deferred: 'deferred', inProgress: 'in progress',
   terms: 'Numbers', termsNote: '  this answer · source text', noDoc: 'not in the docs',
@@ -129,6 +167,18 @@ const EN_T: T = {
   langRebuild: (name: string) => ` Rebuilding this session in ${name} from the start.`,
   rebuildFailed: ' Could not start the rebuild. Restart the session and try again.',
   unchanged: 'Nunchi language unchanged.',
+  turnedBack: 'Turned Nunchi back on. It picks up the analysis after the next answer.',
+  turnedOff: (n: number) => `Turned Nunchi off. This session is no longer analyzed${n > 0 ? ` (the result through answer #${n} stays as it is)` : ''}. Run /nunchi to turn it back on.`,
+  offNoRebuild: ' Nunchi is off here, so nothing is rebuilt. Run /nunchi, then /nunchi language.',
+  noHook: 'No hook records · restart the session (claude --resume)',
+  noHookReply: ' But this session has no hook records, so nothing gets analyzed. Restart the session (claude --resume).',
+  unknown: (arg: string) => `Unknown command: ${arg}`,
+  usage: ['/nunchi            turn on · open the panel', '/nunchi off        turn off · close the panel', '/nunchi status     show the state', '/nunchi language   switch languages'],
+  stNunchi: 'Nunchi    ', stOn: 'on · analyzes after every answer', stOff: 'off · /nunchi to turn back on', stNever: 'not on · /nunchi to turn on',
+  stAnalysis: 'Analysis  ', stAsOf: (n: number, hm: string) => `through answer #${n}${hm ? ' · ' + hm : ''}`, stNone: 'none yet',
+  stState: 'State     ', stIdle: 'idle', stRunning: (k: number) => `analyzing${k ? ' #' + k : ''}`,
+  stHook: 'Hooks     ', stHooked: 'recording', stHookMissing: 'no records · restart the session (claude --resume)', stHookUnknown: 'not known yet · checked after the first answer',
+  stLang: 'Language  ',
 }
 
 export const TEXT: Record<Ui, T> = { ko: KO_T, en: EN_T }

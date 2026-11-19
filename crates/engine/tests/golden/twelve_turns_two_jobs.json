@@ -45,7 +45,8 @@
       "grounded": true,
       "shift": false,
       "title": "",
-      "decision": "",
+      "decisions": [],
+      "checks": [],
       "digest": "턴 1까지의 흐름",
       "resp": "18:9fe8825362"
      },
@@ -60,7 +61,8 @@
       "grounded": true,
       "shift": false,
       "title": "",
-      "decision": "",
+      "decisions": [],
+      "checks": [],
       "digest": "턴 2까지의 흐름",
       "resp": "18:db55bd33b2"
      },
@@ -75,7 +77,8 @@
       "grounded": true,
       "shift": false,
       "title": "",
-      "decision": "",
+      "decisions": [],
+      "checks": [],
       "digest": "턴 3까지의 흐름",
       "resp": "18:ce4c26e8df"
      },
@@ -90,7 +93,18 @@
       "grounded": true,
       "shift": false,
       "title": "",
-      "decision": "턴 4에서 정함",
+      "decisions": [
+       {
+        "id": "D4-1",
+        "text": "턴 4에서 정함",
+        "by": "user",
+        "quote": "4번째 요청: 기능 4",
+        "replaces": [],
+        "from": "",
+        "to": ""
+       }
+      ],
+      "checks": [],
       "digest": "턴 4까지의 흐름",
       "resp": "18:35ced4f8c4"
      },
@@ -105,7 +119,8 @@
       "grounded": true,
       "shift": false,
       "title": "",
-      "decision": "",
+      "decisions": [],
+      "checks": [],
       "digest": "턴 5까지의 흐름",
       "resp": "18:70bcc830e3"
      },
@@ -120,7 +135,8 @@
       "grounded": true,
       "shift": false,
       "title": "",
-      "decision": "",
+      "decisions": [],
+      "checks": [],
       "digest": "턴 6까지의 흐름",
       "resp": "18:8b0e90a09e"
      },
@@ -135,7 +151,8 @@
       "grounded": true,
       "shift": false,
       "title": "",
-      "decision": "",
+      "decisions": [],
+      "checks": [],
       "digest": "턴 7까지의 흐름",
       "resp": "18:5db3af6bca"
      },
@@ -150,7 +167,18 @@
       "grounded": true,
       "shift": false,
       "title": "",
-      "decision": "턴 8에서 정함",
+      "decisions": [
+       {
+        "id": "D8-1",
+        "text": "턴 8에서 정함",
+        "by": "user",
+        "quote": "8번째 요청: 기능 8",
+        "replaces": [],
+        "from": "",
+        "to": ""
+       }
+      ],
+      "checks": [],
       "digest": "턴 8까지의 흐름",
       "resp": "18:fae29c3912"
      },
@@ -165,7 +193,8 @@
       "grounded": true,
       "shift": false,
       "title": "",
-      "decision": "",
+      "decisions": [],
+      "checks": [],
       "digest": "턴 9까지의 흐름",
       "resp": "19:f52f92d683"
      },
@@ -180,7 +209,8 @@
       "grounded": true,
       "shift": false,
       "title": "",
-      "decision": "",
+      "decisions": [],
+      "checks": [],
       "digest": "턴 10까지의 흐름",
       "resp": "20:7f56e54d57"
      },
@@ -195,7 +225,8 @@
       "grounded": true,
       "shift": false,
       "title": "",
-      "decision": "",
+      "decisions": [],
+      "checks": [],
       "digest": "턴 11까지의 흐름",
       "resp": "20:14babf17dc"
      },
@@ -210,7 +241,18 @@
       "grounded": true,
       "shift": false,
       "title": "",
-      "decision": "턴 12에서 정함",
+      "decisions": [
+       {
+        "id": "D12-1",
+        "text": "턴 12에서 정함",
+        "by": "user",
+        "quote": "12번째 요청: 기능",
+        "replaces": [],
+        "from": "",
+        "to": ""
+       }
+      ],
+      "checks": [],
       "digest": "턴 12까지의 흐름",
       "resp": "20:1edd8af8f8"
      }
@@ -351,7 +393,8 @@
        "grounded": true,
        "shift": false,
        "title": "",
-       "decision": "",
+       "decisions": [],
+       "checks": [],
        "digest": "턴 1까지의 흐름",
        "resp": "18:9fe8825362"
       },
@@ -366,7 +409,8 @@
        "grounded": true,
        "shift": false,
        "title": "",
-       "decision": "",
+       "decisions": [],
+       "checks": [],
        "digest": "턴 2까지의 흐름",
        "resp": "18:db55bd33b2"
       },
@@ -381,7 +425,8 @@
        "grounded": true,
        "shift": false,
        "title": "",
-       "decision": "",
+       "decisions": [],
+       "checks": [],
        "digest": "턴 3까지의 흐름",
        "resp": "18:ce4c26e8df"
       },
@@ -396,7 +441,18 @@
        "grounded": true,
        "shift": false,
        "title": "",
-       "decision": "턴 4에서 정함",
+       "decisions": [
+        {
+         "id": "D4-1",
+         "text": "턴 4에서 정함",
+         "by": "user",
+         "quote": "4번째 요청: 기능 4",
+         "replaces": [],
+         "from": "",
+         "to": ""
+        }
+       ],
+       "checks": [],
        "digest": "턴 4까지의 흐름",
        "resp": "18:35ced4f8c4"
       },
@@ -411,7 +467,8 @@
        "grounded": true,
        "shift": false,
        "title": "",
-       "decision": "",
+       "decisions": [],
+       "checks": [],
        "digest": "턴 5까지의 흐름",
        "resp": "18:70bcc830e3"
       },
@@ -426,7 +483,8 @@
        "grounded": true,
        "shift": false,
        "title": "",
-       "decision": "",
+       "decisions": [],
+       "checks": [],
        "digest": "턴 6까지의 흐름",
        "resp": "18:8b0e90a09e"
       },
@@ -441,7 +499,8 @@
        "grounded": true,
        "shift": false,
        "title": "",
-       "decision": "",
+       "decisions": [],
+       "checks": [],
        "digest": "턴 7까지의 흐름",
        "resp": "18:5db3af6bca"
       },
@@ -456,7 +515,18 @@
        "grounded": true,
        "shift": false,
        "title": "",
-       "decision": "턴 8에서 정함",
+       "decisions": [
+        {
+         "id": "D8-1",
+         "text": "턴 8에서 정함",
+         "by": "user",
+         "quote": "8번째 요청: 기능 8",
+         "replaces": [],
+         "from": "",
+         "to": ""
+        }
+       ],
+       "checks": [],
        "digest": "턴 8까지의 흐름",
        "resp": "18:fae29c3912"
       },
@@ -471,7 +541,8 @@
        "grounded": true,
        "shift": false,
        "title": "",
-       "decision": "",
+       "decisions": [],
+       "checks": [],
        "digest": "턴 9까지의 흐름",
        "resp": "19:f52f92d683"
       },
@@ -486,7 +557,8 @@
        "grounded": true,
        "shift": false,
        "title": "",
-       "decision": "",
+       "decisions": [],
+       "checks": [],
        "digest": "턴 10까지의 흐름",
        "resp": "20:7f56e54d57"
       },
@@ -501,7 +573,8 @@
        "grounded": true,
        "shift": false,
        "title": "",
-       "decision": "",
+       "decisions": [],
+       "checks": [],
        "digest": "턴 11까지의 흐름",
        "resp": "20:14babf17dc"
       }
@@ -641,17 +714,17 @@
   }
  },
  "claude_calls": [
-  "1 ok 6b2f833ad458",
-  "2 ok ec99c5ced3e3",
-  "3 ok cdc4621ade75",
-  "4 ok e49c2b136c86",
-  "5 ok 0e3734b88942",
-  "6 ok 1a0a74f13c12",
-  "7 ok f9e489630364",
-  "8 ok 2143c81f6a04",
-  "9 ok 2d2397519568",
-  "10 ok 4b654877830a",
-  "11 ok 00fa5e8d75b9",
-  "12 ok dc70de5f5b3c"
+  "1 ok bc760fda067e",
+  "2 ok d888ed053493",
+  "3 ok 6856a710fd60",
+  "4 ok a9b5c0de7b31",
+  "5 ok 8cbfc8b18b0e",
+  "6 ok 46e42260fa0e",
+  "7 ok 42e6a2002479",
+  "8 ok cd280dfa1881",
+  "9 ok 307e57e70035",
+  "10 ok 4faf910657cc",
+  "11 ok 3b0276dcf8b8",
+  "12 ok c4f151c693b2"
  ]
 }

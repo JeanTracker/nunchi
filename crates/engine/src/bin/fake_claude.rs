@@ -73,7 +73,9 @@ fn main() {
     let mut out = json!({
         "turn": {"index": n, "label": if first { "시작" } else if n % 4 == 0 { "확정" } else { "구체화" },
                  "summary": format!("턴 {n} 요청 요약"), "quote": q, "agent_summary": format!("턴 {n} 응답 요약"),
-                 "agent_quote": aq, "title": if shift { "새 주제" } else { "" }, "decision": format!("턴 {n}에서 정함")},
+                 "agent_quote": aq, "title": if shift { "새 주제" } else { "" }},
+        // 실제 분석기처럼 정해진 턴에만 (요구 이력 86·87)
+        "decisions": if !first && n % 4 == 0 { json!([{"text": format!("턴 {n}에서 정함"), "by": "user", "quote": q}]) } else { json!([]) },
         "topic_shift": shift,
         "goal_change": {"direction": "옮김", "how": "앞 목표에서 새 대상으로", "quote": q},
         "current_goal": format!("목표 {n}"), "goal_turn": if shift || first { n } else { 0 }, "goal_quote": q,

@@ -9,7 +9,7 @@ use serde_json::{json, Map, Value};
 
 pub const VERSION: i64 = 3;
 pub const RELATIONS: [&str; 8] = ["시작", "구체화", "재정의", "정정", "범위 축소", "문제 제기", "확정", "질문"];
-const STATES: [&str; 5] = ["addressed", "open", "deferred", "superseded", "in_progress"];
+const STATES: [&str; 6] = ["addressed", "open", "deferred", "superseded", "in_progress", "no_result"];   // no_result: 조사는 했으나 결과 없음 (요구 이력 86)
 const LEFT_STATES: [&str; 3] = ["open", "deferred", "in_progress"];
 const DIGEST_CUT: usize = 90;
 const DIGEST_CUT_WIDE: usize = 180; // ko가 아닌 세션 (요구 이력 76)
@@ -146,6 +146,42 @@ pub fn retrieve(flow: &Value, turns: &[Turn], t: &Turn) -> Vec<i64> {
     out
 }
 
+/// 지금 유효한 결정 (요구 이력 89): 단계마다의 decisions 중 뒤 결정의 replaces가 가리키지 않는 것. 번호가 없는 옛 항목은 D<턴>-<순번>으로 본다
+pub fn active_decisions(flow: &Value) -> Vec<Value> {
+    let mut all = Vec::new();
+    let mut replaced = std::collections::HashSet::new();
+    for st in list(get(flow, "steps")) {
+        let turn = get(st, "index").cloned().unwrap_or(Value::Null);
+        for (k, d) in list(get(st, "decisions")).iter().enumerate() {
+            let id = match get(d, "id") {
+                Some(Value::String(x)) if !x.is_empty() => x.clone(),
+                _ => format!("D{}-{}", py::str_of(&turn), k + 1),
+            };
+            for r in list(get(d, "replaces")) {
+                replaced.insert(py::str_of(r));
+            }
+            all.push(json!({"id": id, "turn": turn, "text": get(d, "text").cloned().unwrap_or_else(|| s(""))}));
+        }
+    }
+    all.into_iter().filter(|d| !replaced.contains(&py::str_of(&d["id"]))).collect()
+}
+
+/// 열린 빠뜨림 (요구 이력 87·89): 결정마다 마지막 판정이 어김·빠뜨림이고 아직 유효한(바뀌지 않은) 것. {id, turn(찾은 턴), kind, what}
+pub fn open_checks(flow: &Value) -> Vec<Value> {
+    let active: Vec<String> = active_decisions(flow).iter().map(|d| py::str_of(&d["id"])).collect();
+    let mut last: Vec<(String, Value)> = Vec::new();
+    for st in list(get(flow, "steps")) {
+        for c in list(get(st, "checks")) {
+            let id = py::str_of(&c["id"]);
+            last.retain(|(k, _)| *k != id);
+            let mut v = c.clone();
+            v["turn"] = get(st, "index").cloned().unwrap_or(Value::Null);
+            last.push((id, v));
+        }
+    }
+    last.into_iter().filter(|(id, c)| c["kind"] != "고침" && active.contains(id)).map(|(_, c)| c).collect()
+}
+
 pub fn build_prompt(flow: &Value, turns: &[Turn], t: &Turn) -> String {
     let fg = obj_or_empty(get(flow, "first_goal"));
     let cg = obj_or_empty(get(flow, "current_goal"));
@@ -183,7 +219,7 @@ pub fn build_prompt(flow: &Value, turns: &[Turn], t: &Turn) -> String {
         .collect();
     let asks: Vec<Value> = list(get(flow, "asks"))
         .iter()
-        .filter(|a| get(a, "state") != Some(&s("answered")))
+        .filter(|a| !closed_ask(a))
         .map(|a| {
             let turn = match get(a, "last_turn") {
                 Some(v) if truthy(v) => v.clone(),
@@ -197,9 +233,11 @@ pub fn build_prompt(flow: &Value, turns: &[Turn], t: &Turn) -> String {
     let or_none = |v: String, empty: bool| if empty { "(없음)".to_string() } else { v };
     let response = py::strip(&t.response);
     format!(
-        "{HEAD}\n=== 지난 흐름 ===\n{}\n\n=== 지난 묻는 것 (아직 답이 다 오지 않은 것) ===\n{}\n\n=== 지난 요청 기록 ===\n{}\n\n=== 찾아 온 원문 ===\n{}\n\n=== 새 턴 ===\n[턴 {}] 요청: {}{}\n  응답: {}\n",
+        "{HEAD}\n=== 지난 흐름 ===\n{}\n\n=== 지난 묻는 것 (아직 답이 다 오지 않은 것) ===\n{}\n\n=== 지난 의사결정 (유효한 것) ===\n{}\n\n=== 열린 빠뜨림 ===\n{}\n\n=== 지난 요청 기록 ===\n{}\n\n=== 찾아 온 원문 ===\n{}\n\n=== 새 턴 ===\n[턴 {}] 요청: {}{}\n  응답: {}\n",
         py::dumps(&past),
         or_none(py::dumps(&Value::Array(asks.to_vec())), asks.is_empty()),
+        or_none(py::dumps(&Value::Array(active_decisions(flow))), active_decisions(flow).is_empty()),   // 요구 이력 89
+        or_none(py::dumps(&Value::Array(open_checks(flow).iter().map(|c| json!({"id": c["id"], "kind": c["kind"], "what": c["what"]})).collect())), open_checks(flow).is_empty()),
         or_none(py::dumps(&Value::Array(past_requests.to_vec())), past_requests.is_empty()),
         or_none(docs.join("\n"), docs.is_empty()),
         t.index,
@@ -286,7 +324,48 @@ pub fn parse_step(text: &str, flow: &Value, turns: &[Turn], t: &Turn) -> Result<
     step.insert("shift".into(), Value::Bool(shift));
     let (title_cut, digest_cut, _) = cuts(&lang_of(flow));
     step.insert("title".into(), s(&one(get(&tu, "title"), title_cut)));
-    step.insert("decision".into(), s(&if label == s("확정") { one(get(&tu, "decision"), 200) } else { String::new() }));
+    // 의사결정 (요구 이력 86·87): 그 턴에 정해진 설계 요건 목록, 4개까지. 누가 정했나 user · agent(제안을 받아들임)는
+    // 분석기가 적은 값만 받는다(모르는 값을 사용자로 채우면 사용자가 정한 쪽으로 기운다). 근거는 사용자 말에서 글자 그대로.
+    // 칸은 늘 쓴다: 이 칸이 없으면 옛 흐름(확정 턴만 결정, decision 한 줄)으로 본다
+    let mut decisions = Vec::new();
+    let active = active_decisions(flow);
+    for d in iter_items(get(&o, "decisions")) {
+        let text = one(get(d, "text"), 200);
+        let by = match get(d, "by") {
+            Some(Value::String(b)) if b == "user" || b == "agent" => b.clone(),
+            _ => continue,
+        };
+        if text.is_empty() || !contains(get(d, "quote"), &t.said()) {
+            continue;
+        }
+        // 바꾼 결정 (요구 이력 89): 지금 유효한 지난 결정 번호만. 바뀐 부분 from은 옛 문장에, to는 새 문장에 글자 그대로 있어야 한다
+        let replaces: Vec<Value> = list(get(d, "replaces")).iter().filter(|r| active.iter().any(|a| a["id"] == **r)).cloned().collect();
+        let old_text = replaces.first().and_then(|r| active.iter().find(|a| a["id"] == *r)).map(|a| py::str_of(&a["text"])).unwrap_or_default();
+        let (mut from, mut to) = (one(get(d, "from"), 40), one(get(d, "to"), 40));
+        if replaces.is_empty() || from.is_empty() || to.is_empty() || !old_text.contains(&from) || !text.contains(&to) {
+            from = String::new();
+            to = String::new();
+        }
+        let id = format!("D{}-{}", t.index, decisions.len() + 1);
+        decisions.push(json!({"id": id, "text": text, "by": by, "quote": one(get(d, "quote"), 80), "replaces": replaces, "from": from, "to": to}));
+        if decisions.len() == 4 {
+            break;
+        }
+    }
+    // 빠뜨림 판정 (요구 이력 87·89): 지금 유효한 결정 번호, 정해진 종류, 응답 글의 근거 구절이 있어야 남는다. 고침은 열린 빠뜨림에만
+    let open: Vec<Value> = open_checks(flow).iter().map(|c| c["id"].clone()).collect();
+    let mut checks = Vec::new();
+    for c in iter_items(get(&o, "decision_checks")) {
+        let id = get(c, "id").cloned().unwrap_or(Value::Null);
+        let kind = py::str_of(get(c, "kind").unwrap_or(&Value::Null));
+        let ok_id = active.iter().any(|a| a["id"] == id) && !decisions.iter().any(|d| list(get(d, "replaces")).contains(&id));
+        let ok_kind = kind == "어김" || kind == "빠뜨림" || (kind == "고침" && open.contains(&id));
+        if ok_id && ok_kind && contains(get(c, "quote"), &t.response) {
+            checks.push(json!({"id": id, "kind": kind, "what": one(get(c, "what"), 60), "quote": one(get(c, "quote"), 80)}));
+        }
+    }
+    step.insert("decisions".into(), Value::Array(decisions));
+    step.insert("checks".into(), Value::Array(checks));
     let mut goal_text = s(&one(get(&o, "current_goal"), 200));
     if !shift && !first {
         if let Some(v) = prev_goal.get("text").filter(|v| truthy(v)) {
@@ -295,6 +374,14 @@ pub fn parse_step(text: &str, flow: &Value, turns: &[Turn], t: &Turn) -> Result<
     }
     if !truthy(&goal_text) {
         return err("지금 목표가 비었습니다");
+    }
+    // 이 턴 결정이 지난 결정을 바꿨으면(엔진이 대조한 from → to) 목표 글 속 옛 값도 새 값으로 (요구 이력 90): 대상이 같아 목표를 그대로 쓸 때 낡지 않게
+    for d in list(step.get("decisions")) {
+        let (from, to) = (py::str_of(&d["from"]), py::str_of(&d["to"]));
+        let g = py::str_of(&goal_text);
+        if !from.is_empty() && !to.is_empty() && g.contains(&from) {
+            goal_text = s(&g.replace(&from, &to));
+        }
     }
     if shift {
         let ch = match get(&o, "goal_change") {
@@ -359,7 +446,7 @@ pub fn parse_requests(o: &Value, flow: &Value, t: &Turn) -> Value {
             continue;
         }
         let state = match get(item, "state") {
-            Some(Value::String(x)) if ["addressed", "open", "deferred", "in_progress"].contains(&x.as_str()) => x.clone(),
+            Some(Value::String(x)) if ["addressed", "open", "deferred", "in_progress", "no_result"].contains(&x.as_str()) => x.clone(),
             _ => "open".to_string(),
         };
         let aq = get(item, "agent_quote").filter(|v| truthy(v));
@@ -386,7 +473,7 @@ pub fn parse_requests(o: &Value, flow: &Value, t: &Turn) -> Value {
         }
         let state = state.and_then(Value::as_str).unwrap().to_string();
         let aq = get(item, "agent_quote").filter(|v| truthy(v));
-        if ["addressed", "deferred", "in_progress"].contains(&state.as_str()) && aq.is_some() && !contains(aq, &t.response) {
+        if ["addressed", "deferred", "in_progress", "no_result"].contains(&state.as_str()) && aq.is_some() && !contains(aq, &t.response) {
             dropped += 1;
             continue;
         }
@@ -413,15 +500,16 @@ pub fn parse_asks(o: &Value, flow: &Value, t: &Turn) -> Value {
     }
     for i in iter_items(get(o, "asks_reask")) {
         match known_id(known, Some(i)) {
-            Some(a) if get(a, "state") != Some(&s("answered")) => reask.push(i.clone()),
+            Some(a) if !closed_ask(a) => reask.push(i.clone()),
             _ => dropped += 1,
         }
     }
     for u in iter_items(get(o, "asks_update")) {
         if u.is_object()
             && known_id(known, get(u, "id")).is_some()
-            && in_list(get(u, "state"), &["answered", "partial"])
-            && contains(get(u, "quote"), &t.said())
+            && in_list(get(u, "state"), &["answered", "partial", "closed"])
+            // 답은 사용자 말에서, 지나감(closed)은 사용자 말이나 응답에서 근거를 찾는다 (요구 이력 86)
+            && (contains(get(u, "quote"), &t.said()) || (get(u, "state") == Some(&s("closed")) && contains(get(u, "quote"), &t.response)))
         {
             updates.push(json!({"id": u["id"], "state": u["state"], "quote": one(get(u, "quote"), 80),
                                 "blanket": opt_truthy(get(u, "blanket"))}));
@@ -430,6 +518,11 @@ pub fn parse_asks(o: &Value, flow: &Value, t: &Turn) -> Value {
         }
     }
     json!({"new": new, "reask": reask, "updates": updates, "dropped": dropped})
+}
+
+/// 더 묻지 않는 질문: 답했거나(answered) 지나간 것(closed, 요구 이력 86)
+fn closed_ask(a: &Value) -> bool {
+    in_list(get(a, "state"), &["answered", "closed"])
 }
 
 fn obj_list(v: Option<&Value>) -> Vec<Obj> {
@@ -455,7 +548,7 @@ pub fn apply_asks(asks: Option<&Value>, change: &Value, t: &Turn) -> Value {
     }
     for i in list(get(change, "reask")) {
         if let Some(k) = by_id(i) {
-            if out[k].get("state") != Some(&s("answered")) {
+            if !in_list(out[k].get("state"), &["answered", "closed"]) {
                 out[k].insert("last_turn".into(), Value::from(t.index));
             }
         }
@@ -562,7 +655,7 @@ pub fn lang_block(lang: &str) -> String {
     let name = lang_label(lang);
     format!(
         "\n\n=== 출력 언어 ===\n\
-- 다음 칸은 {name}로 쓴다: turn.summary, turn.agent_summary, turn.title, turn.decision, current_goal, first_goal, digest, goal_change.how, requests_new·requests_update의 summary, asks_new의 summary.\n\
+- 다음 칸은 {name}로 쓴다: turn.summary, turn.agent_summary, turn.title, decisions의 text, decision_checks의 what, current_goal, first_goal, digest, goal_change.how, requests_new·requests_update의 summary, asks_new의 summary.\n\
 - quote, agent_quote, goal_quote, pending_quote, asks의 quote는 원문 글자 그대로 복사한다. 번역하지 마라. 대화가 한국어면 인용도 한국어 그대로다.\n\
 - label, direction, kind, state는 위 목록의 글자 그대로 쓴다(예: label은 \"확정\"처럼 한글 그대로).\n\
 - title은 {TITLE_CUT_WIDE}자 안, digest는 {DIGEST_CUT_WIDE}자 안, 묻는 것의 summary는 {ASK_CUT_WIDE}자 안.\n"

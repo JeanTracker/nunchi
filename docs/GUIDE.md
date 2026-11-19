@@ -2,8 +2,9 @@
 
 nunchi is a Claude Code plugin that adds a side panel to a session. When you come back to
 a session after a while, the panel shows where things stand: the current goal and how
-the conversation got there, the decisions you made, what the agent is asking you, and
-which of your requests are still open. You read that, answer, and carry on.
+the conversation got there, the requirements you settled, what the agent did and what it
+is asking you, and which of your requests are still open. You read that, answer, and
+carry on.
 
 The panel only reads analysis results. A small engine that ships with the plugin records
 each session's events through Claude Code hooks and, when a response ends, analyzes the
@@ -61,8 +62,40 @@ opens. From then on it is analyzed after every response, and it stays on when yo
 the session. Responses from before you turned it on are analyzed together, from the
 start, when the next response ends.
 
-The panel does not open on its own in sessions you have not turned on. Turning it off
-again (`/nunchi off`) is not built yet.
+The panel does not open on its own in sessions you have not turned on.
+
+## Commands
+
+All of them take effect at once, even while the agent is still answering; their replies
+show up in the conversation once that answer ends.
+
+| Command | What it does |
+| --- | --- |
+| `/nunchi` or `/nunchi on` | Turn nunchi on for this session and open the panel |
+| `/nunchi off` | Stop analyzing this session and close the panel |
+| `/nunchi status` | Show the state in five lines; changes nothing |
+| `/nunchi language` | Pick the panel and analysis language (see below) |
+
+`/nunchi off` keeps the results you already have. Until you run `/nunchi` again, the
+session is not analyzed, even with `analyze_scope` set to `"all"`, and neither the panel
+nor the line above the input box comes back on its own. An analysis that was already
+running finishes first. Turning it back on picks up from where it stopped.
+
+If you close the panel yourself, it stays closed for the rest of that session.
+Analysis goes on; `/nunchi` opens the panel again.
+
+`/nunchi status` answers like this:
+
+```
+Nunchi    on · analyzes after every answer
+Analysis  through answer #12 · 14:03
+State     idle
+Hooks     recording
+Language  English (Claude Code setting)
+```
+
+`Hooks` reads `not known yet` until the session's first message or answer.
+An unknown argument changes nothing and lists these commands.
 
 ## Language
 
@@ -113,44 +146,68 @@ the agent's answer to it. Next to it you may see:
 - `Analysis failed · <reason>`; it is retried a limited number of times
 - `Auto analysis off · /nunchi to turn on`: the session has old results but is not
   turned on
+- `No hook records · restart the session (claude --resume)`, in red: nunchi saw a
+  message or an answer in this session, but the hooks wrote nothing for it, so nothing
+  gets analyzed
 
 Before the first result the panel shows `Nunchi on · analyzes after the next answer`.
 
-**Goal.** What the conversation is working on now, and from which turn (`since #10`).
-When the goal has changed since the first turn, the first goal is shown dimmed on top
-(`Goal  first #1`) and the current one below it (`Now  since #10 · moved on`; also
-`narrowed` and `widened`). The first goal is only where the session started, not
-necessarily its overall aim. Two dimmed lines follow, because they are the analyzer's
-estimate:
+**Goal.** What the conversation is working on now, and from which turn (`since #10`). It
+names the subject and the outcome you want, not a step or a decided value, so it does not
+go stale as the work moves on. When the goal has changed since the first turn, the first
+goal is shown dimmed on top (`Goal  first #1`) and the current one below it
+(`Now  since #10 · moved on`; also `narrowed` and `widened`). Below it, dimmed because it
+is the analyzer's estimate, `Flow` sums up in one paragraph how the conversation has gone
+from the start.
 
-- `Flow`: one paragraph on how the conversation has gone from the start.
-- `Just now`: the agent's summary of the last turn.
+**Decisions.** The requirements settled for the goal, the things that belong in the
+design, newest first, each with the turn it was settled in. A decision counts when you
+state it yourself, or when you accept the agent's proposal, even with a plain "go ahead"
+or "commit it"; the accepted ones end with `· approved proposal`. The order of work,
+approvals on their own, and questions are not decisions. When one turn settles several,
+they are numbered `#3-1`, `#3-2`. A decision that a later one replaces disappears, and
+the later one shows only what now holds.
 
-**Decisions.** Decisions you made, marked ✔, newest first: what you decided in one line
-(or a short title when the analyzer wrote none), and the turn it was made in. The wording
-is the analyzer's summary, so the turn number lets you check it in the conversation. The
-section is left out when there are none.
+When the agent's latest answer misses or goes against an earlier decision, that decision
+shows ⚠ in yellow instead of ✔, with `· broken in #12` or `· missed in #12`. It stays
+visible even when the list is folded, until the agent says it has fixed it or you change
+the decision. nunchi judges this only from what the agent wrote, not from the code.
 
-**Agent questions.** Decisions, confirmations or information the agent is waiting on,
-newest first. Each item has a number, a one-line summary, the turn it was asked in, and
-the agent's own words in quotes. `#5 · no answer since` means it has gone unanswered
-since turn 5; `partly answered` means what it says. An item closes when one of your
-messages answers it, including a blanket approval such as "go ahead as you suggest". In a
-short panel this section may sit below the visible area; scroll the panel to reach it.
+**Handled.** What the agent did about your messages in the last analyzed turn, one line
+each: ✔ done, ◐ in progress, ⊘ not done, ○ not mentioned, ◇ looked into without a result.
+Decision changes come first (`Decision #1-1 changed: five lines → six lines`), and so do
+omissions found in that turn (`Decision #11 broken: …`) and fixes
+(`Decision #11 fixed: …`). While any omission is open, the first line reads
+`⚠ 1 open miss` with a `Copy prompt` button. It copies one request that covers every open
+omission: each decision, what went wrong, and the agent's own words. Paste it into the
+prompt box wherever you like and send it. If copying fails, the request text appears
+under the button so you can select it.
+
+**Agent questions.** What the agent is waiting on from you, asked in its last answer,
+newest first: a number, a one-line summary, the turn it was last asked in (and
+`· first #5` when it was first asked earlier), and the agent's own words in quotes.
+`partly answered` means what it says. Questions from earlier answers that are still open
+fold under `n earlier questions`; click it to see them. A question closes when you answer
+it, including a blanket "go ahead as you suggest", or when the conversation moves past
+it. In a short panel this section may sit below the visible area; scroll the panel.
 
 **Open requests.** Your requests that are not done yet: ○ not handled, ◐ in progress (for
-example a merge request waiting for review), ⊘ the agent could not do it or deferred it.
-Each shows the turn it came from.
+example a merge request waiting for review), ⊘ not done or deferred, with the agent's
+words in quotes. Each shows the turn it came from. A request the agent looked into
+without finding a cause or answer is not listed here; it moves to **Known issues** with
+the agent's words.
 
-**More and collapse.** Decisions, questions and open requests show three items each. When
-a list has more, its last line reads `… n more`: click it to open the whole list, and the
-same line then reads `Collapse` and takes it back to three. What you open stays open while
-you work in that session, even as new analysis results come in; each session keeps its
-own, and a new session starts with three.
+**More and collapse.** Decisions, handled items and open requests show three items each.
+When a list has more, its last line reads `… n more`: click it to open the whole list,
+and the same line then reads `Collapse`. What you open stays open while you work in that
+session, even as new analysis results come in.
 
-Long text wraps to the pane width. The goal shows up to four lines, the flow summary
-three, the last step two, each decision three, and each agent question and open request
-two; anything longer ends with `…`. Drag the pane edge wider to see more.
+**Full text and shorten.** Long text is cut to a few lines and ends with `…`: the goal
+four lines, the flow three, each decision three, each question summary and open request
+two, each handled item and each quote one. When something in a section is cut, its
+heading shows `Full text` on the right: click it to see the shown items in full, and it
+then reads `Shorten`. It never reveals items folded under `… n more`. The next analysis
+result folds the text back.
 
 **Numbers.** When the last response cites plan numbers such as R17, §4.5 or Phase 4c, the
 panel looks them up in the project's `docs/*.md` and shows the original wording, up to

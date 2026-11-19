@@ -45,7 +45,8 @@
       "grounded": true,
       "shift": false,
       "title": "",
-      "decision": "",
+      "decisions": [],
+      "checks": [],
       "digest": "턴 1까지의 흐름",
       "resp": "31:ad5fb1678f"
      },
@@ -60,7 +61,8 @@
       "grounded": true,
       "shift": false,
       "title": "",
-      "decision": "",
+      "decisions": [],
+      "checks": [],
       "digest": "턴 2까지의 흐름",
       "resp": "45:08f3923ab2"
      },
@@ -75,7 +77,8 @@
       "grounded": true,
       "shift": false,
       "title": "",
-      "decision": "",
+      "decisions": [],
+      "checks": [],
       "digest": "턴 3까지의 흐름",
       "resp": "32:96355dcc5a"
      }
@@ -135,7 +138,8 @@
        "grounded": true,
        "shift": false,
        "title": "",
-       "decision": "",
+       "decisions": [],
+       "checks": [],
        "digest": "턴 1까지의 흐름",
        "resp": "31:ad5fb1678f"
       },
@@ -150,7 +154,8 @@
        "grounded": true,
        "shift": false,
        "title": "",
-       "decision": "",
+       "decisions": [],
+       "checks": [],
        "digest": "턴 2까지의 흐름",
        "resp": "45:08f3923ab2"
       }
@@ -209,9 +214,9 @@
   }
  },
  "claude_calls": [
-  "1 ok 008d5fcbbc72",
-  "2 fail 00ad83eca895",
-  "2 ok 00ad83eca895",
-  "3 ok 11047514b935"
+  "1 ok 4b46d249b1df",
+  "2 fail 527f21acef47",
+  "2 ok 527f21acef47",
+  "3 ok 8995f824b218"
  ]
 }

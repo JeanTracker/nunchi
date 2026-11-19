@@ -37,7 +37,8 @@
       "grounded": true,
       "shift": false,
       "title": "",
-      "decision": "",
+      "decisions": [],
+      "checks": [],
       "digest": "턴 1까지의 흐름",
       "resp": "31:ad5fb1678f"
      },
@@ -52,7 +53,8 @@
       "grounded": true,
       "shift": false,
       "title": "",
-      "decision": "",
+      "decisions": [],
+      "checks": [],
       "digest": "턴 2까지의 흐름",
       "resp": "45:08f3923ab2"
      },
@@ -67,7 +69,8 @@
       "grounded": true,
       "shift": false,
       "title": "",
-      "decision": "",
+      "decisions": [],
+      "checks": [],
       "digest": "턴 3까지의 흐름",
       "resp": "32:96355dcc5a"
      },
@@ -82,7 +85,18 @@
       "grounded": true,
       "shift": true,
       "title": "새 주제",
-      "decision": "턴 4에서 정함",
+      "decisions": [
+       {
+        "id": "D4-1",
+        "text": "턴 4에서 정함",
+        "by": "user",
+        "quote": "좋아 커밋해줘",
+        "replaces": [],
+        "from": "",
+        "to": ""
+       }
+      ],
+      "checks": [],
       "direction": "옮김",
       "how": "앞 목표에서 새 대상으로",
       "shift_quote": "좋아 커밋해줘",
@@ -102,7 +116,8 @@
       "grounded": true,
       "shift": false,
       "title": "",
-      "decision": "",
+      "decisions": [],
+      "checks": [],
       "digest": "턴 5까지의 흐름",
       "resp": "24:cfce963008"
      }
@@ -194,7 +209,8 @@
        "grounded": true,
        "shift": false,
        "title": "",
-       "decision": "",
+       "decisions": [],
+       "checks": [],
        "digest": "턴 1까지의 흐름",
        "resp": "31:ad5fb1678f"
       },
@@ -209,7 +225,8 @@
        "grounded": true,
        "shift": false,
        "title": "",
-       "decision": "",
+       "decisions": [],
+       "checks": [],
        "digest": "턴 2까지의 흐름",
        "resp": "45:08f3923ab2"
       },
@@ -224,7 +241,8 @@
        "grounded": true,
        "shift": false,
        "title": "",
-       "decision": "",
+       "decisions": [],
+       "checks": [],
        "digest": "턴 3까지의 흐름",
        "resp": "32:96355dcc5a"
       },
@@ -239,7 +257,18 @@
        "grounded": true,
        "shift": true,
        "title": "새 주제",
-       "decision": "턴 4에서 정함",
+       "decisions": [
+        {
+         "id": "D4-1",
+         "text": "턴 4에서 정함",
+         "by": "user",
+         "quote": "좋아 커밋해줘",
+         "replaces": [],
+         "from": "",
+         "to": ""
+        }
+       ],
+       "checks": [],
        "direction": "옮김",
        "how": "앞 목표에서 새 대상으로",
        "shift_quote": "좋아 커밋해줘",
@@ -334,10 +363,10 @@
   }
  },
  "claude_calls": [
-  "1 ok 008d5fcbbc72",
-  "2 ask 00ad83eca895",
-  "3 blanket 99a059328151",
-  "4 shift 74aaaa5e192e",
-  "5 progress 8daf8d7f01de"
+  "1 ok 4b46d249b1df",
+  "2 ask 527f21acef47",
+  "3 blanket 376088cf1ba7",
+  "4 shift bce3da0bc355",
+  "5 progress 3f6b61354896"
  ]
 }

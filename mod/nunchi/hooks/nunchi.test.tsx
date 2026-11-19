@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { answersAfter, answerEnded, promptSent, humanPrompt, pieces as piecesOf } from './register.js'
+import { answersAfter, answerEnded, promptSent, humanPrompt, paneClosed, paneAsked, mayAutoOpen, pieces as piecesOf } from './register.js'
 import { pick, norm, failText } from './lang.js'
 
 // SCREEN §11: 관제 분석 결과를 읽어 세션 옆 패널에 보인다
@@ -68,9 +68,10 @@ test('the sections come in the order goal, decisions, questions, requests (요�
   engine(on, { state: 'idle', turn: 0 })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   const ui = await mountPane($, { ...PANE, surface: 'terminal' })
-  const heads = (await ui.findAll({ type: 'Text', text: /^(목표|의사결정|에이전트 질문|남은 요청)(\s|$)/ }))
-    .map(t => String(t.text).split(/\s/)[0] === '에이전트' ? '에이전트 질문' : String(t.text).split(/\s/)[0] === '남은' ? '남은 요청' : String(t.text).split(/\s/)[0])
-  expect(heads.filter((h, k) => heads.indexOf(h) === k)).toEqual(['목표', '의사결정', '에이전트 질문', '남은 요청'])
+  // 요구 이력 87·89: 처리 결과가 결정 사항과 에이전트 질문 사이, 이름은 두 낱말이라 통째로 읽는다
+  const heads = (await ui.findAll({ type: 'Text', text: /^(목표|결정 사항|처리 결과|에이전트 질문|남은 요청)(\s|$)/ }))
+    .map(t => (String(t.text).match(/^(목표|결정 사항|처리 결과|에이전트 질문|남은 요청)/) ?? [''])[0])
+  expect(heads.filter((h, k) => heads.indexOf(h) === k)).toEqual(['목표', '결정 사항', '처리 결과', '에이전트 질문', '남은 요청'])
   for (const old of [/에이전트가 묻는 것/, /^지금까지/, /정한 것/, /^남은 것/]) {
     expect((await ui.find({ type: 'Text', text: old }))).toBeFalsy()
   }
@@ -81,9 +82,13 @@ test('the pane shows the goal, decisions, the agent\'s questions and open reques
   engine(on, { state: 'idle', turn: 0 })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   const ui = await mountPane($, { ...PANE, surface: 'terminal' })
-  expect((await ui.find({ type: 'Text', text: /에이전트 질문 2/ }))).toBeTruthy()
-  expect((await ui.find({ type: 'Text', text: /1 폭 정하기 #3 · 일부 답함/ }))).toBeTruthy()      // 최근에 물은 것부터
-  expect((await ui.find({ type: 'Text', text: /2 색 고르기 #1부터 답 없음/ }))).toBeTruthy()
+  // 요구 이력 86: 마지막 응답(#3)이 물은 것만 펼쳐 보이고, 그 전에 물은 것은 '지난 질문'으로 접는다
+  expect((await ui.find({ type: 'Text', text: /^에이전트 질문 1$/ }))).toBeTruthy()
+  expect((await ui.find({ type: 'Text', text: /1 폭 정하기 #3 · 일부 답함/ }))).toBeTruthy()
+  expect((await ui.find({ type: 'Text', text: /색 고르기/ }))).toBeFalsy()
+  expect((await ui.find({ type: 'Button', key: 'more-asks' }))?.text).toBe('지난 질문 1개')
+  await ui.press({ key: 'more-asks' })
+  expect((await ui.find({ type: 'Text', text: /2 색 고르기 #1$/ }))).toBeTruthy()          // 펼치면 지난 질문이 같은 꼴로
   expect((await ui.find({ type: 'Text', text: /“폭은 몇 칸으로 할지 알려 주세요”/ }))).toBeTruthy()
   expect((await ui.find({ type: 'Text', text: /통째 승인/ }))).toBeFalsy()   // 내용·턴 없는 내부 용어 줄은 두지 않는다 (요구 이력 82)
   expect((await ui.find({ type: 'Text', text: /흐름\s+#1–#3/ }))).toBeTruthy()             // 처음부터 한 덩어리 정리 (요구 이력 57)
@@ -91,9 +96,11 @@ test('the pane shows the goal, decisions, the agent\'s questions and open reques
   expect((await ui.find({ type: 'Text', text: /README 설치 절을 요청함/ }))).toBeFalsy()   // 마지막 정리 하나만
   expect((await ui.find({ type: 'Text', text: /^목표\s+#3부터$/ }))).toBeTruthy()            // 덩어리 이름 줄 (요구 이력 71)
   expect((await ui.find({ type: 'Text', text: /^\s+CHANGELOG 만들기$/ }))).toBeTruthy()      // 다음 줄에 들여 쓴 내용
-  expect((await ui.find({ type: 'Text', text: /^의사결정 1$/ }))).toBeTruthy()
+  expect((await ui.find({ type: 'Text', text: /^결정 사항 1$/ }))).toBeTruthy()
   expect((await ui.find({ type: 'Text', text: /✔ 설치 절 확정\s+#2/ }))).toBeTruthy()       // 정한 턴을 붙인다
-  expect((await ui.find({ type: 'Text', text: /CHANGELOG를 만들고 폭을 물음/ }))).toBeTruthy()
+  expect((await ui.find({ type: 'Text', text: /CHANGELOG를 만들고 폭을 물음/ }))).toBeFalsy()      // 방금은 목표에서 뺐다 (요구 이력 87)
+  expect((await ui.find({ type: 'Text', text: /^처리 결과 #3$/ }))).toBeTruthy()                   // 마지막 턴(#3)에 생긴 내 요청 (요구 이력 87·88)
+  expect((await ui.find({ type: 'Text', text: /^ ⊘ 테스트 돌리기$/ }))).toBeTruthy()
   expect((await ui.find({ type: 'Text', text: /테스트 돌리기 — 못 했거나 미룸/ }))).toBeTruthy()
   expect((await ui.find({ type: 'Text', text: /도구 실패/ }))).toBeFalsy()          // 도구 실패는 보이지 않는다 (요구 이력 48)
   expect((await ui.find({ type: 'Text', text: /대화 정리/ }))).toBeFalsy()          // 턴별 목록은 두지 않는다
@@ -136,12 +143,21 @@ test('a session turned on with /nunchi does not say it is off', async ($, on) =>
   await ui.unmount()
 })
 
-test('on a narrow pane the summary wraps onto indented lines instead of being cut', async ($, on) => {
-  engine(on, { state: 'idle', turn: 0 })
+test('on a narrow pane a cut handled line shows Expand, and Expand wraps it onto indented lines (요구 이력 80·88)', async ($, on) => {
+  const quiet = { ...ANALYSIS, flow: { ...ANALYSIS.flow, requests: ANALYSIS.flow.requests.filter((r: any) => r.from_turn !== 3) } }   // 마지막 턴에 요청이 없으면 에이전트가 한 일 한 줄
+  engine(on, { state: 'idle', turn: 0 }, true, quiet)
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   const ui = await mountPane($, { ...PANE, props: { ...PANE.props, bodyColumns: 24 }, surface: 'terminal' })
-  expect((await ui.find({ type: 'Text', text: /^\s+CHANGELOG를 만들고$/ }))).toBeTruthy()
-  expect((await ui.find({ type: 'Text', text: /^\s+폭을 물음$/ }))).toBeTruthy()          // 잘리지 않고 다음 줄로
+  const texts = async () => (await ui.findAll({ type: 'Text' })).map((x: any) => String(x.text ?? ''))
+  let all = await texts()
+  expect(all.filter(t => /^ · CHANGELOG/.test(t))).toEqual([' · CHANGELOG를 만들 …'])           // 기본은 한 줄, 넘치면 …
+  expect(all.some(t => /물음/.test(t))).toBe(false)
+  expect((await ui.find({ type: 'Button', key: 'text-handled' }))?.text).toBe('펼치기')
+  await ui.press({ key: 'text-handled' })
+  all = await texts()
+  expect(all.some(t => /^ · CHANGELOG/.test(t) && !/…$/.test(t))).toBe(true)                     // 잘리지 않고
+  expect(all.some(t => /^\s+.*물음$/.test(t))).toBe(true)                                        // 들여 쓴 다음 줄로
+  expect((await ui.find({ type: 'Button', key: 'text-handled' }))?.text).toBe('줄이기')
   await ui.unmount()
 })
 
@@ -294,8 +310,8 @@ test('a wide symbol touching the next letter gets one space after it (요구 이
 })
 
 test('links in the pane are drawn as Link elements a click opens (요구 이력 60)', async ($, on) => {
-  const steps = ANALYSIS.flow.steps.map((x: any) => x.index === 3 ? { ...x, agent_summary: '[가이드](https://example.com/g)를 읽고 정리함.' } : x)
-  const linked = { ...ANALYSIS, flow: { ...ANALYSIS.flow, steps,
+  const requests = ANALYSIS.flow.requests.map((r: any) => r.id === 'R2' ? { ...r, summary: '[가이드](https://example.com/g) 읽기' } : r)   // 방금 대신 요청 요약의 링크 (요구 이력 87)
+  const linked = { ...ANALYSIS, flow: { ...ANALYSIS.flow, requests,
     current_goal: { text: 'https://claude.ai/artifact/R8EpVcd9cueTtn7Ep2MS82 확인.', turn: 3 } } }   // 주소로 시작: 목표 2줄 상한(요구 이력 77) 안에서 주소가 두 줄에 나뉜다
   engine(on, { state: 'idle', turn: 0 }, false, linked)
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
@@ -449,13 +465,13 @@ test('what was opened stays open when a new analysis result comes in (요구 이
   on('fs.write', () => ({ value: undefined }))
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   const ui = await mountPane($, { ...PANE, surface: 'terminal' })
-  await ui.press({ key: 'more-asks' })
+  await ui.press({ key: 'more-asks' })                     // 지난 질문(#1·#2) 펼치기 (요구 이력 86: 마지막 응답 #3 이후에 물은 것이 지금 질문)
   expect((await ui.find({ type: 'Text', text: /물음 1 #1/ }))).toBeTruthy()
   live.flow = { ...live.flow, asks: [...asks, { id: 'Q7', turn: 7, last_turn: 7, summary: '물음 7', quote: '물음 7?', state: 'open' }] }
   await $.command.run({ command: 'nunchi' } as any)        // 분석 결과를 다시 읽는다
-  expect((await ui.find({ type: 'Text', text: /에이전트 질문 7/ }))).toBeTruthy()
+  expect((await ui.find({ type: 'Text', text: /에이전트 질문 5/ }))).toBeTruthy()
   expect((await ui.find({ type: 'Text', text: /물음 7 #7/ }))).toBeTruthy()
-  expect((await ui.find({ type: 'Text', text: /물음 2 #2/ }))).toBeTruthy()   // 처음 3개(7·6·5)보다 많이 그대로
+  expect((await ui.find({ type: 'Text', text: /물음 2 #2/ }))).toBeTruthy()   // 펼친 지난 질문이 그대로
   await ui.unmount()
 })
 
@@ -476,7 +492,7 @@ test('there are no bottom buttons and each list opens on its own (요구 이력 
   engine(on, { state: 'idle', turn: 0 }, false, lots(12))
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   const ui = await mountPane($, { ...PANE, surface: 'terminal' })
-  expect(await counts(ui)).toEqual([3, 3, 3])
+  expect(await counts(ui)).toEqual([3, 0, 3])      // 질문은 모두 마지막 응답 전에 물은 것이라 접힌다 (요구 이력 86)
   expect((await ui.find({ type: 'Button', key: 'expand' }))).toBeFalsy()
   expect((await ui.find({ type: 'Button', key: 'shrink' }))).toBeFalsy()
   expect((await ui.find({ type: 'Text', text: /펼치기|줄이기/ }))).toBeFalsy()
@@ -492,10 +508,10 @@ test('keys do nothing, nothing is saved, and a new session starts with three (�
   on('fs.write', (_: unknown, e: any) => { written[String(e.path)] = String(e.text ?? ''); return { value: undefined } })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   const ui = await mountPane($, { ...PANE, surface: 'terminal' })
-  expect(await counts(ui)).toEqual([3, 3, 3])      // 옛 mod.json의 모두 펼침은 쓰지 않는다
+  expect(await counts(ui)).toEqual([3, 0, 3])      // 옛 mod.json의 모두 펼침은 쓰지 않는다 (질문은 지난 질문이라 접힘, 요구 이력 86)
   expect((await ui.find({ type: 'Client' } as any))).toBeFalsy()   // 본문은 보통 글자 (끌어 복사할 수 있게)
   await ui.press({ key: 'more-decisions' })
-  expect(await counts(ui)).toEqual([12, 3, 3])
+  expect(await counts(ui)).toEqual([12, 0, 3])
   expect(Object.keys(written).some(p => p.endsWith('/mod.json'))).toBe(false)
   await ui.unmount()
 })
@@ -570,14 +586,14 @@ test('with Claude Code set to English the pane is in English and quotes stay as 
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   const ui = await mountPane($, { ...PANE, surface: 'terminal' })
   expect((await ui.find({ type: 'Text', text: /^Nunchi · through answer #3/ }))).toBeTruthy()
-  for (const head of [/^Goal  since #3/, /^Decisions 1/, /^Agent questions 2/, /^Open requests 1 of mine/]) {
+  for (const head of [/^Goal  since #3/, /^Decisions 1/, /^Agent questions 1/, /^Open requests 1 of mine/]) {
     expect((await ui.find({ type: 'Text', text: head }))).toBeTruthy()
   }
-  expect((await ui.find({ type: 'Text', text: /no answer since/ }))).toBeTruthy()
+  expect((await ui.find({ type: 'Button', key: 'more-asks' }))?.text).toBe('1 earlier question')   // 지난 질문 버튼 (요구 이력 86)
   expect((await ui.find({ type: 'Text', text: /partly answered/ }))).toBeTruthy()
   expect((await ui.find({ type: 'Text', text: /테스트 돌리기 — deferred/ }))).toBeTruthy()   // 요약은 분석 언어 그대로, 상태 이름만 화면 언어
   expect((await ui.find({ type: 'Text', text: /“폭은 몇 칸으로 할지 알려 주세요”/ }))).toBeTruthy()
-  for (const ko of [/^목표/, /^의사결정/, /^에이전트 질문/, /^남은 요청/, /반영/]) {
+  for (const ko of [/^목표/, /^결정 사항/, /^에이전트 질문/, /^남은 요청/, /반영/]) {
     expect((await ui.find({ type: 'Text', text: ko }))).toBeFalsy()
   }
   await ui.unmount()
@@ -816,7 +832,7 @@ const LONG = {
       { index: 5, grounded: true, label: '확정', summary: '헤더', agent_summary: '', decision: 'APOLLOQA-36312는 네이티브 타이틀바 대신 웹 헤더를 유지하고 제목만 없애는 지금 결정으로 간다' },
       { index: 6, grounded: true, label: '구체화', summary: '확인', agent_summary: '확인함' }],
     requests: [{ id: 'R1', from_turn: 1, by_turn: 3, summary: 'CI 불일치 팝업에서 확인을 누르면 네이티브 브리지 logout 호출', state: 'in_progress' }],
-    asks: [{ id: 'Q1', turn: 2, last_turn: 2, summary: 'useHead 문서 제목을 화면에 둘지 뺄지', quote: '`useHead` 제목은 화면에 보이지 않으니 빼도 되지만, 검색 결과와 탭 이름에는 남습니다. 둘까요?', state: 'open' }],
+    asks: [{ id: 'Q1', turn: 2, last_turn: 6, summary: 'useHead 문서 제목을 화면에 둘지 뺄지', quote: '`useHead` 제목은 화면에 보이지 않으니 빼도 되지만, 검색 결과와 탭 이름에는 남습니다. 둘까요?', state: 'open' }],
   },
 }
 
@@ -833,7 +849,7 @@ test('at 46 columns the end of a decision, a request and a question still shows 
   expect(all.some(t => /결정으로 간다\s+#5$/.test(t))).toBe(true)          // 결론과 턴이 보인다 (전에는 '유지하 …')
   expect(all.some(t => /^\s+브리지 logout 호출 — 진행 중 #3$/.test(t))).toBe(true)   // 할 일이 끝까지 보인다 (전에는 '네이…')
   expect(all.some(t => /뺄지/.test(t))).toBe(true)                          // '~할지' 어미가 남는다
-  expect(all.some(t => /#2부터 답 없음$/.test(t))).toBe(true)
+  expect(all.some(t => /#6 · 처음 #2$/.test(t))).toBe(true)                // 마지막으로 물은 턴과 처음 물은 턴 (요구 이력 86)
   expect(all.some(t => /상태바처럼 고정하고/.test(t)) && all.some(t => /^\s+리뷰하기$/.test(t))).toBe(true)   // 목표 4줄
   const width = (t: string) => [...t].reduce((n, ch) => n + (/[가-힣]/.test(ch) ? 2 : 1), 0)
   for (const t of all.filter(t => /^\s/.test(t))) expect(width(t)).toBeLessThanOrEqual(46)   // 본문 줄은 패널 폭을 넘지 않는다
@@ -866,14 +882,14 @@ test('a text that fills its lines exactly is not cut for the turn; the turn move
 })
 
 for (const cols of [24, 34]) test(`at ${cols} columns a long question tail keeps the summary and stays inside the pane (요구 이력 80)`, async ($, on) => {
-  const asks = [{ id: 'Q1', turn: 2, last_turn: 2, summary: '기획서와 다른 세 곳의 처리 방법', quote: '어떻게 할까요?', state: 'partial' }]
+  const asks = [{ id: 'Q1', turn: 2, last_turn: 6, summary: '기획서와 다른 세 곳의 처리 방법', quote: '어떻게 할까요?', state: 'partial' }]   // 마지막 응답이 다시 물음
   const width = (t: string) => [...t].reduce((n, ch) => n + (/[\uac00-\ud7a3]/.test(ch) ? 2 : 1), 0)
   engine(on, { state: 'idle', turn: 0 }, true, { ...LONG, flow: { ...LONG.flow, asks } })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   const ui = await mountPane($, { ...PANE, props: { ...PANE.props, bodyColumns: cols }, surface: 'terminal' })
   const all: string[] = (await ui.findAll({ type: 'Text' })).map((x: any) => String(x.text ?? ''))
   expect(all.some(t => /^ 1 기획서와/.test(t))).toBe(true)          // 요약이 지워지지 않는다
-  expect(all.some(t => /답 없음/.test(t)) && all.some(t => /일부 답함|답함$/.test(t))).toBe(true)
+  expect(all.some(t => /처음 #2/.test(t)) && all.some(t => /일부 답함|답함$/.test(t))).toBe(true)
   for (const t of all.filter(t => /^\s/.test(t))) expect(width(t)).toBeLessThanOrEqual(cols)
   await ui.unmount()
 })
@@ -987,4 +1003,564 @@ test('submitting a prompt runs the hook, and the head then says a new request is
   await $.prompt.submit({ text: '새 요청' })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   expect(await pending()).toBe(true)                                               // 발화를 보내면 훅이 다시 읽게 한다
+})
+
+// 요구 이력 62·84: 켜짐 표시 세 상태(켜지 않음·켜짐·꺼짐), 끄기·상태·모르는 인자, 사람이 닫은 패널, 훅 기록 없음
+const SDIR = '/home/me/.claude-control/sessions/abc'
+function offWorld(on: any, o: { want?: unknown; analysis?: unknown; status?: unknown; events?: boolean; setting?: string; answers?: (string | null)[]; panes?: string[] } = {}) {
+  const w = {
+    files: { [MOD]: '{"noticed":true}' } as Record<string, string>,
+    opened: [] as string[], titles: [] as string[], closed: [] as string[], registered: [] as any[], asked: [] as any[], now: 100000, events: o.events ?? true,
+  }
+  if (o.want !== undefined) w.files[SDIR + '/want'] = JSON.stringify(o.want)
+  const answers = [...(o.answers ?? [])]
+  on('command.register', (_: unknown, e: any) => { w.registered.push(e); return { value: { command: 'nunchi' } } })
+  on('ui.open', (_: unknown, e: any) => { w.opened.push(String(e.id)); w.titles.push(String(e.title)); return { value: { isPlaced: true } } })
+  on('ui.close', (_: unknown, e: any) => { w.closed.push(String(e.id)); return { value: undefined } })
+  on('ui.panes', () => ({ value: (o.panes ?? []).map(id => ({ id, title: '', isShown: true, isFocused: false, isPlaced: true })) }))
+  on('session.start', (_: unknown, e: any) => ({ cwd: e.cwd }))
+  on('session.id', () => ({ value: 'abc' }))
+  on('settings.read', () => ({ value: { language: o.setting ?? '한국어' } }))
+  on('env.get', (_: unknown, e: any) => ({ value: e.name === 'HOME' ? '/home/me' : undefined }))
+  on('clock.every', () => ({ value: null }))
+  on('clock.now', () => ({ value: w.now }))
+  on('prompt.submit', (_: unknown, e: any) => ({ text: e.text }))
+  on('fs.write', (_: unknown, e: any) => { w.files[String(e.path)] = String(e.text ?? ''); return { value: undefined } })
+  on('fs.exists', (_: unknown, e: any) => ({ value: String(e.path ?? e).endsWith('/events.jsonl') ? w.events : String(e.path ?? e) in w.files }))
+  on('process.run', () => ({ value: { exitCode: 0, stdout: '', stderr: '' } }))
+  on('fs.read', (_: unknown, e: any) => {
+    const p = String(e.path ?? e)
+    if (p in w.files) return { value: w.files[p] }
+    if (p.endsWith('/sessions/abc/analysis.json') && o.analysis !== null) return { value: JSON.stringify(o.analysis ?? { ...ANALYSIS, analyzed_at: '2026-11-18T05:07:00Z' }) }
+    if (p.endsWith('/sessions/abc/analysis_status.json')) return { value: JSON.stringify(o.status ?? { state: 'idle', turn: 0 }) }
+    throw new Error('missing ' + p)
+  })
+  on('tool.call', (_: unknown, e: any) => {
+    w.asked.push(e)
+    const a = answers.shift()
+    if (a == null) return { deny: 'esc' }
+    return { result: { answers: { [String(e.questions?.[0]?.question ?? '')]: a } } }
+  })
+  return w
+}
+const wantIn = (w: { files: Record<string, string> }) => JSON.parse(w.files[SDIR + '/want'] ?? 'null')
+const BAND = { plugin: 'nunchi', component: 'AbovePrompt', surface: 'terminal',
+  props: { hasSurvey: false, isCollapsed: false, isWorking: false, maxRows: 3, bodyColumns: 120 }, viewport: { columns: 200, rows: 50 } } as any
+
+test('/nunchi registers with every argument in the hint and runs mid-turn (요구 이력 84)', async ($, on) => {
+  const w = offWorld(on, { analysis: null })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  expect(w.registered[0]?.argumentHint).toBe('[on|off|status|language]')
+  expect(w.registered[0]?.immediate).toBe(true)
+  await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()   // 열었다 닫아 남은 비동기 일을 정리한다
+})
+
+test('/nunchi off keeps the language, closes the pane, and says the result stays (요구 이력 62·84)', async ($, on) => {
+  const w = offWorld(on, { want: { at: 'x', by: 'nunchi', lang: 'en' } })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  expect(w.opened).toContain('nunchi')                                  // 켠 세션은 저절로 열린다
+  const r = await $.command.run({ command: 'nunchi', args: 'off' } as any)
+  expect(wantIn(w)).toMatchObject({ on: false, lang: 'en', by: 'nunchi' })
+  expect(w.closed).toEqual(['nunchi'])
+  expect(String(r.text)).toBe('눈치를 껐습니다. 이 세션은 더 분석하지 않습니다(결과는 #3 응답까지 반영한 그대로 남깁니다). 다시 켜려면 /nunchi')
+  await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()   // 열었다 닫아 남은 비동기 일을 정리한다
+})
+
+test('a turned-off session with a result opens no pane and shows no band, even on a wide window (요구 이력 84)', async ($, on) => {
+  const w = offWorld(on, { want: { at: 'x', on: false } })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  expect(w.opened.length).toBe(0)
+  const band = await $.ui.mount(BAND)
+  expect((await band.find({ type: 'Text', text: /목표/ }))).toBeFalsy()
+  await band.unmount()
+  expect(w.opened.length).toBe(0)                                       // 넓은 창에서도 다시 열지 않는다
+  await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()   // 열었다 닫아 남은 비동기 일을 정리한다
+})
+
+test('/nunchi turns a turned-off session back on and says it picks up again (요구 이력 84)', async ($, on) => {
+  const w = offWorld(on, { want: { at: 'x', on: false, lang: 'ko' } })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const r = await $.command.run({ command: 'nunchi', args: 'on' } as any)
+  expect(wantIn(w)).toMatchObject({ on: true, lang: 'ko' })
+  expect(w.opened).toContain('nunchi')
+  expect(String(r.text)).toBe('눈치를 다시 켰습니다. 다음 응답이 끝나면 이어서 분석합니다.')
+  await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()   // 열었다 닫아 남은 비동기 일을 정리한다
+})
+
+test('/nunchi status answers five lines without opening or writing anything (요구 이력 62·84)', async ($, on) => {
+  const w = offWorld(on, { want: { at: 'x', on: true } })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const before = JSON.stringify(w.files), opens = w.opened.length
+  const r = await $.command.run({ command: 'nunchi', args: 'status' } as any)
+  const lines = String(r.text).split('\n')
+  expect(lines.length).toBe(5)
+  expect(lines[0]).toBe('눈치  켜짐 · 응답이 끝날 때마다 분석')
+  expect(lines[1]).toMatch(/^분석  #3 응답까지 반영 · \d\d:\d\d$/)
+  expect(lines[2]).toBe('상태  쉼')
+  expect(lines[3]).toBe('훅    기록 있음')                            // 기록 파일이 있으면 발화 전이라도 확인된 것
+  expect(lines[4]).toBe('언어  한국어 (Claude Code 설정)')
+  expect(JSON.stringify(w.files)).toBe(before)
+  expect(w.opened.length).toBe(opens)
+  await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()   // 열었다 닫아 남은 비동기 일을 정리한다
+})
+
+test('/nunchi status tells a turned-off session from one never turned on (요구 이력 84)', async ($, on) => {
+  const w = offWorld(on, { want: { at: 'x', on: false }, analysis: null, status: { state: 'queued', turn: 0 }, events: false })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const r = String((await $.command.run({ command: 'nunchi', args: 'status' } as any)).text).split('\n')
+  expect(r[0]).toBe('눈치  꺼짐 · /nunchi로 다시 켜기')
+  expect(r[3]).toBe('훅    아직 모름 · 첫 응답이 끝나면 확인')    // 기록이 없어도 발화를 보기 전에는 없다고 하지 않는다
+  expect(r[1]).toBe('분석  아직 없음')
+  expect(r[2]).toBe('상태  분석 대기')
+  delete w.files[SDIR + '/want']
+  const r2 = String((await $.command.run({ command: 'nunchi', args: 'status' } as any)).text).split('\n')
+  expect(r2[0]).toBe('눈치  켜지 않음 · /nunchi로 켜기')
+  await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()   // 열었다 닫아 남은 비동기 일을 정리한다
+})
+
+test('an unknown argument changes nothing and lists the commands (요구 이력 84)', async ($, on) => {
+  const w = offWorld(on, { analysis: null })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const r = await $.command.run({ command: 'nunchi', args: 'of' } as any)
+  expect(wantIn(w)).toBe(null)
+  expect(w.opened.length).toBe(0)
+  const lines = String(r.text).split('\n')
+  expect(lines[0]).toBe('모르는 명령입니다: of')
+  expect(lines.slice(1).map(l => l.split(/\s{2,}/)[0])).toEqual(['/nunchi', '/nunchi off', '/nunchi status', '/nunchi language'])
+  await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()   // 열었다 닫아 남은 비동기 일을 정리한다
+})
+
+test('a pane the person closed is not opened by itself again until /nunchi (요구 이력 84)', async () => {
+  // 시험 도구의 $.ui에는 close가 없고, 시험이 불러온 모듈은 엔진이 돌리는 모듈과 따로라 판단 함수를 직접 시험한다
+  const v = { ...JSON.parse(JSON.stringify({})), basis: 3, goal: 'x', on: true, off: false } as any
+  expect(mayAutoOpen(v)).toBe(true)
+  paneClosed({ id: 'other', origin: { kind: 'person' } })               // 다른 패널은 상관없다
+  paneClosed({ id: 'nunchi', origin: { kind: 'plugin' } })              // 끄기의 닫기는 off가 막는다
+  paneClosed({ id: 'nunchi', origin: { kind: 'unload' } })
+  expect(mayAutoOpen(v)).toBe(true)
+  paneClosed({ id: 'nunchi', origin: { kind: 'person' } })
+  expect(mayAutoOpen(v)).toBe(false)
+  paneAsked()                                                            // /nunchi
+  expect(mayAutoOpen(v)).toBe(true)
+  expect(mayAutoOpen({ ...v, off: true })).toBe(false)                  // 끈 세션은 결과가 있어도 열지 않는다
+  expect(mayAutoOpen({ ...v, on: false, basis: 0, goal: '' })).toBe(false)
+})
+
+test('a turned-on session reopens on a wide window when the pane is missing (요구 이력 53)', async ($, on) => {
+  const w = offWorld(on, { want: { at: 'x', on: true } })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const n = w.opened.length
+  const band = await $.ui.mount(BAND)
+  expect((await band.find({ type: 'Text', text: /목표/ }))).toBeTruthy()
+  await band.unmount()
+  expect(w.opened.length).toBeGreaterThan(n)
+  await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()   // 열었다 닫아 남은 비동기 일을 정리한다
+})
+
+test('the no-hook line waits until a prompt was seen, then shows while the record is missing (요구 이력 84)', async ($, on) => {
+  const w = offWorld(on, { want: { at: 'x', on: true }, events: false })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const red = async () => {
+    const ui = await mountPane($, { ...PANE, surface: 'terminal' })
+    const got = !!(await ui.find({ type: 'Text', text: /훅 기록 없음 · 세션 다시 시작/ }))
+    await ui.unmount()
+    return got
+  }
+  expect(await red()).toBe(false)                     // 세션 도중 설치: 첫 발화 전에는 기록이 없어도 알리지 않는다
+  const again = () => $.command.run({ command: 'nunchi', args: 'status' } as any)   // 다시 읽기 (세션 시작은 판정을 처음으로 되돌린다)
+  await $.prompt.submit({ text: '다음 요청' })
+  await again()
+  expect(await red()).toBe(false)                     // 훅이 적을 시간을 준다
+  w.now += 6000
+  await again()
+  expect(await red()).toBe(true)
+  const st = String((await again()).text).split('\n')
+  expect(st[3]).toBe('훅    기록 없음 · 세션 다시 시작 (claude --resume)')   // 이름 '훅'이 두 번 나오지 않는다
+  const r = await $.command.run({ command: 'nunchi' } as any)
+  expect(String(r.text)).toMatch(/훅 기록이 없어 분석이 돌지 않습니다/)
+  w.events = true
+  await again()
+  expect(await red()).toBe(false)                     // 기록이 생기면 사라진다
+  await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()   // 열었다 닫아 남은 비동기 일을 정리한다
+})
+
+test('/nunchi language in a turned-off session does not offer a rebuild (요구 이력 84)', async ($, on) => {
+  const w = offWorld(on, { want: { at: 'x', on: false, lang: 'ko' }, answers: ['English'] })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const r = await $.command.run({ command: 'nunchi', args: 'language' } as any)
+  expect(w.asked.length).toBe(1)                      // 언어만 묻고 다시 분석은 묻지 않는다
+  expect(String(r.text)).toMatch(/Nunchi is off here, so nothing is rebuilt/)
+  expect(wantIn(w)).toMatchObject({ on: false, lang: 'en' })
+  await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()   // 열었다 닫아 남은 비동기 일을 정리한다
+})
+
+test('the command description, off, status and usage read in English on an English screen (요구 이력 76·84)', async ($, on) => {
+  const w = offWorld(on, { want: { at: 'x', on: true }, setting: 'English',
+    analysis: { ...ANALYSIS, analyzed_at: '2026-11-18T05:07:00Z', flow: { ...ANALYSIS.flow, lang: 'en' } } })   // 영어로 분석된 세션
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  expect(w.registered.at(-1)?.description).toBe('Turn on Nunchi: analyze this session and open the panel · off · status · language')
+  const st = String((await $.command.run({ command: 'nunchi', args: 'status' } as any)).text).split('\n')
+  expect(st[0]).toBe('Nunchi    on · analyzes after every answer')
+  expect(st[1]).toMatch(/^Analysis  through answer #3 · \d\d:\d\d$/)
+  expect(st[2]).toBe('State     idle')
+  expect(st[3]).toBe('Hooks     recording')
+  expect(st[4]).toBe('Language  English (Claude Code setting)')
+  const u = String((await $.command.run({ command: 'nunchi', args: 'stop' } as any)).text).split('\n')
+  expect(u[0]).toBe('Unknown command: stop')
+  expect(u[2]).toBe('/nunchi off        turn off · close the panel')
+  const off = await $.command.run({ command: 'nunchi', args: 'off' } as any)
+  expect(String(off.text)).toBe('Turned Nunchi off. This session is no longer analyzed (the result through answer #3 stays as it is). Run /nunchi to turn it back on.')
+  const back = await $.command.run({ command: 'nunchi' } as any)
+  expect(String(back.text)).toBe('Turned Nunchi back on. It picks up the analysis after the next answer.')
+  for (const t of [...st, ...u, String(off.text), String(back.text)]) expect(t).not.toMatch(/[가-힣]/)   // 한글이 섞이지 않는다
+  await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()   // 열었다 닫아 남은 비동기 일을 정리한다
+})
+
+test('switching the language mid-session registers the command again in the new language (요구 이력 84)', async ($, on) => {
+  const w = offWorld(on, { want: { at: 'x', on: true }, answers: ['English', '그대로 두기 (새 세션부터 English)'] })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  expect(w.registered.at(-1)?.description).toBe('눈치 켜기: 이 세션을 분석하고 패널을 연다 · off 끄기 · status 상태 · language 언어')
+  const n = w.registered.length
+  await $.command.run({ command: 'nunchi', args: 'language' } as any)
+  expect(w.registered.length).toBe(n + 1)
+  expect(w.registered.at(-1)).toMatchObject({ name: 'nunchi', argumentHint: '[on|off|status|language]', immediate: true,
+    description: 'Turn on Nunchi: analyze this session and open the panel · off · status · language' })
+  await $.command.run({ command: 'nunchi', args: 'status' } as any)
+  expect(w.registered.length).toBe(n + 1)                                // 언어가 그대로면 다시 등록하지 않는다
+  await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()   // 열었다 닫아 남은 비동기 일을 정리한다
+})
+
+test('switching the language retitles an open pane, and never opens a closed one (요구 이력 85)', async ($, on) => {
+  const w = offWorld(on, { want: { at: 'x', on: true }, answers: ['English', '그대로 두기 (새 세션부터 English)'], panes: ['nunchi'] })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  expect(w.titles.at(-1)).toBe('눈치')
+  await $.command.run({ command: 'nunchi', args: 'language' } as any)
+  expect(w.titles.at(-1)).toBe('Nunchi')
+  await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()   // 열었다 닫아 남은 비동기 일을 정리한다
+})
+
+test('a language switch with the pane closed opens nothing (요구 이력 85)', async ($, on) => {
+  const w = offWorld(on, { want: { at: 'x', on: true }, answers: ['English', '그대로 두기 (새 세션부터 English)'], panes: [] })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const n = w.opened.length
+  await $.command.run({ command: 'nunchi', args: 'language' } as any)
+  expect(w.opened.length).toBe(n)
+  await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()   // 열었다 닫아 남은 비동기 일을 정리한다
+})
+
+// 요구 이력 86: 이 세션 검토(review/screens/panel-review.html)를 본뜬 결과. 새 흐름이라 단계마다 decision_by 칸이 있다
+const SESSION = {
+  last_turn: 11, analyzed_at: '2026-11-19T01:00:00Z',
+  flow: {
+    version: 3, until: 11,
+    first_goal: { text: '설치 점검', turn: 1 }, current_goal: { text: '끄기·상태 마무리', turn: 9 },
+    steps: [
+      { index: 4, grounded: true, label: '확정', summary: '커밋', agent_summary: '', decision: '', decision_by: '' },                       // 순서 승인: 결정 아님
+      { index: 5, grounded: true, label: '질문', summary: '버전', agent_summary: '', decision: '마켓 정보만 바꿀 때는 버전을 올리지 않음', decision_by: 'agent' },
+      { index: 9, grounded: true, label: '확정', summary: '진행', agent_summary: '', decision: '끄기와 상태를 함께 만듦', decision_by: 'user' },
+      { index: 11, grounded: true, label: '구체화', summary: '지침', agent_summary: '커밋과 배포를 물음', decision: '다국어 규칙을 지침 17번에 넣음', decision_by: 'user' },
+    ],
+    asks: [
+      { id: 'Q2', turn: 3, last_turn: 9, summary: '다른 세션에서 입력해 보기', quote: '입력해 보시면', state: 'closed' },
+      { id: 'Q3', turn: 6, last_turn: 6, summary: 'off만 만들지', quote: '함께 만들까요', state: 'open' },
+      { id: 'Q5', turn: 8, last_turn: 9, summary: '230MB 복사본 지울지', quote: '지울까요?', state: 'open' },
+      { id: 'Q8', turn: 9, last_turn: 11, summary: '커밋할지', quote: '커밋할까요?', state: 'open' },
+      { id: 'Q9', turn: 9, last_turn: 9, summary: '시험 폴더 지울지', quote: '지울지 정해 주세요', state: 'open' },
+      { id: 'Q10', turn: 11, last_turn: 11, summary: '0.5.1로 올려 배포할지', quote: '0.5.1로 올려 배포까지 할지', state: 'open' },
+    ],
+    requests: [
+      { id: 'R1', from_turn: 7, summary: '계획 검토 결과 정리', state: 'deferred', agent_quote: '세 번째 항목은 다음에 보겠습니다' },
+      { id: 'R2', from_turn: 11, by_turn: 11, summary: '흔들리는 패널 테스트 원인 찾기', state: 'no_result', agent_quote: '원인 못 찾음' },
+    ],
+  },
+}
+async function sessionPane($: any, on: any, setting = '한국어') {
+  offWorld(on, { want: { at: 'x', on: true }, analysis: SESSION, setting })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
+  const texts = async () => (await ui.findAll({ type: 'Text' })).map((x: any) => String(x.text ?? ''))
+  return { ui, texts }
+}
+
+test('only the questions of the last answer show, newest first, and the earlier ones fold (요구 이력 86)', async ($, on) => {
+  const { ui, texts } = await sessionPane($, on)
+  let all = await texts()
+  expect(all.filter(t => /^에이전트 질문 \d/.test(t))).toEqual(['에이전트 질문 2'])   // 줄 하나 (안쪽 글 조각은 숫자 없이 따로 잡힌다)
+  const asked = all.filter(t => /^ \d .+#\d/.test(t))   // 번호 조각만 따로 잡힌 것은 뺀다
+  expect(asked[0]).toMatch(/^ 1 0\.5\.1로 올려 배포할지 #11$/)              // 같은 턴이면 나중에 생긴 것이 위
+  expect(asked[1]).toMatch(/^ 2 커밋할지 #11 · 처음 #9$/)                   // 마지막으로 물은 턴과 처음 물은 턴
+  expect(asked.length).toBe(2)
+  expect(all.some(t => /230MB|시험 폴더|off만/.test(t))).toBe(false)         // 지난 질문은 접힌다
+  expect(all.some(t => /다른 세션/.test(t))).toBe(false)                     // 지나간 질문은 보이지 않는다
+  expect((await ui.find({ type: 'Button', key: 'more-asks' }))?.text).toBe('지난 질문 3개')
+  await ui.press({ key: 'more-asks' })
+  all = await texts()
+  expect(all.filter(t => /^ \d .+#\d/.test(t)).map(t => t.replace(/\s+#.*/, ''))).toEqual([' 1 0.5.1로 올려 배포할지', ' 2 커밋할지', ' 3 시험 폴더 지울지', ' 4 230MB 복사본 지울지', ' 5 off만 만들지'])   // 둘 다 #9면 나중에 생긴 Q9가 위
+  expect((await ui.find({ type: 'Button', key: 'more-asks' }))?.text).toBe('접기')
+  expect(all.some(t => /다른 세션/.test(t))).toBe(false)
+  await ui.unmount()
+})
+
+test('decisions are the settled requirements, not order approvals, and an accepted proposal says so (요구 이력 86)', async ($, on) => {
+  const { ui, texts } = await sessionPane($, on)
+  const all = await texts()
+  expect(all).toContain('결정 사항 3')
+  const d = all.filter(t => /✔/.test(t))
+  expect(d[0]).toMatch(/✔ 다국어 규칙을 지침 17번에 넣음\s+#11$/)            // 관계가 구체화여도 결정
+  expect(d[1]).toMatch(/✔ 끄기와 상태를 함께 만듦\s+#9$/)
+  expect(d[2]).toMatch(/✔ 마켓 정보만 바꿀 때는 버전을 올리지 않음/)
+  expect(all.some(t => /^\s*#5 · 제안 승인$/.test(t))).toBe(true)              // 폭이 모자라 꼬리는 다음 줄 (요구 이력 80)
+  expect(all.some(t => /커밋\s+#4/.test(t))).toBe(false)                     // 정해진 것이 없는 확정 턴은 넣지 않는다
+  await ui.unmount()
+})
+
+test('a deferred request carries the agent\'s words, and an investigation without a result is a known issue (요구 이력 86)', async ($, on) => {
+  const { ui, texts } = await sessionPane($, on)
+  const all = await texts()
+  expect(all).toContain('남은 요청 1 내 요청 중')
+  expect(all.some(t => /⊘ 계획 검토 결과 정리 #7$/.test(t))).toBe(true)      // 원문이 있으면 고정 문구는 붙이지 않는다
+  expect(all.some(t => /^\s+“세 번째 항목은 다음에 보겠습니다”$/.test(t))).toBe(true)
+  expect(all.some(t => /못 했거나 미룸/.test(t))).toBe(false)
+  expect(all).toContain('알려진 문제 1')
+  expect(all.some(t => /◇ 흔들리는 패널 테스트 원인 찾기 #11$/.test(t))).toBe(true)
+  expect(all.some(t => /^\s+“원인 못 찾음”$/.test(t))).toBe(true)
+  await ui.unmount()
+})
+
+test('the new question, decision and known-issue labels read in English on an English screen (요구 이력 86)', async ($, on) => {
+  const { ui, texts } = await sessionPane($, on, 'English')
+  const all = await texts()
+  expect(all).toContain('Agent questions 2')
+  expect(all.some(t => /^ 2 커밋할지 #11 · first #9$/.test(t))).toBe(true)
+  expect((await ui.find({ type: 'Button', key: 'more-asks' }))?.text).toBe('3 earlier questions')
+  expect(all.some(t => /#5 · approved proposal$/.test(t))).toBe(true)
+  expect(all).toContain('Known issues 1')
+  for (const t of all.filter(t => /^(Agent questions|Decisions|Open requests|Known issues)/.test(t))) expect(t).not.toMatch(/[가-힣]/)
+  await ui.unmount()
+})
+
+test('a turn can settle several requirements, newest turn first, and an accepted proposal says so (요구 이력 87)', async ($, on) => {
+  const listed = { ...SESSION, flow: { ...SESSION.flow, steps: [
+    { index: 4, grounded: true, label: '확정', summary: '커밋', agent_summary: '', decisions: [{ text: '플러그인은 HTTPS 주소로 받는다', by: 'agent', quote: '커밋하고 푸시해줘' }] },
+    { index: 9, grounded: true, label: '확정', summary: '진행', agent_summary: '', decisions: [] },                                   // 순서 승인만: 결정 없음
+    { index: 14, grounded: true, label: '확정', summary: '답', agent_summary: '', decisions: [
+      { text: '에이전트 질문은 제목을 두고 지난 질문은 접는다', by: 'user', quote: '지난 질문은 펼치기' },
+      { text: '의사결정은 설계 요건만 담는다', by: 'agent', quote: '2. 좋아.' }] },
+  ] } }
+  offWorld(on, { want: { at: 'x', on: true }, analysis: listed })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await mountPane($, { ...PANE, props: { ...PANE.props, bodyColumns: 95 }, surface: 'terminal' })
+  const all = (await ui.findAll({ type: 'Text' })).map((x: any) => String(x.text ?? ''))
+  expect(all).toContain('결정 사항 3')
+  const d = all.filter(t => /✔/.test(t))
+  expect(d[0]).toMatch(/✔ 에이전트 질문은 제목을 두고 지난 질문은 접는다\s+#14-1$/)          // 한 턴에 둘이면 턴-순번 (요구 이력 90)
+  expect(d[1]).toMatch(/✔ 의사결정은 설계 요건만 담는다\s+#14-2 · 제안 승인$/)
+  expect(d[2]).toMatch(/✔ 플러그인은 HTTPS 주소로 받는다\s+#4 · 제안 승인$/)
+  expect(all.some(t => /#9/.test(t) && /✔/.test(t))).toBe(false)
+  await ui.unmount()
+})
+
+// 요구 이력 88: 펼치기는 지금 보이는 항목의 잘린 글만 풀고, 숨은 항목(… n개 더)은 그대로. 새 분석이 오면 기본 줄 수로
+test('Expand un-cuts only the shown items, never the hidden ones, and folds back on a new analysis (요구 이력 88)', async ($, on) => {
+  const long = (i: number) => `결정 ${i}: 패널 글은 한국어와 영어 문구 표에 둘 다 넣고 세션 도중 언어를 바꾸면 패널 제목과 명령 설명도 다시 등록하며 영어 화면 시험을 함께 넣고 실제 화면도 두 언어로 확인한다 끝${i}`   // 46칸 3줄을 넘는다
+  const steps = [1, 2, 3, 4, 5].map(i => ({ index: i, grounded: true, label: '구체화', summary: `s${i}`, agent_summary: '', decisions: [{ text: long(i), by: 'user', quote: 'q' }] }))
+  const live: any = { ...SESSION, last_turn: 5, flow: { ...SESSION.flow, until: 5, steps, asks: [], requests: [] } }
+  offWorld(on, { want: { at: 'x', on: true }, analysis: live })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await mountPane($, { ...PANE, props: { ...PANE.props, bodyColumns: 46 }, surface: 'terminal' })
+  const texts = async () => (await ui.findAll({ type: 'Text' })).map((x: any) => String(x.text ?? ''))
+  let all = await texts()
+  expect(all.some(t => /끝5/.test(t))).toBe(false)                                   // 3줄에서 잘림
+  expect((await ui.find({ type: 'Button', key: 'text-decisions' }))?.text).toBe('펼치기')
+  expect((await ui.find({ type: 'Button', key: 'more-decisions' }))?.text).toBe('… 2개 더')
+  await ui.press({ key: 'text-decisions' })
+  all = await texts()
+  expect(all.some(t => /끝5/.test(t)) && all.some(t => /끝4/.test(t)) && all.some(t => /끝3/.test(t))).toBe(true)   // 보이는 3개는 다 보인다
+  expect(all.some(t => /결정 2:|결정 1:/.test(t))).toBe(false)                           // 숨은 2개는 그대로 숨는다
+  expect((await ui.find({ type: 'Button', key: 'more-decisions' }))?.text).toBe('… 2개 더')
+  expect((await ui.find({ type: 'Button', key: 'text-decisions' }))?.text).toBe('줄이기')
+  live.last_turn = 6; live.flow = { ...live.flow, until: 6 }                             // 새 분석 (기준 턴이 바뀜)
+  await $.command.run({ command: 'nunchi', args: 'status' } as any)                     // 다시 읽기
+  all = await texts()
+  expect(all.some(t => /끝5/.test(t))).toBe(false)                                       // 기본 줄 수로 돌아간다
+  expect((await ui.find({ type: 'Button', key: 'text-decisions' }))?.text).toBe('펼치기')
+  await ui.unmount()
+})
+
+test('the handled block and its buttons read in English on an English screen, without Expand (요구 이력 88)', async ($, on) => {
+  const quiet = { ...SESSION, flow: { ...SESSION.flow, requests: [{ id: 'R9', from_turn: 11, by_turn: 11, summary: 'a very long request summary that will not fit on one narrow line at all', state: 'addressed', agent_quote: 'done' }] } }
+  offWorld(on, { want: { at: 'x', on: true }, analysis: quiet, setting: 'English' })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await mountPane($, { ...PANE, props: { ...PANE.props, bodyColumns: 46 }, surface: 'terminal' })
+  const all = (await ui.findAll({ type: 'Text' })).map((x: any) => String(x.text ?? ''))
+  expect(all).toContain('Handled #11')
+  expect((await ui.find({ type: 'Button', key: 'text-handled' }))?.text).toBe('Full text')
+  await ui.press({ key: 'text-handled' })
+  expect((await ui.find({ type: 'Button', key: 'text-handled' }))?.text).toBe('Shorten')
+  await ui.unmount()
+})
+
+// 요구 이력 89: 바뀐 결정은 숨고, 처리 결과 맨 위에 '결정 #턴 바뀜: from → to'. 같은 구절의 요청은 그 줄이 대신한다. 처리 결과에는 인용이 없다
+const CHANGED = {
+  last_turn: 3, analyzed_at: '2026-11-19T06:00:00Z',
+  flow: { version: 3, until: 3, first_goal: { text: 'status 다듬기', turn: 1 }, current_goal: { text: 'status 다듬기', turn: 1 },
+    steps: [
+      { index: 1, grounded: true, label: '시작', summary: 's1', agent_summary: '', decisions: [
+        { id: 'D1-1', text: '/nunchi status는 다섯 줄로 답한다', by: 'user', quote: '다섯 줄로', replaces: [], from: '', to: '' },
+        { id: 'D1-2', text: '줄 순서는 눈치·분석·상태·훅·언어', by: 'user', quote: '순서로', replaces: [], from: '', to: '' }] },
+      { index: 2, grounded: true, label: '구체화', summary: 's2', agent_summary: '', decisions: [] },
+      { index: 3, grounded: true, label: '확정', summary: 's3', agent_summary: '여섯 줄로 둠', decisions: [
+        { id: 'D3-1', text: '/nunchi status 답은 여섯 줄로 한다', by: 'agent', quote: '상태 답은 여섯 줄로 바꾸자', replaces: ['D1-1'], from: '다섯 줄', to: '여섯 줄' }] },
+    ],
+    asks: [],
+    requests: [
+      { id: 'R3', from_turn: 3, by_turn: 3, summary: '상태 답을 여섯 줄로 바꾸기', quote: '상태 답은 여섯 줄로 바꾸자', state: 'addressed', agent_quote: '여섯 줄로 두겠습니다' },
+      { id: 'R4', from_turn: 3, by_turn: 3, summary: '안내서 고치기', quote: '안내서도', state: 'addressed', agent_quote: '안내서도 고쳤습니다' },
+    ] } }
+
+test('a replaced decision is hidden and the handled block says what changed, without quotes (요구 이력 89)', async ($, on) => {
+  offWorld(on, { want: { at: 'x', on: true }, analysis: CHANGED })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await mountPane($, { ...PANE, props: { ...PANE.props, bodyColumns: 60 }, surface: 'terminal' })
+  const all = (await ui.findAll({ type: 'Text' })).map((x: any) => String(x.text ?? ''))
+  expect(all).toContain('결정 사항 2')
+  expect(all.some(t => /다섯 줄로 답한다/.test(t))).toBe(false)                         // 바뀐 옛 결정은 숨는다
+  expect(all.some(t => /✔ \/nunchi status 답은 여섯 줄로 한다/.test(t))).toBe(true)      // 지금 정해진 내용만
+  expect(all.some(t => /줄 순서는/.test(t))).toBe(true)                                   // 바뀌지 않은 결정은 남는다
+  const h = all.filter(t => /^ [✔◐⊘○◇] /.test(t))   // 처리 결과 줄 (머리 줄의 ' · #n'은 빼고)
+  expect(h[0]).toBe(' ✔ 결정 #1-1 바뀜: 다섯 줄 → 여섯 줄')                                 // 바뀜 줄이 맨 위, #1에 결정이 둘이라 #1-1 (요구 이력 90)
+  expect(h.some(t => /여섯 줄로 바꾸기/.test(t))).toBe(false)                             // 같은 구절의 요청은 대신한다
+  expect(h.some(t => /안내서 고치기/.test(t))).toBe(true)
+  expect(all.some(t => /여섯 줄로 두겠습니다|안내서도 고쳤습니다/.test(t))).toBe(false)   // 처리 결과에는 인용이 없다
+  expect((await ui.find({ type: 'Button', key: 'text-handled' }))).toBeFalsy()             // 잘린 것이 없으면 펼치기도 없다
+  await ui.unmount()
+})
+
+test('the change line reads in English on an English screen, and falls back when what changed is unknown (요구 이력 89)', async ($, on) => {
+  const unknown = JSON.parse(JSON.stringify(CHANGED))
+  unknown.flow.steps[2].decisions[0].from = ''; unknown.flow.steps[2].decisions[0].to = ''
+  offWorld(on, { want: { at: 'x', on: true }, analysis: unknown, setting: 'English' })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await mountPane($, { ...PANE, props: { ...PANE.props, bodyColumns: 90 }, surface: 'terminal' })   // 한 줄에 다 들어가게
+  const all = (await ui.findAll({ type: 'Text' })).map((x: any) => String(x.text ?? ''))
+  expect(all).toContain(' ✔ Decision #1-1 changed → /nunchi status 답은 여섯 줄로 한다')   // 바뀐 부분을 못 따면 새 결정 문장
+  expect(all).toContain('Decisions 2')
+  await ui.unmount()
+})
+
+// 요구 이력 87·89: 마지막 답이 지난 결정을 어기면 결정 줄의 ✔ 자리에 ⚠, 찾은 턴에만 처리 결과 맨 위에 ⚠ 줄, 그 결정 아래 프롬프트 복사
+function broken(at: number, extra: any[] = [], checks: any[] = [{ id: 'D1-1', kind: '어김', what: '상태 문구가 한국어만', quote: '한국어로만' }]) {
+  const many = [2, 3, 4, 5].map(i => ({ index: i, grounded: true, label: '구체화', summary: `s${i}`, agent_summary: '', decisions: [{ id: `D${i}-1`, text: `요건 ${i}`, by: 'user', quote: 'q', replaces: [], from: '', to: '' }] }))
+  return { last_turn: at, analyzed_at: '2026-11-19T06:00:00Z', flow: { version: 3, until: at, first_goal: { text: 'g', turn: 1 }, current_goal: { text: 'g', turn: 1 },
+    steps: [
+      { index: 1, grounded: true, label: '시작', summary: 's1', agent_summary: '', decisions: [{ id: 'D1-1', text: '보이는 글은 모두 한국어·영어로 둔다', by: 'user', quote: 'q', replaces: [], from: '', to: '' }] },
+      ...many,
+      { index: 6, grounded: true, label: '구체화', summary: 's6', agent_summary: '상태 줄 추가', decisions: [], checks },
+      ...extra,
+    ], asks: [], requests: [] } }
+}
+async function copyWorld(on: any, analysis: any, isCopied: boolean, setting = '한국어') {
+  const copied: any[] = [], toasts: string[] = []
+  offWorld(on, { want: { at: 'x', on: true }, analysis, setting })
+  on('ui.copy', (_: unknown, e: any) => { copied.push(e); return { value: isCopied ? { isCopied: true } : { isCopied: false, reason: 'no-clipboard' } } })
+  on('ui.toast', (_: unknown, e: any) => { toasts.push(String(e.text ?? e)); return { value: undefined } })
+  return { copied, toasts }
+}
+
+test('a broken decision shows ⚠ in place of ✔, stays visible when folded, and offers only a copy button (요구 이력 87·89)', async ($, on) => {
+  const { copied, toasts } = await copyWorld(on, broken(6), true)
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await mountPane($, { ...PANE, props: { ...PANE.props, bodyColumns: 70 }, surface: 'terminal' })
+  const all = (await ui.findAll({ type: 'Text' })).map((x: any) => String(x.text ?? ''))
+  expect(all.some(t => /⚠ 보이는 글은 모두 한국어·영어로 둔다\s+#1 · #6 어김$/.test(t))).toBe(true)   // 최근 3개(5·4·3) 밖이어도 보인다
+  expect(all.some(t => /✔ 보이는 글은/.test(t))).toBe(false)
+  expect((await ui.find({ type: 'Button', key: 'copy-D1-1' }))).toBeFalsy()                          // 결정 줄 아래에는 버튼이 없다 (요구 이력 90)
+  expect((await ui.find({ type: 'Button', key: 'copy-prompt' }))?.text).toBe('프롬프트 복사')           // 처리 결과에 하나
+  expect(all.some(t => /결정대로 고쳐 줘/.test(t))).toBe(false)                                       // 요청 글은 보이지 않는다
+  const hs = all.filter(t => /^ [✔◐⊘○◇⚠] \S/.test(t))
+  expect(hs[0]).toBe(' ⚠ 열린 빠뜨림 1')                                                              // 개수 줄이 늘 첫 줄, 버튼은 여기 (요구 이력 90)
+  expect(hs[1]).toBe(' ⚠ 결정 #1 어김: 상태 문구가 한국어만')                                          // 찾은 턴에는 상세 줄
+  await ui.press({ key: 'copy-prompt' })
+  expect(copied[0]?.text).toBe('앞서 정한 결정이 지켜지지 않았어. 결정: "보이는 글은 모두 한국어·영어로 둔다". 어긋난 점: 상태 문구가 한국어만 (네가 쓴 말: "한국어로만"). 결정대로 고쳐 줘.')   // 번호 대신 에이전트가 쓴 말
+  expect(toasts.at(-1)).toBe('복사했습니다 · 입력창에 붙여 넣으세요')
+  expect((await ui.findAll({ type: 'Text' })).some((x: any) => /결정대로 고쳐 줘/.test(String(x.text ?? '')))).toBe(false)
+  await ui.unmount()
+})
+
+test('when copying fails the request text appears under ⚠ so it can be dragged (요구 이력 89)', async ($, on) => {
+  const { toasts } = await copyWorld(on, broken(6), false)
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await mountPane($, { ...PANE, props: { ...PANE.props, bodyColumns: 70 }, surface: 'terminal' })
+  await ui.press({ key: 'copy-prompt' })
+  expect(toasts.at(-1)).toBe('복사하지 못했습니다 · 아래 글을 끌어서 복사하세요')
+  const all = (await ui.findAll({ type: 'Text' })).map((x: any) => String(x.text ?? '')).join('\n')
+  expect(all).toMatch(/앞서 정한 결정이 지켜지지 않았어/)
+  await ui.unmount()
+})
+
+test('after the found turn only the decision keeps ⚠, and a fix turns it back to ✔ (요구 이력 87·89)', async ($, on) => {
+  const later = broken(7, [{ index: 7, grounded: true, label: '구체화', summary: 's7', agent_summary: '다른 일', decisions: [] }])
+  const w = offWorld(on, { want: { at: 'x', on: true }, analysis: later })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  let ui = await mountPane($, { ...PANE, props: { ...PANE.props, bodyColumns: 70 }, surface: 'terminal' })
+  let all = (await ui.findAll({ type: 'Text' })).map((x: any) => String(x.text ?? ''))
+  expect(all.some(t => /⚠ 보이는 글은/.test(t))).toBe(true)
+  expect(all.some(t => /^ ⚠ 결정 #1/.test(t))).toBe(false)                                            // 처리 결과의 ⚠ 줄은 찾은 턴에만
+  expect(all).toContain(' ⚠ 열린 빠뜨림 1 · #6부터')                                                 // 그 뒤에는 열린 빠뜨림 줄과 버튼 하나, 언제부터인지 (요구 이력 90)
+  expect((await ui.find({ type: 'Button', key: 'copy-prompt' }))?.text).toBe('프롬프트 복사')
+  await ui.unmount()
+  void w
+})
+
+test('a fix closes ⚠ and the handled block says it was fixed; an English screen reads in English (요구 이력 87·89)', async ($, on) => {
+  const fixed = broken(7, [{ index: 7, grounded: true, label: '정정', summary: 's7', agent_summary: '고침', decisions: [], checks: [{ id: 'D1-1', kind: '고침', what: '영어 글 표에도 넣음', quote: '넣었습니다' }] }])
+  offWorld(on, { want: { at: 'x', on: true }, analysis: fixed, setting: 'English' })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await mountPane($, { ...PANE, props: { ...PANE.props, bodyColumns: 70 }, surface: 'terminal' })
+  const all = (await ui.findAll({ type: 'Text' })).map((x: any) => String(x.text ?? ''))
+  expect(all.some(t => /⚠/.test(t))).toBe(false)
+  expect(all).toContain(' ✔ Decision #1 fixed: 영어 글 표에도 넣음')
+  expect((await ui.find({ type: 'Button', key: 'copy-prompt' }))).toBeFalsy()                        // 열린 빠뜨림이 없으면 버튼도 없다
+  await ui.unmount()
+})
+
+test('the ⚠ tag, copy button and toasts read in English (요구 이력 89)', async ($, on) => {
+  const en: any = broken(6, [], [{ id: 'D1-1', kind: '빠뜨림', what: 'status lines', quote: 'q' }]); en.flow.lang = 'en'   // 영어로 분석된 세션: 복사 글 틀도 분석 언어
+  const { copied, toasts } = await copyWorld(on, en, true, 'English')
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await mountPane($, { ...PANE, props: { ...PANE.props, bodyColumns: 80 }, surface: 'terminal' })
+  const all = (await ui.findAll({ type: 'Text' })).map((x: any) => String(x.text ?? ''))
+  expect(all.some(t => /#1 · missed in #6$/.test(t))).toBe(true)
+  expect(all).toContain(' ⚠ Decision #1 missed: status lines')
+  expect((await ui.find({ type: 'Button', key: 'copy-prompt' }))?.text).toBe('Copy prompt')
+  await ui.press({ key: 'copy-prompt' })
+  expect(String(copied[0]?.text)).toBe('An earlier decision was not followed. Decision: "보이는 글은 모두 한국어·영어로 둔다". What was missed: status lines (you wrote: "q"). Please fix it to match the decision.')
+  expect(toasts.at(-1)).toBe('Copied · paste it into the prompt')
+  await ui.unmount()
+})
+
+test('one copy prompt covers every open omission, and a pasted fix request does not repeat the fix line (요구 이력 90)', async ($, on) => {
+  const two = broken(6, [], [{ id: 'D1-1', kind: '어김', what: '상태 문구가 한국어만', quote: 'q' }, { id: 'D2-1', kind: '빠뜨림', what: '시험을 안 넣음', quote: 'q' }])
+  const { copied } = await copyWorld(on, two, true)
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await mountPane($, { ...PANE, props: { ...PANE.props, bodyColumns: 80 }, surface: 'terminal' })
+  expect((await ui.findAll({ type: 'Button', key: 'copy-prompt' })).length).toBe(1)
+  await ui.press({ key: 'copy-prompt' })
+  expect(String(copied[0]?.text).split('\n')).toEqual([
+    '앞서 정한 결정 2개가 지켜지지 않았어. 결정대로 고쳐 줘.',
+    '1) 결정: "보이는 글은 모두 한국어·영어로 둔다" / 어긋난 점: 상태 문구가 한국어만 (네가 쓴 말: "q")',
+    '2) 결정: "요건 2" / 빠진 점: 시험을 안 넣음 (네가 쓴 말: "q")'])
+  await ui.unmount()
+})
+
+test('in a fix turn the pasted fix request is not listed again beside the fix line (요구 이력 90)', async ($, on) => {
+  const fixed: any = broken(7, [{ index: 7, grounded: true, label: '정정', summary: 's7', agent_summary: '고침', decisions: [], checks: [{ id: 'D1-1', kind: '고침', what: '영어도 넣음', quote: 'q' }] }])
+  fixed.flow.requests = [{ id: 'R9', from_turn: 7, by_turn: 7, summary: '결정대로 되돌리기', quote: '결정대로 고쳐 줘', state: 'addressed' },
+                         { id: 'R10', from_turn: 7, by_turn: 7, summary: '안내서 고치기', quote: '안내서도', state: 'addressed' }]
+  offWorld(on, { want: { at: 'x', on: true }, analysis: fixed })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await mountPane($, { ...PANE, props: { ...PANE.props, bodyColumns: 80 }, surface: 'terminal' })
+  const h = (await ui.findAll({ type: 'Text' })).map((x: any) => String(x.text ?? '')).filter((t: string) => /^ [✔◐⊘○◇⚠] \S/.test(t))   // 색칠한 표시 조각만 따로 잡힌 것은 뺀다
+  expect(h).toEqual([' ✔ 결정 #1 고침: 영어도 넣음', ' ✔ 안내서 고치기'])
+  await ui.unmount()
 })

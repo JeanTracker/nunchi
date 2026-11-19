@@ -37,7 +37,8 @@
       "grounded": true,
       "shift": false,
       "title": "",
-      "decision": "",
+      "decisions": [],
+      "checks": [],
       "digest": "턴 1까지의 흐름",
       "resp": "31:ad5fb1678f"
      }
@@ -93,8 +94,8 @@
   }
  },
  "claude_calls": [
-  "1 ok 008d5fcbbc72",
-  "2 fail 00ad83eca895",
-  "2 fail 00ad83eca895"
+  "1 ok 4b46d249b1df",
+  "2 fail 527f21acef47",
+  "2 fail 527f21acef47"
  ]
 }
