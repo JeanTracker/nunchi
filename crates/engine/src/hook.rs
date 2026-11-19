@@ -52,19 +52,6 @@ fn build_record(payload: &Map<String, Value>) -> Map<String, Value> {
     rec
 }
 
-/// PreCompact 때 대화 기록 사본을 남긴다
-fn save_compact_copy(rec: &Map<String, Value>, session_dir: &Path) -> std::io::Result<()> {
-    let src = rec.get("transcript_path").map(py::str_of).unwrap_or_default();
-    if rec.get("event") != Some(&Value::from("PreCompact")) || src.is_empty() || !Path::new(&src).exists() {
-        return Ok(());
-    }
-    let mut n = 1;
-    while session_dir.join(format!("compact-{n}.jsonl")).exists() {
-        n += 1;
-    }
-    std::fs::copy(&src, session_dir.join(format!("compact-{n}.jsonl"))).map(|_| ())
-}
-
 /// /nunchi 표시: 켬 Some(true), 끔 Some(false), 없음 None (분석 코드를 읽지 않는 가벼운 판단)
 fn want_state(path: &Path) -> Option<bool> {
     if !path.exists() {
@@ -123,7 +110,8 @@ fn run() -> Result<(), String> {
     let line = py::dumps(&Value::Object(rec.clone())) + "\n";
     let mut f = std::fs::OpenOptions::new().append(true).create(true).mode(0o600).open(session_dir.join("events.jsonl")).map_err(fail)?;
     f.write_all(line.as_bytes()).map_err(fail)?;
-    save_compact_copy(&rec, &session_dir).map_err(fail)?;
+    // 압축 직전 기록 사본은 남기지 않는다 (요구 이력 95): Claude Code가 압축해도 기록 파일 앞부분을 지우지 않아
+    // 압축 전 원문은 기록 파일에 그대로 있고, 사본을 읽는 곳도 없었다
     request_analysis(&rec).map_err(fail)?;
     Ok(())
 }

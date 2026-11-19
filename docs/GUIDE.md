@@ -2,9 +2,10 @@
 
 nunchi is a Claude Code plugin that adds a side panel to a session. When you come back to
 a session after a while, the panel shows where things stand: the current goal and how
-the conversation got there, the requirements you settled, what the agent did and what it
-is asking you, and which of your requests are still open. You read that, answer, and
-carry on.
+the conversation got there, the requirements you settled, what the agent did about your
+last messages and what it is asking you, and which of your requests are still open. When
+an answer misses or goes against something you decided, the panel flags it. You read
+that, answer, and carry on.
 
 The panel only reads analysis results. A small engine that ships with the plugin records
 each session's events through Claude Code hooks and, when a response ends, analyzes the
@@ -19,7 +20,9 @@ new turn in the background with `claude -p`.
 - Claude Code. Tested with 2.1.322 to 2.1.325.
 - The `claude` command on the PATH of the shell you start Claude Code from. The analyzer
   calls `claude -p` once per new turn on your account's quota (see "Analysis cost").
-- While the repository is private, git access to it, to add the marketplace.
+
+The repository is public, and the plugin is fetched over HTTPS from its `dist` branch, so
+installing needs no SSH key.
 
 ## Install
 
@@ -60,21 +63,36 @@ Having the plugin installed does not analyze every session. Type `/nunchi` in a 
 whose flow you want to follow. That session becomes an analysis target and the panel
 opens. From then on it is analyzed after every response, and it stays on when you reopen
 the session. Responses from before you turned it on are analyzed together, from the
-start, when the next response ends.
+start, when the next response ends. To have them analyzed right away instead, run
+`/nunchi build`.
 
 The panel does not open on its own in sessions you have not turned on.
 
 ## Commands
 
-All of them take effect at once, even while the agent is still answering; their replies
-show up in the conversation once that answer ends.
-
 | Command | What it does |
 | --- | --- |
 | `/nunchi` or `/nunchi on` | Turn nunchi on for this session and open the panel |
+| `/nunchi build` | Analyze the conversation so far now, without waiting for the next answer |
 | `/nunchi off` | Stop analyzing this session and close the panel |
 | `/nunchi status` | Show the state in five lines; changes nothing |
 | `/nunchi language` | Pick the panel and analysis language (see below) |
+
+`/nunchi`, `off`, `status` and `language` take effect at once, even while the agent is
+still answering; their replies show up in the conversation once that answer ends.
+
+`/nunchi build` looks at what this session already has and analyzes only what is needed:
+
+- In a session where nunchi was never on, it analyzes the conversation from the start.
+- If the existing analysis was made by an older version of nunchi (one without
+  decisions and omission checks), it rebuilds it from the start with the current engine.
+- Otherwise it analyzes only the answers that are not analyzed yet. If there are none,
+  it asks nothing, turns nunchi on and says the analysis is up to date.
+
+Before it starts, it tells you how many answers it will analyze and asks you to confirm;
+each answer is one `claude -p` call on your quota. It also turns nunchi on for the
+session and opens the panel, so later answers keep being analyzed. `/nunchi off` stops
+that. Cancelling the confirmation changes nothing.
 
 `/nunchi off` keeps the results you already have. Until you run `/nunchi` again, the
 session is not analyzed, even with `analyze_scope` set to `"all"`, and neither the panel
@@ -171,7 +189,12 @@ the later one shows only what now holds.
 When the agent's latest answer misses or goes against an earlier decision, that decision
 shows ⚠ in yellow instead of ✔, with `· broken in #12` or `· missed in #12`. It stays
 visible even when the list is folded, until the agent says it has fixed it or you change
-the decision. nunchi judges this only from what the agent wrote, not from the code.
+the decision.
+
+nunchi judges this only from what the agent wrote, not from the code, so it can be
+wrong. In our tests (a scripted conversation with six decisions and unrelated requests,
+three real sessions and this project's own session, 97 turns in all), no request
+unrelated to a decision was flagged as a miss.
 
 **Handled.** What the agent did about your messages in the last analyzed turn, one line
 each: ✔ done, ◐ in progress, ⊘ not done, ○ not mentioned, ◇ looked into without a result.
@@ -217,11 +240,66 @@ are. This only works for documents written in that table and heading style.
 
 Links in the panel (bare URLs and Markdown links) can be clicked.
 
+## Panel symbols
+
+Every symbol and mark the panel uses, in one place. The section names are the English
+panel labels; on a Korean screen the same symbols appear with Korean labels.
+
+**Your requests** (Handled, Open requests, Known issues)
+
+| Symbol | Meaning |
+| --- | --- |
+| ✔ (green) | Done: the agent says it did it. |
+| ◐ | In progress, or waiting on you. In Open requests it ends with `— in progress`. |
+| ○ | Asked for, but the answer did not deal with it. |
+| ⊘ | Not done or deferred: the agent said it could not or would do it later. Its words follow in quotes. |
+| ◇ | Looked into without finding a cause or answer. Listed under Known issues, not Open requests, with the agent's words. |
+
+**Decisions**
+
+| Symbol | Meaning |
+| --- | --- |
+| ✔ (green) | A decision that still holds. |
+| ⚠ (yellow) | The latest answer broke or missed it: `· broken in #12` or `· missed in #12`. It stays until the agent says it fixed it or you change the decision. |
+| `· approved proposal` | The agent proposed it and you accepted. |
+
+**Handled** (the last analyzed turn)
+
+| Line | Meaning |
+| --- | --- |
+| ✔ `Decision #n changed: A → B` | A decision was replaced; only the new one stays in Decisions. |
+| ⚠ `Decision #n broken: …` / `missed: …` | Found in this turn. |
+| ✔ `Decision #n fixed: …` | An open miss was fixed. |
+| ⚠ `n open misses` + `Copy prompt` | Misses are still open; the button copies one fix request for all of them. |
+
+**Agent questions**
+
+| Mark | Meaning |
+| --- | --- |
+| 1 2 3 | Questions in the last answer, newest first. |
+| `· first #n` | First asked in an earlier turn. |
+| `· partly answered` | You answered part of it. |
+| `n earlier questions` | Older open questions, folded; click to open. |
+
+**Everywhere**
+
+| Mark | Meaning |
+| --- | --- |
+| `“…”` (dimmed) | The agent's own words, quoted as written. Only questions, ⊘ and ◇ carry them; Handled does not. |
+| `#n`, `#n-k` | The turn something came from; `-k` numbers several decisions settled in one turn. |
+| `#n–#m` | The turns a flow summary covers. |
+| yellow count, green `none` | Something to look at, or nothing there. |
+| `… n more` / `Collapse` | Hidden items in a list; opens and closes the list. |
+| `Full text` / `Shorten` | Text cut with `…` in that section; shows it in full or cuts it again. |
+| `through answer #n` | The last answer the panel reflects; `· new request pending` while your new message is not analyzed yet. |
+| `Queued`, `Analyzing`, `Rebuilding from the start #k/#n`, `Catching up #k/#n` | Waiting for or running analysis; the dots move while it works. |
+
 ## Analysis cost
 
-Each new turn of a turned-on session costs one `claude -p` call, run by the engine
-outside your session; it does not add to the session's context. Settings live in
-`~/.claude-control/config.json`:
+Each new turn of a turned-on session costs one `claude -p` call (more if a call fails and
+is retried), run by the engine outside your session; it does not add to the session's
+context. `/nunchi build` costs one call for each answer it analyzes, and tells you the
+count before it starts. Settings live in `~/.claude-control/config.json`:
 
 ```json
 {

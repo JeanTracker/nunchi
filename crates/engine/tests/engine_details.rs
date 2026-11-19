@@ -45,7 +45,7 @@ fn enqueue_merges_to_the_latest_answer_and_keeps_force() {
     let d = tmp("enqueue");
     worker::enqueue(&d, "s1", "/t.jsonl", "2026-11-16T00:00:02.000Z", true, "hook").unwrap();
     worker::enqueue(&d, "s1", "/t2.jsonl", "2026-11-16T00:00:01.000Z", false, "control").unwrap(); // 더 옛 응답은 덮지 않는다
-    let v: Value = serde_json::from_str(&std::fs::read_to_string(d.join("queue/s1.json")).unwrap()).unwrap();
+    let v: Value = serde_json::from_str(&std::fs::read_to_string(d.join("queue/s1.job")).unwrap()).unwrap(); // 새 엔진의 요청은 옛 분석기가 읽지 않는 .job (요구 이력 93)
     assert_eq!((v["source_ts"].as_str(), v["transcript_path"].as_str(), v["force"].as_bool()),
                (Some("2026-11-16T00:00:02.000Z"), Some("/t.jsonl"), Some(true)));
     assert_eq!(v["by"], "control"); // 관제가 한 번이라도 넣었으면 관제 요청 (요구 이력 62)

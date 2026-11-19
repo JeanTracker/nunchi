@@ -48,7 +48,7 @@ export function settingsName(code: string): string {
 
 const KO_T = {
   title: '눈치',
-  command: '눈치 켜기: 이 세션을 분석하고 패널을 연다 · off 끄기 · status 상태 · language 언어',
+  command: '눈치 켜기: 이 세션을 분석하고 패널을 연다 · off 끄기 · status 상태 · language 언어 · build 지금까지 분석',
   queued: '분석 대기', running: '분석 중',
   failed: '분석 실패 · ',
   onWaiting: '눈치 켜짐 · 다음 응답이 끝나면 분석합니다',
@@ -105,8 +105,14 @@ const KO_T = {
   offNoRebuild: ' 꺼져 있어 다시 분석하지 않습니다. /nunchi로 켠 뒤 /nunchi language',
   noHook: '훅 기록 없음 · 세션 다시 시작 (claude --resume)',
   noHookReply: ' 다만 이 세션에는 훅 기록이 없어 분석이 돌지 않습니다. 세션을 다시 시작하세요(claude --resume).',
+  // 지금까지 분석 (요구 이력 93)
+  buildFresh: (n: number) => `응답 ${n}개를 처음부터 분석합니다. 눈치는 켜 두어 다음 응답부터도 분석합니다(/nunchi off로 끄기).`,
+  buildMore: (n: number) => `아직 분석하지 않은 응답 ${n}개를 분석합니다. 눈치는 켜 두어 다음 응답부터도 분석합니다(/nunchi off로 끄기).`,
+  buildUpToDate: (n: number) => `분석이 최신입니다(#${n} 응답까지). 눈치는 켜 두었습니다.`,
+  buildCancelled: '분석하지 않았습니다. 아무것도 바꾸지 않았습니다.',
+  buildNoRecord: '이 세션의 기록이 없어 분석하지 못합니다. 세션을 다시 시작한 뒤(claude --resume) 해 보세요.',
   unknown: (arg: string) => `모르는 명령입니다: ${arg}`,
-  usage: ['/nunchi            켜기 · 패널 열기', '/nunchi off        끄기 · 패널 닫기', '/nunchi status     지금 상태', '/nunchi language   언어 바꾸기'],
+  usage: ['/nunchi            켜기 · 패널 열기', '/nunchi off        끄기 · 패널 닫기', '/nunchi status     지금 상태', '/nunchi language   언어 바꾸기', '/nunchi build      지금까지 대화를 지금 분석'],
   stNunchi: '눈치  ', stOn: '켜짐 · 응답이 끝날 때마다 분석', stOff: '꺼짐 · /nunchi로 다시 켜기', stNever: '켜지 않음 · /nunchi로 켜기',
   stAnalysis: '분석  ', stAsOf: (n: number, hm: string) => `#${n} 응답까지 반영${hm ? ' · ' + hm : ''}`, stNone: '아직 없음',
   stState: '상태  ', stIdle: '쉼', stRunning: (k: number) => `분석 중${k ? ' #' + k : ''}`,
@@ -117,7 +123,7 @@ type T = typeof KO_T
 
 const EN_T: T = {
   title: 'Nunchi',
-  command: 'Turn on Nunchi: analyze this session and open the panel · off · status · language',
+  command: 'Turn on Nunchi: analyze this session and open the panel · off · status · language · build',
   queued: 'Queued', running: 'Analyzing',
   failed: 'Analysis failed · ',
   onWaiting: 'Nunchi on · analyzes after the next answer',
@@ -172,8 +178,13 @@ const EN_T: T = {
   offNoRebuild: ' Nunchi is off here, so nothing is rebuilt. Run /nunchi, then /nunchi language.',
   noHook: 'No hook records · restart the session (claude --resume)',
   noHookReply: ' But this session has no hook records, so nothing gets analyzed. Restart the session (claude --resume).',
+  buildFresh: (n: number) => `Analyzing ${n} answers from the start. Nunchi stays on and keeps analyzing later answers (/nunchi off to stop).`,
+  buildMore: (n: number) => `Analyzing the ${n} answers not analyzed yet. Nunchi stays on and keeps analyzing later answers (/nunchi off to stop).`,
+  buildUpToDate: (n: number) => `The analysis is up to date (through answer #${n}). Nunchi is on.`,
+  buildCancelled: 'Nothing analyzed. Nothing changed.',
+  buildNoRecord: 'No records for this session, so it cannot be analyzed. Restart the session (claude --resume) and try again.',
   unknown: (arg: string) => `Unknown command: ${arg}`,
-  usage: ['/nunchi            turn on · open the panel', '/nunchi off        turn off · close the panel', '/nunchi status     show the state', '/nunchi language   switch languages'],
+  usage: ['/nunchi            turn on · open the panel', '/nunchi off        turn off · close the panel', '/nunchi status     show the state', '/nunchi language   switch languages', '/nunchi build      analyze the conversation so far, now'],
   stNunchi: 'Nunchi    ', stOn: 'on · analyzes after every answer', stOff: 'off · /nunchi to turn back on', stNever: 'not on · /nunchi to turn on',
   stAnalysis: 'Analysis  ', stAsOf: (n: number, hm: string) => `through answer #${n}${hm ? ' · ' + hm : ''}`, stNone: 'none yet',
   stState: 'State     ', stIdle: 'idle', stRunning: (k: number) => `analyzing${k ? ' #' + k : ''}`,
@@ -193,6 +204,12 @@ export const ASK_REBUILD = (ui: Ui, was: string, to: string, turns: number) => u
   : `This session is analyzed in ${was}. Rebuild it in ${to}? (${turns} answers · at least ${turns} analysis calls)`
 export const OPT_KEEP = (ui: Ui, to: string) => ui === 'ko' ? `그대로 두기 (새 세션부터 ${to})` : `Keep it (new sessions in ${to})`
 export const OPT_REBUILD = (ui: Ui) => ui === 'ko' ? '지금 다시 분석' : 'Rebuild now'
+// /nunchi build (요구 이력 93): 비용이 들지 않는 그만두기가 먼저(창이 뜬 채 끝나면 첫 항목이 답으로 들어온다)
+export const ASK_BUILD = (ui: Ui, n: number, fresh: boolean) => ui === 'ko'
+  ? `${fresh ? `이 세션의 응답 ${n}개를 지금 엔진으로 처음부터` : `아직 분석하지 않은 응답 ${n}개를 지금`} 분석할까요? (분석 호출 ${n}회 이상 · 이 계정 사용량)`
+  : `Analyze ${fresh ? `this session's ${n} answers from the start with the current engine` : `the ${n} answers not analyzed yet now`}? (at least ${n} analysis calls · on your account's quota)`
+export const OPT_BUILD_CANCEL = (ui: Ui) => ui === 'ko' ? '그만두기' : 'Cancel'
+export const OPT_BUILD_GO = (ui: Ui, n: number) => ui === 'ko' ? `분석하기 (응답 ${n}개)` : `Analyze (${n} answers)`
 
 /** 엔진이 남긴 실패 이유(코드)를 화면 문구로. 모르는 글(옛 결과)은 그대로 */
 export function failText(code: string, ui: Ui): string {

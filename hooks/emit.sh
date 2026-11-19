@@ -30,6 +30,11 @@ if [ "${1:-}" = rebuild ]; then
   if [ -n "$engine" ] && [ -x "$engine" ]; then exec "$engine" rebuild "${2:-}" "${3:-}"; fi
   exit 1
 fi
+# 지금까지 분석 (요구 이력 93): mod가 `emit.sh build <세션 ID> <언어> [--count]`로 부른다. 엔진이 한 줄 JSON을 낸다
+if [ "${1:-}" = build ]; then
+  if [ -n "$engine" ] && [ -x "$engine" ]; then exec "$engine" build "${2:-}" "${3:-}" ${4:+"$4"}; fi
+  exit 1
+fi
 # 실행할 수 있는지 먼저 물어본다(약 5ms). 실행 권한이 있어도 못 도는 파일이면 exec가 실패해 훅 오류가 되기 때문이다.
 if [ -n "$engine" ] && [ -x "$engine" ] && "$engine" --version >/dev/null 2>&1; then
   exec "$engine" hook

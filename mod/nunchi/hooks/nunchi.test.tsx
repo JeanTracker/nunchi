@@ -534,7 +534,7 @@ const MOD = '/home/me/.claude-control/mod.json'
 
 // 언어 시험 엔진: Claude Code language(setting)·터미널 언어(env)·mod.json(files)을 정하고, 질문 창 답(answers, null이면 Esc)을 차례로 준다
 function langEngine(on: any, o: { setting?: unknown; env?: Record<string, string>; files?: Record<string, string>; analysis?: unknown; status?: unknown;
-  answers?: (string | null)[]; toasts?: string[]; asked?: any[]; runs?: string[][] } = {}) {
+  answers?: (string | null)[]; toasts?: string[]; asked?: any[]; runs?: string[][]; run?: (argv: string[]) => { exitCode: number; stdout: string } } = {}) {
   const files: Record<string, string> = { ...(o.files ?? {}) }
   const answers = [...(o.answers ?? [])]
   on('command.register', () => ({ value: { command: 'nunchi' } }))
@@ -547,7 +547,14 @@ function langEngine(on: any, o: { setting?: unknown; env?: Record<string, string
   on('clock.now', () => ({ value: 1000 }))
   on('ui.toast', (_: unknown, e: any) => { o.toasts?.push(String(e.text ?? e)); return { value: undefined } })
   on('fs.write', (_: unknown, e: any) => { files[String(e.path)] = String(e.text ?? ''); return { value: undefined } })
-  on('process.run', (_: unknown, e: any) => { o.runs?.push([...((e.argv ?? e) as string[])]); return { value: { exitCode: 0, stdout: '', stderr: '' } } })
+  on('process.run', (_: unknown, e: any) => {
+    const argv = [...((e.argv ?? e) as string[])]
+    o.runs?.push(argv)
+    // 엔진 build가 볼 켜짐 표시를 함께 적어 둔다 (want를 엔진에 맡기기 전에 썼는지 본다)
+    if (argv.includes('build') && !argv.includes('--count')) o.runs?.push(['want-at-build', files['/home/me/.claude-control/sessions/abc/want'] ?? ''])
+    const r = o.run?.(argv) ?? { exitCode: 0, stdout: '' }
+    return { value: { ...r, stderr: '' } }
+  })
   on('fs.read', (_: unknown, e: any) => {
     const p = String(e.path ?? e)
     if (p in files) return { value: files[p] }
@@ -789,6 +796,75 @@ test('rebuild now hands the session to the engine through emit.sh (요구 이력
   expect(call[1]).toMatch(/\/hooks\/emit\.sh$/)
   expect(call.slice(2)).toEqual(['rebuild', 'abc', 'en'])
   expect(String(r.text)).toMatch(/Rebuilding this session in English from the start/)
+  await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()
+})
+
+// ---------- 지금까지 분석 /nunchi build (요구 이력 93) ----------
+
+const WANT = '/home/me/.claude-control/sessions/abc/want'
+const plan = (o: object) => () => ({ exitCode: 0, stdout: JSON.stringify(o) + '\n' })
+
+test('build shows how many answers it will analyze and cancel comes first; Esc changes nothing (요구 이력 93)', async ($, on) => {
+  const asked: any[] = [], runs: string[][] = []
+  const files = langEngine(on, { setting: '한국어', answers: [null], asked, runs, files: { [MOD]: '{"noticed":true}' }, run: plan({ total: 44, done: 0, todo: 44, fresh: true }) })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const r = await $.command.run({ command: 'nunchi', args: 'build' } as any)
+  const q = asked[0]?.questions?.[0]
+  expect(q?.question).toBe('이 세션의 응답 44개를 지금 엔진으로 처음부터 분석할까요? (분석 호출 44회 이상 · 이 계정 사용량)')
+  expect(q?.options?.map((x: any) => x.label ?? x)).toEqual(['그만두기', '분석하기 (응답 44개)'])
+  expect(String(r.text)).toBe('분석하지 않았습니다. 아무것도 바꾸지 않았습니다.')
+  expect(runs.filter(a => a.includes('build')).map(a => a.slice(2))).toEqual([['build', 'abc', 'ko', '--count']])   // 세기만 했다
+  expect(files[WANT]).toBeUndefined()   // 켜지 않았다
+  await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()
+})
+
+test('build turns the session on before handing it to the engine, then says it analyzes from the start (요구 이력 93)', async ($, on) => {
+  const runs: string[][] = []
+  const files = langEngine(on, { setting: '한국어', answers: ['분석하기 (응답 44개)'], runs, files: { [MOD]: '{"noticed":true}' }, run: plan({ total: 44, done: 0, todo: 44, fresh: true }) })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const r = await $.command.run({ command: 'nunchi', args: 'build' } as any)
+  const calls = runs.filter(a => a[0] === 'sh' && a.includes('build'))
+  expect(calls[0][1]).toMatch(/\/hooks\/emit\.sh$/)
+  expect(calls.map(a => a.slice(2))).toEqual([['build', 'abc', 'ko', '--count'], ['build', 'abc', 'ko']])
+  expect(JSON.parse(runs.find(a => a[0] === 'want-at-build')![1])).toMatchObject({ on: true, by: 'nunchi', lang: 'ko' })   // 맡기기 전에 켰다
+  expect(JSON.parse(files[WANT])).toMatchObject({ on: true })
+  expect(String(r.text)).toBe('응답 44개를 처음부터 분석합니다. 눈치는 켜 두어 다음 응답부터도 분석합니다(/nunchi off로 끄기).')
+  await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()
+})
+
+test('build with nothing left asks nothing, turns on and says it is up to date (요구 이력 93)', async ($, on) => {
+  const asked: any[] = [], runs: string[][] = []
+  const files = langEngine(on, { setting: '한국어', asked, runs, files: { [MOD]: '{"noticed":true}' }, run: plan({ total: 3, done: 3, todo: 0, fresh: false }) })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const r = await $.command.run({ command: 'nunchi', args: 'build' } as any)
+  expect(asked.length).toBe(0)
+  expect(runs.filter(a => a[0] === 'sh' && a.includes('build')).length).toBe(1)   // 맡기지 않는다
+  expect(JSON.parse(files[WANT])).toMatchObject({ on: true })
+  expect(String(r.text)).toBe('분석이 최신입니다(#3 응답까지). 눈치는 켜 두었습니다.')
+  await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()
+})
+
+test('build without records says why and changes nothing (요구 이력 93)', async ($, on) => {
+  const files = langEngine(on, { setting: '한국어', files: { [MOD]: '{"noticed":true}' }, run: () => ({ exitCode: 1, stdout: '' }) })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const r = await $.command.run({ command: 'nunchi', args: 'build' } as any)
+  expect(String(r.text)).toBe('이 세션의 기록이 없어 분석하지 못합니다. 세션을 다시 시작한 뒤(claude --resume) 해 보세요.')
+  expect(files[WANT]).toBeUndefined()
+  await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()
+})
+
+test('build reads in English on an English screen, with no Hangul (요구 이력 93)', async ($, on) => {
+  const asked: any[] = []
+  langEngine(on, { setting: 'English', answers: ['Analyze (5 answers)'], asked, files: { [MOD]: '{"noticed":true}' }, run: plan({ total: 9, done: 4, todo: 5, fresh: false }) })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const r = await $.command.run({ command: 'nunchi', args: 'build' } as any)
+  const q = asked[0]?.questions?.[0]
+  expect(q?.question).toBe('Analyze the 5 answers not analyzed yet now? (at least 5 analysis calls · on your account\'s quota)')
+  expect(q?.options?.map((x: any) => x.label ?? x)).toEqual(['Cancel', 'Analyze (5 answers)'])
+  expect(String(r.text)).toBe('Analyzing the 5 answers not analyzed yet. Nunchi stays on and keeps analyzing later answers (/nunchi off to stop).')
+  const u = String((await $.command.run({ command: 'nunchi', args: 'nope' } as any)).text)
+  expect(u).toMatch(/\/nunchi build      analyze the conversation so far, now/)
+  for (const t of [q?.question, ...q?.options?.map((x: any) => x.label ?? x), String(r.text), u]) expect(String(t)).not.toMatch(/[가-힣]/)
   await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()
 })
 
@@ -1050,7 +1126,7 @@ const BAND = { plugin: 'nunchi', component: 'AbovePrompt', surface: 'terminal',
 test('/nunchi registers with every argument in the hint and runs mid-turn (요구 이력 84)', async ($, on) => {
   const w = offWorld(on, { analysis: null })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  expect(w.registered[0]?.argumentHint).toBe('[on|off|status|language]')
+  expect(w.registered[0]?.argumentHint).toBe('[on|off|status|language|build]')
   expect(w.registered[0]?.immediate).toBe(true)
   await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()   // 열었다 닫아 남은 비동기 일을 정리한다
 })
@@ -1126,7 +1202,7 @@ test('an unknown argument changes nothing and lists the commands (요구 이력 
   expect(w.opened.length).toBe(0)
   const lines = String(r.text).split('\n')
   expect(lines[0]).toBe('모르는 명령입니다: of')
-  expect(lines.slice(1).map(l => l.split(/\s{2,}/)[0])).toEqual(['/nunchi', '/nunchi off', '/nunchi status', '/nunchi language'])
+  expect(lines.slice(1).map(l => l.split(/\s{2,}/)[0])).toEqual(['/nunchi', '/nunchi off', '/nunchi status', '/nunchi language', '/nunchi build'])
   await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()   // 열었다 닫아 남은 비동기 일을 정리한다
 })
 
@@ -1198,7 +1274,7 @@ test('the command description, off, status and usage read in English on an Engli
   const w = offWorld(on, { want: { at: 'x', on: true }, setting: 'English',
     analysis: { ...ANALYSIS, analyzed_at: '2026-11-18T05:07:00Z', flow: { ...ANALYSIS.flow, lang: 'en' } } })   // 영어로 분석된 세션
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  expect(w.registered.at(-1)?.description).toBe('Turn on Nunchi: analyze this session and open the panel · off · status · language')
+  expect(w.registered.at(-1)?.description).toBe('Turn on Nunchi: analyze this session and open the panel · off · status · language · build')
   const st = String((await $.command.run({ command: 'nunchi', args: 'status' } as any)).text).split('\n')
   expect(st[0]).toBe('Nunchi    on · analyzes after every answer')
   expect(st[1]).toMatch(/^Analysis  through answer #3 · \d\d:\d\d$/)
@@ -1219,12 +1295,12 @@ test('the command description, off, status and usage read in English on an Engli
 test('switching the language mid-session registers the command again in the new language (요구 이력 84)', async ($, on) => {
   const w = offWorld(on, { want: { at: 'x', on: true }, answers: ['English', '그대로 두기 (새 세션부터 English)'] })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  expect(w.registered.at(-1)?.description).toBe('눈치 켜기: 이 세션을 분석하고 패널을 연다 · off 끄기 · status 상태 · language 언어')
+  expect(w.registered.at(-1)?.description).toBe('눈치 켜기: 이 세션을 분석하고 패널을 연다 · off 끄기 · status 상태 · language 언어 · build 지금까지 분석')
   const n = w.registered.length
   await $.command.run({ command: 'nunchi', args: 'language' } as any)
   expect(w.registered.length).toBe(n + 1)
-  expect(w.registered.at(-1)).toMatchObject({ name: 'nunchi', argumentHint: '[on|off|status|language]', immediate: true,
-    description: 'Turn on Nunchi: analyze this session and open the panel · off · status · language' })
+  expect(w.registered.at(-1)).toMatchObject({ name: 'nunchi', argumentHint: '[on|off|status|language|build]', immediate: true,
+    description: 'Turn on Nunchi: analyze this session and open the panel · off · status · language · build' })
   await $.command.run({ command: 'nunchi', args: 'status' } as any)
   expect(w.registered.length).toBe(n + 1)                                // 언어가 그대로면 다시 등록하지 않는다
   await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()   // 열었다 닫아 남은 비동기 일을 정리한다
@@ -1562,5 +1638,15 @@ test('in a fix turn the pasted fix request is not listed again beside the fix li
   const ui = await mountPane($, { ...PANE, props: { ...PANE.props, bodyColumns: 80 }, surface: 'terminal' })
   const h = (await ui.findAll({ type: 'Text' })).map((x: any) => String(x.text ?? '')).filter((t: string) => /^ [✔◐⊘○◇⚠] \S/.test(t))   // 색칠한 표시 조각만 따로 잡힌 것은 뺀다
   expect(h).toEqual([' ✔ 결정 #1 고침: 영어도 넣음', ' ✔ 안내서 고치기'])
+  await ui.unmount()
+})
+
+for (const [setting, want] of [['한국어', '남은 요청 없음'], ['English', 'Open requests none']] as const) test(`with no open requests the heading has no "of mine" tail (${setting}, 요구 이력 92)`, async ($, on) => {
+  offWorld(on, { want: { at: 'x', on: true }, analysis: { ...SESSION, flow: { ...SESSION.flow, requests: [] } }, setting })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
+  const all = (await ui.findAll({ type: 'Text' })).map((x: any) => String(x.text ?? ''))
+  expect(all).toContain(want)
+  expect(all.some(t => /none of mine|없음 내 요청 중/.test(t))).toBe(false)
   await ui.unmount()
 })

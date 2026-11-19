@@ -212,8 +212,12 @@ fn dist_carries_every_mod_module_but_not_the_tests() {
 // 다시 분석 (요구 이력 76): mod가 `sh emit.sh rebuild <세션> <언어>`로 부른다. 입력은 읽지 않는다 (mod는 표준 입력을 주지 않음)
 impl Plugin {
     fn rebuild(&self) -> (i32, std::time::Duration) {
+        self.call(&["rebuild", "s1", "en"])
+    }
+
+    fn call(&self, args: &[&str]) -> (i32, std::time::Duration) {
         let started = std::time::Instant::now();
-        let mut c = Command::new("/bin/sh").arg(self.dir.join("hooks/emit.sh")).args(["rebuild", "s1", "en"]).env_clear()
+        let mut c = Command::new("/bin/sh").arg(self.dir.join("hooks/emit.sh")).args(args).env_clear()
             .env("PATH", self.dir.join("empty-path")).stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().unwrap();
         let _keep_open = c.stdin.take();   // 표준 입력을 열어 둔 채: 읽으려 들면 끝나지 않는다
         loop {
@@ -242,6 +246,25 @@ fn rebuild_goes_straight_to_the_engine() {
 fn rebuild_without_an_engine_fails_at_once() {
     let p = Plugin::new("rebuild-none");
     let (code, took) = p.rebuild();
+    assert_eq!(code, 1);
+    assert!(took < std::time::Duration::from_secs(2), "입력을 기다리지 않는다: {took:?}");
+}
+
+// 지금까지 분석 (요구 이력 93): mod가 `sh emit.sh build <세션> <언어> [--count]`로 부른다
+#[test]
+fn build_goes_straight_to_the_engine_with_or_without_count() {
+    let p = Plugin::new("build");
+    let called = p.dir.join("called");
+    p.engine(&format!("printf '%s ' \"$@\" >> '{}'\n", called.display()));
+    assert_eq!(p.call(&["build", "s1", "ko", "--count"]).0, 0);
+    assert_eq!(p.call(&["build", "s1", "ko"]).0, 0);
+    assert_eq!(std::fs::read_to_string(called).unwrap(), "build s1 ko --count build s1 ko ");
+}
+
+#[test]
+fn build_without_an_engine_fails_at_once() {
+    let p = Plugin::new("build-none");
+    let (code, took) = p.call(&["build", "s1", "ko", "--count"]);
     assert_eq!(code, 1);
     assert!(took < std::time::Duration::from_secs(2), "입력을 기다리지 않는다: {took:?}");
 }

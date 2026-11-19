@@ -253,10 +253,14 @@ pub fn parse_turns(path: &Path, until_ts: &str) -> Result<Vec<Turn>, String> {
             if is_meta && current && !segments.last().unwrap().is_empty() {
                 continue;
             }
+            // 압축 요약 (요구 이력 94): 사람이 쓴 말이 아니라 건너뛰되 지금 턴은 닫지 않는다. 응답 도중 압축되면
+            // 같은 요청의 답이 압축 뒤에도 이어지기 때문이다(닫으면 압축 뒤의 답이 모두 빠졌다)
+            if py::opt_truthy(py::get(&rec, "isCompactSummary")) {
+                continue;
+            }
             let text = if !command_request.is_empty() {
                 command_request
             } else if is_meta
-                || py::opt_truthy(py::get(&rec, "isCompactSummary"))
                 || !is_from_human(&rec)
                 || is_command_record(&text)
             {

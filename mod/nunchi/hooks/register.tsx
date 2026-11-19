@@ -8,7 +8,7 @@ import type { Register, EngineInterface } from 'claude-code'
 
 import type { View, Left, More, Ask } from '../types'
 import { drawRows, type Row, type Span } from './rows'
-import { TEXT, pick, norm, langName, failText, columns, ASK_LANG, OPT_KO, OPT_EN, OPT_FOLLOW, ASK_REBUILD, OPT_KEEP, OPT_REBUILD, type Ui } from './lang'
+import { TEXT, pick, norm, langName, failText, columns, ASK_LANG, OPT_KO, OPT_EN, OPT_FOLLOW, ASK_REBUILD, OPT_KEEP, OPT_REBUILD, ASK_BUILD, OPT_BUILD_CANCEL, OPT_BUILD_GO, type Ui } from './lang'
 
 const PANE = 'nunchi'
 const EMPTY: View = {
@@ -577,12 +577,51 @@ async function askRebuild($: EngineInterface, lang: string): Promise<boolean> {
   return true
 }
 
+/** 엔진의 build를 부른다 (요구 이력 93): 한 줄 JSON {total, done, todo, fresh}. 기록이 없거나 엔진이 못 돌면 null */
+async function engineBuild($: EngineInterface, lang: string, countOnly: boolean): Promise<{ total: number; todo: number; fresh: boolean } | null> {
+  const argv = ['sh', $.plugin.root + '/hooks/emit.sh', 'build', await sessionId($), lang, ...(countOnly ? ['--count'] : [])]
+  const r = await $.process.run(argv).catch(() => null)
+  if (!r || r.exitCode !== 0) return null
+  try {
+    const o = JSON.parse(String(r.stdout ?? '').trim().split('\n').pop() ?? '')
+    return { total: Number(o.total) || 0, todo: Number(o.todo) || 0, fresh: !!o.fresh }
+  } catch { return null }
+}
+
+/** /nunchi build (요구 이력 93): 지금까지 대화를 지금 분석한다. 분석할 응답 수를 먼저 보이고 확인을 받으며, 세션을 켠다 */
+async function build($: EngineInterface): Promise<string> {
+  const lang = await language($)
+  const T = TEXT[lang.ui]
+  const plan = await engineBuild($, lang.analysis, true)
+  if (!plan) return T.buildNoRecord
+  if (plan.todo > 0) {
+    let answer = ''
+    try {
+      answer = await $.ui.ask(ASK_BUILD(lang.ui, plan.todo, plan.fresh), [OPT_BUILD_CANCEL(lang.ui), OPT_BUILD_GO(lang.ui, plan.todo)])
+    } catch { /* Esc: 그만둔다 */ }
+    if (answer !== OPT_BUILD_GO(lang.ui, plan.todo)) return T.buildCancelled
+  }
+  // 켠다: 분석기는 꺼진 세션의 요청을 버리므로 엔진에 맡기기 전에 쓴다
+  const dir = await sessionDir($)
+  const old = await readJson($, dir + '/want')
+  const at = new Date(await $.clock.now()).toISOString()
+  await $.fs.write(dir + '/want', JSON.stringify({ at, by: 'nunchi', on: true, lang: plan.fresh ? lang.analysis : old?.lang ?? lang.analysis }) + '\n')
+  const started = plan.todo > 0 ? await engineBuild($, lang.analysis, false) : plan
+  paneAsked()
+  await refresh($)
+  const r = await openPane($)
+  const where = r.isPlaced ? '' : T.narrow
+  if (!started) return T.buildNoRecord
+  if (plan.todo === 0) return T.buildUpToDate(plan.total) + where
+  return (plan.fresh ? T.buildFresh(plan.todo) : T.buildMore(plan.todo)) + where
+}
+
 /** /nunchi를 화면 언어의 설명으로 등록한다. 같은 이름으로 다시 등록하면 바뀐다 (요구 이력 76·84) */
 async function registerCommand($: EngineInterface, ui: Ui) {
   if (commandUi === ui) return
   commandUi = ui
   try {
-    await $.command.register({ name: 'nunchi', description: TEXT[ui].command, argumentHint: '[on|off|status|language]', immediate: true })   // 응답 중에도 바로 (요구 이력 84)
+    await $.command.register({ name: 'nunchi', description: TEXT[ui].command, argumentHint: '[on|off|status|language|build]', immediate: true })   // 응답 중에도 바로 (요구 이력 84)
   } catch { commandUi = '' }   // 다음 갱신에서 다시 해 본다
 }
 
@@ -657,12 +696,13 @@ export const register: Register = on => {
     return next(e)
   })
 
-  // /nunchi [on|off|status|language] (요구 이력 62·76·84)
+  // /nunchi [on|off|status|language|build] (요구 이력 62·76·84·93)
   on('command.run', { command: 'nunchi' }, async ($, e) => {
     const arg = String((e as any).args ?? '').trim()
     const word = arg.toLowerCase()
     if (word === 'language') return { text: await chooseLanguage($) }
     if (word === 'status') return { text: await statusText($) }
+    if (word === 'build') return { text: await build($) }
     if (word && word !== 'on' && word !== 'off') {
       const T = TEXT[(await language($)).ui]
       return { text: [T.unknown(arg), ...T.usage].join('\n') }   // 아무것도 바꾸지 않는다
@@ -854,7 +894,8 @@ export const register: Register = on => {
       }
       if (v.pastCount) rows.push({ more: 'asks', label: pastOpen ? T.collapse : T.pastAsks(v.pastCount) })
       row(sp(' '))
-      head2('left', sp(T.left, { b: 1 }), sp(v.leftCount ? String(v.leftCount) : T.none, { c: v.leftCount ? 'yellow' : 'green' }), sp(T.mine, { d: 1 }))
+      // 없으면 '내 요청 중'을 붙이지 않는다: 'Open requests none of mine'처럼 어색해진다 (요구 이력 92)
+      head2('left', sp(T.left, { b: 1 }), sp(v.leftCount ? String(v.leftCount) : T.none, { c: v.leftCount ? 'yellow' : 'green' }), sp(v.leftCount ? T.mine : '', { d: 1 }))
       for (const x of v.left.slice(0, shownOf('left', v.leftCount))) {
         // 2줄 감싸기, #턴은 끝에 (요구 이력 80). 표시 ○◐⊘는 넓게 그려질 수 있어 4칸으로 본다
         const tail = ` #${x.turn}`

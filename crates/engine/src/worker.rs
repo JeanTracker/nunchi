@@ -38,11 +38,20 @@ fn queue_dir(home: &Path) -> PathBuf {
     home.join(QUEUE)
 }
 
+/// 대기 요청 파일 (요구 이력 93): 새 엔진은 `<세션>.job`에 적는다. 0.5.0까지의 분석기는 `.json`만 읽어
+/// 새 엔진이 넣은 작업을 가져가 옛 형식으로 쓰지 못한다. 새 분석기는 둘 다 읽는다(옛 훅이 넣은 요청도 맡음)
+const JOB_EXT: &str = ".job";
+
+fn is_job(p: &Path) -> bool {
+    let n = p.to_string_lossy();
+    n.ends_with(JOB_EXT) || n.ends_with(".json")
+}
+
 // ---------- 대기열 ----------
 
 /// 분석 요청을 남긴다. 이미 있으면 더 최신 응답 시각으로 합치고, force는 한 번이라도 있으면 남긴다
 pub fn enqueue(home: &Path, session_id: &str, transcript_path: &str, source_ts: &str, force: bool, by: &str) -> std::io::Result<()> {
-    let path = queue_dir(home).join(format!("{session_id}.json"));
+    let path = queue_dir(home).join(format!("{session_id}{JOB_EXT}"));
     let old = store::read_obj(&path);
     let (mut ts, mut tp) = (source_ts.to_string(), transcript_path.to_string());
     if let Some(Value::String(old_ts)) = old.get("source_ts") {
@@ -90,7 +99,7 @@ impl Item {
 /// 기다리는 요청 (오래된 것부터)
 fn pending(home: &Path) -> Vec<Item> {
     let mut paths: Vec<PathBuf> = match std::fs::read_dir(queue_dir(home)) {
-        Ok(rd) => rd.flatten().map(|e| e.path()).filter(|p| p.to_string_lossy().ends_with(".json")).collect(),
+        Ok(rd) => rd.flatten().map(|e| e.path()).filter(|p| is_job(p)).collect(),
         Err(_) => vec![],
     };
     paths.sort();
@@ -100,6 +109,43 @@ fn pending(home: &Path) -> Vec<Item> {
         .filter(|i| py::opt_truthy(i.v.get("session_id")) && py::opt_truthy(i.v.get("source_ts")))
         .collect();
     out.sort_by_key(|i| i.v.get("queued_at").map(py::str_of).unwrap_or_default());
+    merge_same_session(out)
+}
+
+/// 한 세션의 요청이 `.json`(옛 훅)과 `.job`(새 엔진) 두 파일에 있으면 하나로 합친다 (요구 이력 93).
+/// 한 파일일 때 enqueue가 지키던 규칙과 같게: 더 최신 응답 시각(과 그 기록 경로)을 남기고, force와 관제 요청은
+/// 하나라도 있으면 남기고, 먼저 넣은 시각을 쓴다. 옛 시각의 요청을 나중에 맡으면 흐름이 맞지 않아 처음부터 다시
+/// 시작하므로(실제로 46턴을 다시 분석했다) 진 쪽 파일은 지운다
+fn merge_same_session(items: Vec<Item>) -> Vec<Item> {
+    let mut out: Vec<Item> = Vec::new();
+    for it in items {
+        let Some(k) = out.iter().position(|o| o.sid() == it.sid()) else {
+            out.push(it);
+            continue;
+        };
+        let (mut win, lose) = if it.ts() > out[k].ts() { (it, out.remove(k)) } else { let w = out.remove(k); (w, it) };
+        let any = |key: &str| py::opt_truthy(win.v.get(key)) || py::opt_truthy(lose.v.get(key));
+        let force = any("force");
+        let control = win.v.get("by") == Some(&Value::from("control")) || lose.v.get("by") == Some(&Value::from("control"));
+        let first = [win.v.get("queued_at"), lose.v.get("queued_at")].into_iter().flatten().map(py::str_of).filter(|q| !q.is_empty()).min();
+        win.v.insert("force".into(), Value::Bool(force));
+        if control {
+            win.v.insert("by".into(), Value::from("control"));
+        }
+        if let Some(q) = first {
+            win.v.insert("queued_at".into(), Value::from(q));
+        }
+        // 합친 요청은 늘 `.job`에 둔다: 옛 분석기가 읽는 `.json`에 남기면 그쪽이 가져가 옛 형식으로 쓸 수 있다
+        let job = win.path.with_file_name(format!("{}{JOB_EXT}", win.sid()));
+        let _ = store::write_compact(&job, &Value::Object(win.v.clone()));
+        for old in [&win.path, &lose.path] {
+            if *old != job && store::read_obj(old).get("source_ts").map(py::str_of) <= Some(win.ts()) {
+                let _ = std::fs::remove_file(old);
+            }
+        }
+        win.path = job;
+        out.insert(k.min(out.len()), win);
+    }
     out
 }
 
@@ -566,11 +612,7 @@ pub fn rebuild_main(args: &[String]) -> i32 {
     let home = store::home_dir();
     let dir = home.join("sessions").join(sid);
     let tp = events_field(&dir, "transcript_path").unwrap_or_default();
-    let last_stop = std::fs::read_to_string(dir.join("events.jsonl")).unwrap_or_default().lines()
-        .filter_map(|l| serde_json::from_str::<Value>(l).ok())
-        .filter(|v| py::get(v, "event") == Some(&Value::from("Stop")))
-        .filter_map(|v| py::get(&v, "ts").map(py::str_of)).last();
-    let ts = last_stop.or_else(|| read_analysis(&dir).and_then(|a| py::get(&a, "source_ts").map(py::str_of))).unwrap_or_default();
+    let ts = last_answer_ts(&dir).unwrap_or_default();
     if tp.is_empty() || ts.is_empty() {
         eprintln!("no record for {sid}");
         return 1;
@@ -582,6 +624,75 @@ pub fn rebuild_main(args: &[String]) -> i32 {
     write_status(&dir, "queued", 0, &[("rebuild", Value::Bool(true))]);
     wake(&home, store::load_settings(&home).analyze_workers);
     0
+}
+
+/// `nunchi-engine build <세션 ID> <언어> [--count]` (요구 이력 93): 이 세션의 지금까지 대화를 지금 분석한다.
+/// 분석이 없거나 옛 엔진 형식이면 처음부터(다시 분석 표시), 아니면 아직 분석하지 않은 응답만.
+/// 한 줄 JSON `{"total", "done", "todo", "fresh"}`를 내고, `--count`면 세기만 한다. 할 것이 없으면 맡기지 않는다.
+/// 0 성공, 1 기록 없음·읽지 못함, 2 인자 오류
+pub fn build_main(args: &[String]) -> i32 {
+    let (Some(sid), Some(lang)) = (args.first(), args.get(1)) else {
+        eprintln!("usage: nunchi-engine build SESSION LANG [--count]");
+        return 2;
+    };
+    if sid.is_empty() || sid.contains('/') || sid.contains("..") {
+        return 2;
+    }
+    let count_only = args.iter().skip(2).any(|a| a == "--count");
+    let home = store::home_dir();
+    let dir = home.join("sessions").join(sid);
+    let tp = events_field(&dir, "transcript_path").unwrap_or_default();
+    let ts = last_answer_ts(&dir).unwrap_or_default();
+    if tp.is_empty() || ts.is_empty() {
+        eprintln!("no record for {sid}");
+        return 1;
+    }
+    let turns = match parse_turns(Path::new(&tp), &ts) {
+        Ok(t) => t,
+        Err(_) => return 1,
+    };
+    let plan = build_plan(read_analysis(&dir).as_ref(), &turns);
+    println!("{}", plan);
+    if count_only || plan["todo"] == json!(0) {
+        return 0;
+    }
+    let fresh = plan["fresh"] == json!(true);
+    if fresh && read_analysis(&dir).is_some() {
+        let mark = json!({"lang": flow::clean_lang(lang), "at": clock::now_us()});
+        if store::write_json(&dir.join(REBUILD_MARK), &mark).is_err() {
+            return 1;
+        }
+    }
+    if enqueue(&home, sid, &tp, &ts, true, "nunchi").is_err() {
+        return 1;
+    }
+    let extra: Vec<(&str, Value)> = if fresh { vec![("rebuild", Value::Bool(true))] } else { vec![] };
+    write_status(&dir, "queued", 0, &extra);
+    wake(&home, store::load_settings(&home).analyze_workers);
+    0
+}
+
+/// 마지막 응답 시각: 기록의 마지막 Stop, 없으면 지난 분석의 기준 시각
+fn last_answer_ts(dir: &Path) -> Option<String> {
+    let last_stop = std::fs::read_to_string(dir.join("events.jsonl")).unwrap_or_default().lines()
+        .filter_map(|l| serde_json::from_str::<Value>(l).ok())
+        .filter(|v| py::get(v, "event") == Some(&Value::from("Stop")))
+        .filter_map(|v| py::get(&v, "ts").map(py::str_of)).last();
+    last_stop.or_else(|| read_analysis(dir).and_then(|a| py::get(&a, "source_ts").map(py::str_of))).filter(|t| !t.is_empty())
+}
+
+/// 지금 분석할 것 (요구 이력 93). 흐름이 없거나, 근거가 확인된 단계 중 결정 목록(`decisions`)이 없는 것이 있으면
+/// 옛 엔진(0.5.0까지)이 쓴 흐름이라 처음부터 다시 한다(분석은 이어서 하므로 그대로 두면 옛 단계가 끝까지 남는다)
+pub fn build_plan(analysis: Option<&Value>, turns: &[Turn]) -> Value {
+    let total = turns.iter().map(|t| t.index).max().unwrap_or(0);
+    let flow = analysis.and_then(|a| py::get(a, "flow")).filter(|f| f.is_object());
+    let old = flow.map(|f| py::get(f, "steps").and_then(Value::as_array).map(|st| {
+        st.iter().any(|x| py::get(x, "grounded") == Some(&Value::Bool(true)) && py::get(x, "decisions").is_none())
+    }).unwrap_or(false)).unwrap_or(false);
+    let fresh = flow.is_none() || old || !flow.map(|f| flow::valid_for(f, turns)).unwrap_or(false);
+    let done = if fresh { 0 } else { flow.and_then(|f| py::int_or(py::get(f, "until"), 0)).unwrap_or(0) };
+    let todo = (total - done).max(0);
+    json!({"total": total, "done": done, "todo": todo, "fresh": fresh && todo > 0})
 }
 
 /// 새 흐름의 분석 언어 (요구 이력 76): /nunchi가 쓴 want의 lang → mod가 세션 시작 때 적은 lang 파일 → ko
@@ -714,6 +825,16 @@ pub fn drain(home: &Path) -> usize {
             let ts = item.ts();
             let existing = read_analysis(&sdir);
             if let Some(e) = &existing {
+                // 이미 더 최신 응답까지 분석한 결과가 있으면 이 요청은 지난 것이다: 맡으면 흐름이 맞지 않아 처음부터 다시 한다
+                // 시각끼리만 견준다(옛 결과의 source_ts에는 시각이 아닌 글이 있을 수 있다). 같은 꼴의 ISO 시각은 글자 순서가 시간 순서다
+                let iso = |t: &str| t.len() >= 20 && t.as_bytes()[..4].iter().all(u8::is_ascii_digit) && t.as_bytes()[10] == b'T';
+                let newer = py::get(e, "source_ts").map(py::str_of).map(|t| iso(&t) && iso(&ts) && t.as_str() > ts.as_str()).unwrap_or(false);
+                if newer && !an.busy_with(&sid) && !rebuild_asked(&sdir) {
+                    drop_item(item);
+                    release(home, &sid);
+                    mine.remove(&sid);
+                    continue;
+                }
                 if py::truthy(e) && py::get(e, "source_ts") == item.v.get("source_ts") && !flow_pending(e) && !an.busy_with(&sid) && !rebuild_asked(&sdir) {
                     drop_item(item);
                     release(home, &sid);

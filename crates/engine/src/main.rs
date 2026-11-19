@@ -57,10 +57,14 @@ fn main() {
             on_panic(1, "worker");
             worker::rebuild_main(&args[1..])
         }
+        Some("build") => {
+            on_panic(1, "worker");
+            worker::build_main(&args[1..])
+        }
         #[cfg(feature = "dev")]
         Some("dev") => nunchi_engine::dev::main(&args[1..]),
         _ => {
-            eprintln!("usage: nunchi-engine hook | worker --home DIR | rebuild SESSION LANG");
+            eprintln!("usage: nunchi-engine hook | worker --home DIR | rebuild SESSION LANG | build SESSION LANG [--count]");
             2
         }
     };
