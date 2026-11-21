@@ -208,6 +208,21 @@ fn builtin_command_output_and_commands_without_args_are_not_turns() {
 }
 
 #[test]
+fn meta_before_the_reply_does_not_cut_the_turn() {
+    let d = tmp("meta-before");
+    let tr = d.join("t.jsonl");
+    write_lines(&tr, &[
+        user("이 레포를 적용할 수 있어?", "2026-11-10T00:00:00.000Z"),
+        meta("시스템 안내 …", "2026-11-10T00:00:01.000Z"),
+        answer("적용은 되지만 목적에는 맞지 않습니다", "2026-11-10T00:00:30.000Z"),
+    ]);
+    let turns = transcript::parse_turns(&tr, "").unwrap();
+    assert_eq!(turns.len(), 1);
+    assert_eq!(turns[0].response, "적용은 되지만 목적에는 맞지 않습니다");
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+#[test]
 fn skill_expansion_in_the_middle_of_a_reply_does_not_cut_the_turn() {
     let d = tmp("cmd-skill");
     let tr = d.join("t.jsonl");

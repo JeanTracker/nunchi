@@ -250,7 +250,9 @@ pub fn parse_turns(path: &Path, until_ts: &str) -> Result<Vec<Turn>, String> {
                     }
                 }
             }
-            if is_meta && current && !segments.last().unwrap().is_empty() {
+            // 지금 턴에 끼어든 meta 기록(시스템 안내, 스킬 본문 등)은 사람이 쓴 말이 아니다. 답이 나오기 전이어도
+            // 턴을 닫지 않는다: 닫으면 뒤따르는 답이 통째로 빠져 그 턴이 '응답 없음'이 됐다
+            if is_meta && current {
                 continue;
             }
             // 압축 요약 (요구 이력 94): 사람이 쓴 말이 아니라 건너뛰되 지금 턴은 닫지 않는다. 응답 도중 압축되면
