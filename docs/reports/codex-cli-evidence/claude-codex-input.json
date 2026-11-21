@@ -1,0 +1,2317 @@
+{
+  "method": "Codex hook pairs via actual adapter and parser; Rust build_prompt + advance; Claude CLI with no tools or session persistence; Korean; up to two attempts per turn",
+  "normalized_turns": [
+    {
+      "index": 1,
+      "request": "할 일 API를 만들어줘. 저장소는 SQLite로 확정이야. CSV 내보내기도 추가해줘.",
+      "response": "할 일 API에 SQLite를 사용하겠습니다. CSV 열 순서는 어떻게 할까요?",
+      "final_response": "할 일 API에 SQLite를 사용하겠습니다. CSV 열 순서는 어떻게 할까요?",
+      "added": []
+    },
+    {
+      "index": 2,
+      "request": "CSV 열 순서는 id, title로 해줘. 저장소 결정은 PostgreSQL로 변경해. CSV 구현은 다음 턴까지 보류해줘.",
+      "response": "저장소는 PostgreSQL로 변경합니다. CSV 열 순서는 id, title이며 구현은 보류했습니다.",
+      "final_response": "저장소는 PostgreSQL로 변경합니다. CSV 열 순서는 id, title이며 구현은 보류했습니다.",
+      "added": []
+    },
+    {
+      "index": 3,
+      "request": "이제 CSV 내보내기를 마무리하고 결과를 알려줘.",
+      "response": "CSV 내보내기를 구현했습니다. 출력 예시는 id,title 다음 줄에 1,장보기입니다. 저장소는 SQLite로 구현했습니다.",
+      "final_response": "CSV 내보내기를 구현했습니다. 출력 예시는 id,title 다음 줄에 1,장보기입니다. 저장소는 SQLite로 구현했습니다.",
+      "added": []
+    }
+  ],
+  "runs": [
+    {
+      "run": 1,
+      "criteria": {
+        "goal": true,
+        "storage": true,
+        "csv": true,
+        "question": true,
+        "violation": true
+      },
+      "observations": [
+        {
+          "turn": 1,
+          "calls": [
+            {
+              "exit": 0,
+              "duration": 13.76,
+              "models": [
+                "claude-opus-5-5"
+              ],
+              "prompt_sha256": "7e496f79660ce217fd03536747ce5fe40851b9e6635c24b177bd59149e7ec48d"
+            }
+          ],
+          "analysis": {
+            "flow": {
+              "version": 3,
+              "first_goal": {
+                "text": "CSV 내보내기를 갖춘 SQLite 기반 할 일 API 만들기",
+                "turn": 1,
+                "quote": "할 일 API를 만들어줘"
+              },
+              "current_goal": {
+                "text": "CSV 내보내기를 갖춘 SQLite 기반 할 일 API 만들기",
+                "turn": 1,
+                "quote": "할 일 API를 만들어줘"
+              },
+              "steps": [
+                {
+                  "index": 1,
+                  "label": "시작",
+                  "summary": "SQLite 저장소로 할 일 API를 만들고 CSV 내보내기도 넣어 달라고 요청",
+                  "quote": "할 일 API를 만들어줘",
+                  "agent_summary": "SQLite를 쓰겠다고 답하고 CSV 열 순서를 물음",
+                  "agent_quote": "CSV 열 순서는 어떻게 할까요?",
+                  "fp": "할일API를만들어줘.저장소는SQLite로확정이야.CSV내보내기도추가해줘.",
+                  "grounded": true,
+                  "shift": false,
+                  "title": "",
+                  "decisions": [
+                    {
+                      "id": "D1-1",
+                      "text": "할 일 API의 저장소는 SQLite를 쓴다",
+                      "by": "user",
+                      "quote": "저장소는 SQLite로 확정이야",
+                      "replaces": [],
+                      "from": "",
+                      "to": ""
+                    },
+                    {
+                      "id": "D1-2",
+                      "text": "할 일 API에 CSV 내보내기 기능을 둔다",
+                      "by": "user",
+                      "quote": "CSV 내보내기도 추가해줘",
+                      "replaces": [],
+                      "from": "",
+                      "to": ""
+                    }
+                  ],
+                  "checks": [],
+                  "digest": "SQLite 저장소와 CSV 내보내기를 갖춘 할 일 API를 요청했고, 에이전트가 CSV 열 순서를 물음",
+                  "resp": "35:1ae43c90ce"
+                }
+              ],
+              "requests": [
+                {
+                  "summary": "할 일 API 만들기",
+                  "quote": "할 일 API를 만들어줘",
+                  "state": "open",
+                  "agent_quote": "",
+                  "id": "R1",
+                  "from_turn": 1,
+                  "by_turn": 1
+                },
+                {
+                  "summary": "저장소로 SQLite 쓰기",
+                  "quote": "저장소는 SQLite로 확정이야",
+                  "state": "addressed",
+                  "agent_quote": "할 일 API에 SQLite를 사용하겠습니다",
+                  "id": "R2",
+                  "from_turn": 1,
+                  "by_turn": 1
+                },
+                {
+                  "summary": "CSV 내보내기 추가",
+                  "quote": "CSV 내보내기도 추가해줘",
+                  "state": "open",
+                  "agent_quote": "",
+                  "id": "R3",
+                  "from_turn": 1,
+                  "by_turn": 1
+                }
+              ],
+              "asks": [
+                {
+                  "summary": "CSV 열 순서 정하기",
+                  "quote": "CSV 열 순서는 어떻게 할까요?",
+                  "kind": "결정",
+                  "id": "Q1",
+                  "turn": 1,
+                  "last_turn": 1,
+                  "state": "open"
+                }
+              ],
+              "until": 1,
+              "prev": {
+                "version": 3,
+                "first_goal": {},
+                "current_goal": {},
+                "steps": [],
+                "requests": [],
+                "asks": [],
+                "until": 0
+              }
+            }
+          }
+        },
+        {
+          "turn": 2,
+          "calls": [
+            {
+              "exit": 0,
+              "duration": 15.15,
+              "models": [
+                "claude-opus-5-5"
+              ],
+              "prompt_sha256": "6fc5e4e0f76f48554d8cbdacae8988fe92818a4293a102966efc078ab825450b"
+            }
+          ],
+          "analysis": {
+            "flow": {
+              "version": 3,
+              "first_goal": {
+                "text": "CSV 내보내기를 갖춘 SQLite 기반 할 일 API 만들기",
+                "turn": 1,
+                "quote": "할 일 API를 만들어줘"
+              },
+              "current_goal": {
+                "text": "CSV 내보내기를 갖춘 PostgreSQL 기반 할 일 API 만들기",
+                "turn": 1,
+                "quote": "할 일 API를 만들어줘"
+              },
+              "steps": [
+                {
+                  "index": 1,
+                  "label": "시작",
+                  "summary": "SQLite 저장소로 할 일 API를 만들고 CSV 내보내기도 넣어 달라고 요청",
+                  "quote": "할 일 API를 만들어줘",
+                  "agent_summary": "SQLite를 쓰겠다고 답하고 CSV 열 순서를 물음",
+                  "agent_quote": "CSV 열 순서는 어떻게 할까요?",
+                  "fp": "할일API를만들어줘.저장소는SQLite로확정이야.CSV내보내기도추가해줘.",
+                  "grounded": true,
+                  "shift": false,
+                  "title": "",
+                  "decisions": [
+                    {
+                      "id": "D1-1",
+                      "text": "할 일 API의 저장소는 SQLite를 쓴다",
+                      "by": "user",
+                      "quote": "저장소는 SQLite로 확정이야",
+                      "replaces": [],
+                      "from": "",
+                      "to": ""
+                    },
+                    {
+                      "id": "D1-2",
+                      "text": "할 일 API에 CSV 내보내기 기능을 둔다",
+                      "by": "user",
+                      "quote": "CSV 내보내기도 추가해줘",
+                      "replaces": [],
+                      "from": "",
+                      "to": ""
+                    }
+                  ],
+                  "checks": [],
+                  "digest": "SQLite 저장소와 CSV 내보내기를 갖춘 할 일 API를 요청했고, 에이전트가 CSV 열 순서를 물음",
+                  "resp": "35:1ae43c90ce"
+                },
+                {
+                  "index": 2,
+                  "label": "정정",
+                  "summary": "CSV 열 순서를 id, title로 정하고, 저장소를 PostgreSQL로 바꾸고, CSV 구현은 보류해 달라고 요청",
+                  "quote": "저장소 결정은 PostgreSQL로 변경해",
+                  "agent_summary": "저장소를 PostgreSQL로 바꾸고 CSV 열 순서를 id, title로 받아들였으며, CSV 구현은 보류했다고 답함",
+                  "agent_quote": "저장소는 PostgreSQL로 변경합니다",
+                  "fp": "CSV열순서는id,title로해줘.저장소결정은PostgreSQL로변경해.",
+                  "grounded": true,
+                  "shift": false,
+                  "title": "",
+                  "decisions": [
+                    {
+                      "id": "D2-1",
+                      "text": "CSV 열 순서는 id, title로 한다",
+                      "by": "user",
+                      "quote": "CSV 열 순서는 id, title로 해줘",
+                      "replaces": [],
+                      "from": "",
+                      "to": ""
+                    },
+                    {
+                      "id": "D2-2",
+                      "text": "할 일 API의 저장소는 PostgreSQL을 쓴다",
+                      "by": "user",
+                      "quote": "저장소 결정은 PostgreSQL로 변경해",
+                      "replaces": [
+                        "D1-1"
+                      ],
+                      "from": "SQLite",
+                      "to": "PostgreSQL"
+                    }
+                  ],
+                  "checks": [],
+                  "digest": "할 일 API를 SQLite와 CSV 내보내기로 시작했다가, 저장소를 PostgreSQL로 바꾸고 CSV 열 순서를 정한 뒤 구현은 보류함",
+                  "resp": "48:96d7ed16a4"
+                }
+              ],
+              "requests": [
+                {
+                  "summary": "할 일 API 만들기",
+                  "quote": "할 일 API를 만들어줘",
+                  "state": "open",
+                  "agent_quote": "",
+                  "id": "R1",
+                  "from_turn": 1,
+                  "by_turn": 1
+                },
+                {
+                  "summary": "저장소로 SQLite 쓰기",
+                  "quote": "저장소는 SQLite로 확정이야",
+                  "state": "superseded",
+                  "agent_quote": "저장소는 PostgreSQL로 변경합니다",
+                  "id": "R2",
+                  "from_turn": 1,
+                  "by_turn": 2,
+                  "superseded_by": 2
+                },
+                {
+                  "summary": "CSV 내보내기 추가",
+                  "quote": "CSV 내보내기도 추가해줘",
+                  "state": "deferred",
+                  "agent_quote": "구현은 보류했습니다",
+                  "id": "R3",
+                  "from_turn": 1,
+                  "by_turn": 2
+                },
+                {
+                  "summary": "CSV 열 순서를 id, title로 하기",
+                  "quote": "CSV 열 순서는 id, title로 해줘",
+                  "state": "addressed",
+                  "agent_quote": "CSV 열 순서는 id, title이며",
+                  "id": "R4",
+                  "from_turn": 2,
+                  "by_turn": 2
+                },
+                {
+                  "summary": "저장소를 PostgreSQL로 바꾸기",
+                  "quote": "저장소 결정은 PostgreSQL로 변경해",
+                  "state": "addressed",
+                  "agent_quote": "저장소는 PostgreSQL로 변경합니다",
+                  "id": "R5",
+                  "from_turn": 2,
+                  "by_turn": 2
+                },
+                {
+                  "summary": "CSV 구현을 다음 턴까지 보류하기",
+                  "quote": "CSV 구현은 다음 턴까지 보류해줘",
+                  "state": "addressed",
+                  "agent_quote": "구현은 보류했습니다",
+                  "id": "R6",
+                  "from_turn": 2,
+                  "by_turn": 2
+                }
+              ],
+              "asks": [
+                {
+                  "summary": "CSV 열 순서 정하기",
+                  "quote": "CSV 열 순서는 어떻게 할까요?",
+                  "kind": "결정",
+                  "id": "Q1",
+                  "turn": 1,
+                  "last_turn": 1,
+                  "state": "answered",
+                  "answered_at": 2,
+                  "answer_quote": "CSV 열 순서는 id, title로 해줘",
+                  "by_blanket": false
+                }
+              ],
+              "until": 2,
+              "prev": {
+                "version": 3,
+                "first_goal": {
+                  "text": "CSV 내보내기를 갖춘 SQLite 기반 할 일 API 만들기",
+                  "turn": 1,
+                  "quote": "할 일 API를 만들어줘"
+                },
+                "current_goal": {
+                  "text": "CSV 내보내기를 갖춘 SQLite 기반 할 일 API 만들기",
+                  "turn": 1,
+                  "quote": "할 일 API를 만들어줘"
+                },
+                "steps": [
+                  {
+                    "index": 1,
+                    "label": "시작",
+                    "summary": "SQLite 저장소로 할 일 API를 만들고 CSV 내보내기도 넣어 달라고 요청",
+                    "quote": "할 일 API를 만들어줘",
+                    "agent_summary": "SQLite를 쓰겠다고 답하고 CSV 열 순서를 물음",
+                    "agent_quote": "CSV 열 순서는 어떻게 할까요?",
+                    "fp": "할일API를만들어줘.저장소는SQLite로확정이야.CSV내보내기도추가해줘.",
+                    "grounded": true,
+                    "shift": false,
+                    "title": "",
+                    "decisions": [
+                      {
+                        "id": "D1-1",
+                        "text": "할 일 API의 저장소는 SQLite를 쓴다",
+                        "by": "user",
+                        "quote": "저장소는 SQLite로 확정이야",
+                        "replaces": [],
+                        "from": "",
+                        "to": ""
+                      },
+                      {
+                        "id": "D1-2",
+                        "text": "할 일 API에 CSV 내보내기 기능을 둔다",
+                        "by": "user",
+                        "quote": "CSV 내보내기도 추가해줘",
+                        "replaces": [],
+                        "from": "",
+                        "to": ""
+                      }
+                    ],
+                    "checks": [],
+                    "digest": "SQLite 저장소와 CSV 내보내기를 갖춘 할 일 API를 요청했고, 에이전트가 CSV 열 순서를 물음",
+                    "resp": "35:1ae43c90ce"
+                  }
+                ],
+                "requests": [
+                  {
+                    "summary": "할 일 API 만들기",
+                    "quote": "할 일 API를 만들어줘",
+                    "state": "open",
+                    "agent_quote": "",
+                    "id": "R1",
+                    "from_turn": 1,
+                    "by_turn": 1
+                  },
+                  {
+                    "summary": "저장소로 SQLite 쓰기",
+                    "quote": "저장소는 SQLite로 확정이야",
+                    "state": "addressed",
+                    "agent_quote": "할 일 API에 SQLite를 사용하겠습니다",
+                    "id": "R2",
+                    "from_turn": 1,
+                    "by_turn": 1
+                  },
+                  {
+                    "summary": "CSV 내보내기 추가",
+                    "quote": "CSV 내보내기도 추가해줘",
+                    "state": "open",
+                    "agent_quote": "",
+                    "id": "R3",
+                    "from_turn": 1,
+                    "by_turn": 1
+                  }
+                ],
+                "asks": [
+                  {
+                    "summary": "CSV 열 순서 정하기",
+                    "quote": "CSV 열 순서는 어떻게 할까요?",
+                    "kind": "결정",
+                    "id": "Q1",
+                    "turn": 1,
+                    "last_turn": 1,
+                    "state": "open"
+                  }
+                ],
+                "until": 1
+              }
+            }
+          }
+        },
+        {
+          "turn": 3,
+          "calls": [
+            {
+              "exit": 0,
+              "duration": 13.76,
+              "models": [
+                "claude-opus-5-5"
+              ],
+              "prompt_sha256": "bf54a43ef0fff971a4dc3a15f6c2c72a3e231fbad47db1e4dd76b5c045a3bb90"
+            }
+          ],
+          "analysis": {
+            "flow": {
+              "version": 3,
+              "first_goal": {
+                "text": "CSV 내보내기를 갖춘 SQLite 기반 할 일 API 만들기",
+                "turn": 1,
+                "quote": "할 일 API를 만들어줘"
+              },
+              "current_goal": {
+                "text": "CSV 내보내기를 갖춘 PostgreSQL 기반 할 일 API 만들기",
+                "turn": 1,
+                "quote": "할 일 API를 만들어줘"
+              },
+              "steps": [
+                {
+                  "index": 1,
+                  "label": "시작",
+                  "summary": "SQLite 저장소로 할 일 API를 만들고 CSV 내보내기도 넣어 달라고 요청",
+                  "quote": "할 일 API를 만들어줘",
+                  "agent_summary": "SQLite를 쓰겠다고 답하고 CSV 열 순서를 물음",
+                  "agent_quote": "CSV 열 순서는 어떻게 할까요?",
+                  "fp": "할일API를만들어줘.저장소는SQLite로확정이야.CSV내보내기도추가해줘.",
+                  "grounded": true,
+                  "shift": false,
+                  "title": "",
+                  "decisions": [
+                    {
+                      "id": "D1-1",
+                      "text": "할 일 API의 저장소는 SQLite를 쓴다",
+                      "by": "user",
+                      "quote": "저장소는 SQLite로 확정이야",
+                      "replaces": [],
+                      "from": "",
+                      "to": ""
+                    },
+                    {
+                      "id": "D1-2",
+                      "text": "할 일 API에 CSV 내보내기 기능을 둔다",
+                      "by": "user",
+                      "quote": "CSV 내보내기도 추가해줘",
+                      "replaces": [],
+                      "from": "",
+                      "to": ""
+                    }
+                  ],
+                  "checks": [],
+                  "digest": "SQLite 저장소와 CSV 내보내기를 갖춘 할 일 API를 요청했고, 에이전트가 CSV 열 순서를 물음",
+                  "resp": "35:1ae43c90ce"
+                },
+                {
+                  "index": 2,
+                  "label": "정정",
+                  "summary": "CSV 열 순서를 id, title로 정하고, 저장소를 PostgreSQL로 바꾸고, CSV 구현은 보류해 달라고 요청",
+                  "quote": "저장소 결정은 PostgreSQL로 변경해",
+                  "agent_summary": "저장소를 PostgreSQL로 바꾸고 CSV 열 순서를 id, title로 받아들였으며, CSV 구현은 보류했다고 답함",
+                  "agent_quote": "저장소는 PostgreSQL로 변경합니다",
+                  "fp": "CSV열순서는id,title로해줘.저장소결정은PostgreSQL로변경해.",
+                  "grounded": true,
+                  "shift": false,
+                  "title": "",
+                  "decisions": [
+                    {
+                      "id": "D2-1",
+                      "text": "CSV 열 순서는 id, title로 한다",
+                      "by": "user",
+                      "quote": "CSV 열 순서는 id, title로 해줘",
+                      "replaces": [],
+                      "from": "",
+                      "to": ""
+                    },
+                    {
+                      "id": "D2-2",
+                      "text": "할 일 API의 저장소는 PostgreSQL을 쓴다",
+                      "by": "user",
+                      "quote": "저장소 결정은 PostgreSQL로 변경해",
+                      "replaces": [
+                        "D1-1"
+                      ],
+                      "from": "SQLite",
+                      "to": "PostgreSQL"
+                    }
+                  ],
+                  "checks": [],
+                  "digest": "할 일 API를 SQLite와 CSV 내보내기로 시작했다가, 저장소를 PostgreSQL로 바꾸고 CSV 열 순서를 정한 뒤 구현은 보류함",
+                  "resp": "48:96d7ed16a4"
+                },
+                {
+                  "index": 3,
+                  "label": "구체화",
+                  "summary": "보류했던 CSV 내보내기를 마무리하고 결과를 알려 달라고 요청",
+                  "quote": "이제 CSV 내보내기를 마무리하고 결과를 알려줘",
+                  "agent_summary": "CSV 내보내기를 구현하고 출력 예시를 알렸으나, 저장소는 SQLite로 구현했다고 답함",
+                  "agent_quote": "저장소는 SQLite로 구현했습니다.",
+                  "fp": "이제CSV내보내기를마무리하고결과를알려줘.",
+                  "grounded": true,
+                  "shift": false,
+                  "title": "",
+                  "decisions": [],
+                  "checks": [
+                    {
+                      "id": "D2-2",
+                      "kind": "어김",
+                      "what": "저장소를 PostgreSQL 대신 SQLite로 구현",
+                      "quote": "저장소는 SQLite로 구현했습니다."
+                    }
+                  ],
+                  "digest": "SQLite 할 일 API로 시작해 PostgreSQL로 바꾸고 CSV는 보류했다가, CSV를 구현했으나 저장소를 SQLite로 함",
+                  "resp": "59:33110c2e26"
+                }
+              ],
+              "requests": [
+                {
+                  "summary": "할 일 API 만들기",
+                  "quote": "할 일 API를 만들어줘",
+                  "state": "open",
+                  "agent_quote": "",
+                  "id": "R1",
+                  "from_turn": 1,
+                  "by_turn": 1
+                },
+                {
+                  "summary": "저장소로 SQLite 쓰기",
+                  "quote": "저장소는 SQLite로 확정이야",
+                  "state": "superseded",
+                  "agent_quote": "저장소는 PostgreSQL로 변경합니다",
+                  "id": "R2",
+                  "from_turn": 1,
+                  "by_turn": 2,
+                  "superseded_by": 2
+                },
+                {
+                  "summary": "CSV 내보내기 추가",
+                  "quote": "CSV 내보내기도 추가해줘",
+                  "state": "addressed",
+                  "agent_quote": "CSV 내보내기를 구현했습니다.",
+                  "id": "R3",
+                  "from_turn": 1,
+                  "by_turn": 3
+                },
+                {
+                  "summary": "CSV 열 순서를 id, title로 하기",
+                  "quote": "CSV 열 순서는 id, title로 해줘",
+                  "state": "addressed",
+                  "agent_quote": "CSV 열 순서는 id, title이며",
+                  "id": "R4",
+                  "from_turn": 2,
+                  "by_turn": 2
+                },
+                {
+                  "summary": "저장소를 PostgreSQL로 바꾸기",
+                  "quote": "저장소 결정은 PostgreSQL로 변경해",
+                  "state": "addressed",
+                  "agent_quote": "저장소는 PostgreSQL로 변경합니다",
+                  "id": "R5",
+                  "from_turn": 2,
+                  "by_turn": 2
+                },
+                {
+                  "summary": "CSV 구현을 다음 턴까지 보류하기",
+                  "quote": "CSV 구현은 다음 턴까지 보류해줘",
+                  "state": "addressed",
+                  "agent_quote": "구현은 보류했습니다",
+                  "id": "R6",
+                  "from_turn": 2,
+                  "by_turn": 2
+                },
+                {
+                  "summary": "CSV 내보내기 결과 알려주기",
+                  "quote": "결과를 알려줘",
+                  "state": "addressed",
+                  "agent_quote": "출력 예시는 id,title 다음 줄에 1,장보기입니다",
+                  "id": "R7",
+                  "from_turn": 3,
+                  "by_turn": 3
+                }
+              ],
+              "asks": [
+                {
+                  "summary": "CSV 열 순서 정하기",
+                  "quote": "CSV 열 순서는 어떻게 할까요?",
+                  "kind": "결정",
+                  "id": "Q1",
+                  "turn": 1,
+                  "last_turn": 1,
+                  "state": "answered",
+                  "answered_at": 2,
+                  "answer_quote": "CSV 열 순서는 id, title로 해줘",
+                  "by_blanket": false
+                }
+              ],
+              "until": 3,
+              "prev": {
+                "version": 3,
+                "first_goal": {
+                  "text": "CSV 내보내기를 갖춘 SQLite 기반 할 일 API 만들기",
+                  "turn": 1,
+                  "quote": "할 일 API를 만들어줘"
+                },
+                "current_goal": {
+                  "text": "CSV 내보내기를 갖춘 PostgreSQL 기반 할 일 API 만들기",
+                  "turn": 1,
+                  "quote": "할 일 API를 만들어줘"
+                },
+                "steps": [
+                  {
+                    "index": 1,
+                    "label": "시작",
+                    "summary": "SQLite 저장소로 할 일 API를 만들고 CSV 내보내기도 넣어 달라고 요청",
+                    "quote": "할 일 API를 만들어줘",
+                    "agent_summary": "SQLite를 쓰겠다고 답하고 CSV 열 순서를 물음",
+                    "agent_quote": "CSV 열 순서는 어떻게 할까요?",
+                    "fp": "할일API를만들어줘.저장소는SQLite로확정이야.CSV내보내기도추가해줘.",
+                    "grounded": true,
+                    "shift": false,
+                    "title": "",
+                    "decisions": [
+                      {
+                        "id": "D1-1",
+                        "text": "할 일 API의 저장소는 SQLite를 쓴다",
+                        "by": "user",
+                        "quote": "저장소는 SQLite로 확정이야",
+                        "replaces": [],
+                        "from": "",
+                        "to": ""
+                      },
+                      {
+                        "id": "D1-2",
+                        "text": "할 일 API에 CSV 내보내기 기능을 둔다",
+                        "by": "user",
+                        "quote": "CSV 내보내기도 추가해줘",
+                        "replaces": [],
+                        "from": "",
+                        "to": ""
+                      }
+                    ],
+                    "checks": [],
+                    "digest": "SQLite 저장소와 CSV 내보내기를 갖춘 할 일 API를 요청했고, 에이전트가 CSV 열 순서를 물음",
+                    "resp": "35:1ae43c90ce"
+                  },
+                  {
+                    "index": 2,
+                    "label": "정정",
+                    "summary": "CSV 열 순서를 id, title로 정하고, 저장소를 PostgreSQL로 바꾸고, CSV 구현은 보류해 달라고 요청",
+                    "quote": "저장소 결정은 PostgreSQL로 변경해",
+                    "agent_summary": "저장소를 PostgreSQL로 바꾸고 CSV 열 순서를 id, title로 받아들였으며, CSV 구현은 보류했다고 답함",
+                    "agent_quote": "저장소는 PostgreSQL로 변경합니다",
+                    "fp": "CSV열순서는id,title로해줘.저장소결정은PostgreSQL로변경해.",
+                    "grounded": true,
+                    "shift": false,
+                    "title": "",
+                    "decisions": [
+                      {
+                        "id": "D2-1",
+                        "text": "CSV 열 순서는 id, title로 한다",
+                        "by": "user",
+                        "quote": "CSV 열 순서는 id, title로 해줘",
+                        "replaces": [],
+                        "from": "",
+                        "to": ""
+                      },
+                      {
+                        "id": "D2-2",
+                        "text": "할 일 API의 저장소는 PostgreSQL을 쓴다",
+                        "by": "user",
+                        "quote": "저장소 결정은 PostgreSQL로 변경해",
+                        "replaces": [
+                          "D1-1"
+                        ],
+                        "from": "SQLite",
+                        "to": "PostgreSQL"
+                      }
+                    ],
+                    "checks": [],
+                    "digest": "할 일 API를 SQLite와 CSV 내보내기로 시작했다가, 저장소를 PostgreSQL로 바꾸고 CSV 열 순서를 정한 뒤 구현은 보류함",
+                    "resp": "48:96d7ed16a4"
+                  }
+                ],
+                "requests": [
+                  {
+                    "summary": "할 일 API 만들기",
+                    "quote": "할 일 API를 만들어줘",
+                    "state": "open",
+                    "agent_quote": "",
+                    "id": "R1",
+                    "from_turn": 1,
+                    "by_turn": 1
+                  },
+                  {
+                    "summary": "저장소로 SQLite 쓰기",
+                    "quote": "저장소는 SQLite로 확정이야",
+                    "state": "superseded",
+                    "agent_quote": "저장소는 PostgreSQL로 변경합니다",
+                    "id": "R2",
+                    "from_turn": 1,
+                    "by_turn": 2,
+                    "superseded_by": 2
+                  },
+                  {
+                    "summary": "CSV 내보내기 추가",
+                    "quote": "CSV 내보내기도 추가해줘",
+                    "state": "deferred",
+                    "agent_quote": "구현은 보류했습니다",
+                    "id": "R3",
+                    "from_turn": 1,
+                    "by_turn": 2
+                  },
+                  {
+                    "summary": "CSV 열 순서를 id, title로 하기",
+                    "quote": "CSV 열 순서는 id, title로 해줘",
+                    "state": "addressed",
+                    "agent_quote": "CSV 열 순서는 id, title이며",
+                    "id": "R4",
+                    "from_turn": 2,
+                    "by_turn": 2
+                  },
+                  {
+                    "summary": "저장소를 PostgreSQL로 바꾸기",
+                    "quote": "저장소 결정은 PostgreSQL로 변경해",
+                    "state": "addressed",
+                    "agent_quote": "저장소는 PostgreSQL로 변경합니다",
+                    "id": "R5",
+                    "from_turn": 2,
+                    "by_turn": 2
+                  },
+                  {
+                    "summary": "CSV 구현을 다음 턴까지 보류하기",
+                    "quote": "CSV 구현은 다음 턴까지 보류해줘",
+                    "state": "addressed",
+                    "agent_quote": "구현은 보류했습니다",
+                    "id": "R6",
+                    "from_turn": 2,
+                    "by_turn": 2
+                  }
+                ],
+                "asks": [
+                  {
+                    "summary": "CSV 열 순서 정하기",
+                    "quote": "CSV 열 순서는 어떻게 할까요?",
+                    "kind": "결정",
+                    "id": "Q1",
+                    "turn": 1,
+                    "last_turn": 1,
+                    "state": "answered",
+                    "answered_at": 2,
+                    "answer_quote": "CSV 열 순서는 id, title로 해줘",
+                    "by_blanket": false
+                  }
+                ],
+                "until": 2
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "run": 2,
+      "criteria": {
+        "goal": true,
+        "storage": true,
+        "csv": true,
+        "question": true,
+        "violation": true
+      },
+      "observations": [
+        {
+          "turn": 1,
+          "calls": [
+            {
+              "exit": 0,
+              "duration": 13.16,
+              "models": [
+                "claude-opus-5-5"
+              ],
+              "prompt_sha256": "7e496f79660ce217fd03536747ce5fe40851b9e6635c24b177bd59149e7ec48d"
+            }
+          ],
+          "analysis": {
+            "flow": {
+              "version": 3,
+              "first_goal": {
+                "text": "CSV 내보내기를 갖춘 할 일 API 만들기",
+                "turn": 1,
+                "quote": "할 일 API를 만들어줘"
+              },
+              "current_goal": {
+                "text": "CSV 내보내기를 갖춘 할 일 API 만들기",
+                "turn": 1,
+                "quote": "할 일 API를 만들어줘"
+              },
+              "steps": [
+                {
+                  "index": 1,
+                  "label": "시작",
+                  "summary": "SQLite 저장소로 할 일 API를 만들고 CSV 내보내기를 추가해 달라고 요청",
+                  "quote": "할 일 API를 만들어줘",
+                  "agent_summary": "SQLite를 쓰겠다고 하고 CSV 열 순서를 물음",
+                  "agent_quote": "할 일 API에 SQLite를 사용하겠습니다",
+                  "fp": "할일API를만들어줘.저장소는SQLite로확정이야.CSV내보내기도추가해줘.",
+                  "grounded": true,
+                  "shift": false,
+                  "title": "",
+                  "decisions": [
+                    {
+                      "id": "D1-1",
+                      "text": "할 일 API의 저장소는 SQLite를 쓴다",
+                      "by": "user",
+                      "quote": "저장소는 SQLite로 확정이야",
+                      "replaces": [],
+                      "from": "",
+                      "to": ""
+                    },
+                    {
+                      "id": "D1-2",
+                      "text": "할 일 API에 CSV 내보내기 기능을 둔다",
+                      "by": "user",
+                      "quote": "CSV 내보내기도 추가해줘",
+                      "replaces": [],
+                      "from": "",
+                      "to": ""
+                    }
+                  ],
+                  "checks": [],
+                  "digest": "SQLite 저장소와 CSV 내보내기를 갖춘 할 일 API를 요청했고, 에이전트는 CSV 열 순서를 물음",
+                  "resp": "35:1ae43c90ce"
+                }
+              ],
+              "requests": [
+                {
+                  "summary": "할 일 API 만들기",
+                  "quote": "할 일 API를 만들어줘",
+                  "state": "open",
+                  "agent_quote": "",
+                  "id": "R1",
+                  "from_turn": 1,
+                  "by_turn": 1
+                },
+                {
+                  "summary": "저장소를 SQLite로 하기",
+                  "quote": "저장소는 SQLite로 확정이야",
+                  "state": "addressed",
+                  "agent_quote": "할 일 API에 SQLite를 사용하겠습니다",
+                  "id": "R2",
+                  "from_turn": 1,
+                  "by_turn": 1
+                },
+                {
+                  "summary": "CSV 내보내기 추가하기",
+                  "quote": "CSV 내보내기도 추가해줘",
+                  "state": "open",
+                  "agent_quote": "",
+                  "id": "R3",
+                  "from_turn": 1,
+                  "by_turn": 1
+                }
+              ],
+              "asks": [
+                {
+                  "summary": "CSV 열 순서 정하기",
+                  "quote": "CSV 열 순서는 어떻게 할까요?",
+                  "kind": "결정",
+                  "id": "Q1",
+                  "turn": 1,
+                  "last_turn": 1,
+                  "state": "open"
+                }
+              ],
+              "until": 1,
+              "prev": {
+                "version": 3,
+                "first_goal": {},
+                "current_goal": {},
+                "steps": [],
+                "requests": [],
+                "asks": [],
+                "until": 0
+              }
+            }
+          }
+        },
+        {
+          "turn": 2,
+          "calls": [
+            {
+              "exit": 0,
+              "duration": 16.55,
+              "models": [
+                "claude-opus-5-5"
+              ],
+              "prompt_sha256": "3fb4f45b8e96e754c670dfe318ad656b55aa94fbf47534c6cb619bd94849a09a"
+            }
+          ],
+          "analysis": {
+            "flow": {
+              "version": 3,
+              "first_goal": {
+                "text": "CSV 내보내기를 갖춘 할 일 API 만들기",
+                "turn": 1,
+                "quote": "할 일 API를 만들어줘"
+              },
+              "current_goal": {
+                "text": "CSV 내보내기를 갖춘 할 일 API 만들기",
+                "turn": 1,
+                "quote": "할 일 API를 만들어줘"
+              },
+              "steps": [
+                {
+                  "index": 1,
+                  "label": "시작",
+                  "summary": "SQLite 저장소로 할 일 API를 만들고 CSV 내보내기를 추가해 달라고 요청",
+                  "quote": "할 일 API를 만들어줘",
+                  "agent_summary": "SQLite를 쓰겠다고 하고 CSV 열 순서를 물음",
+                  "agent_quote": "할 일 API에 SQLite를 사용하겠습니다",
+                  "fp": "할일API를만들어줘.저장소는SQLite로확정이야.CSV내보내기도추가해줘.",
+                  "grounded": true,
+                  "shift": false,
+                  "title": "",
+                  "decisions": [
+                    {
+                      "id": "D1-1",
+                      "text": "할 일 API의 저장소는 SQLite를 쓴다",
+                      "by": "user",
+                      "quote": "저장소는 SQLite로 확정이야",
+                      "replaces": [],
+                      "from": "",
+                      "to": ""
+                    },
+                    {
+                      "id": "D1-2",
+                      "text": "할 일 API에 CSV 내보내기 기능을 둔다",
+                      "by": "user",
+                      "quote": "CSV 내보내기도 추가해줘",
+                      "replaces": [],
+                      "from": "",
+                      "to": ""
+                    }
+                  ],
+                  "checks": [],
+                  "digest": "SQLite 저장소와 CSV 내보내기를 갖춘 할 일 API를 요청했고, 에이전트는 CSV 열 순서를 물음",
+                  "resp": "35:1ae43c90ce"
+                },
+                {
+                  "index": 2,
+                  "label": "정정",
+                  "summary": "CSV 열 순서를 id, title로 정하고, 저장소를 PostgreSQL로 바꾸고, CSV 구현은 보류해 달라고 요청",
+                  "quote": "저장소 결정은 PostgreSQL로 변경해",
+                  "agent_summary": "저장소를 PostgreSQL로 바꾸고, CSV 열 순서를 id, title로 정한 뒤 구현은 보류했다고 답함",
+                  "agent_quote": "저장소는 PostgreSQL로 변경합니다",
+                  "fp": "CSV열순서는id,title로해줘.저장소결정은PostgreSQL로변경해.",
+                  "grounded": true,
+                  "shift": false,
+                  "title": "",
+                  "decisions": [
+                    {
+                      "id": "D2-1",
+                      "text": "CSV 내보내기의 열 순서는 id, title로 한다",
+                      "by": "user",
+                      "quote": "CSV 열 순서는 id, title로 해줘",
+                      "replaces": [],
+                      "from": "",
+                      "to": ""
+                    },
+                    {
+                      "id": "D2-2",
+                      "text": "할 일 API의 저장소는 PostgreSQL을 쓴다",
+                      "by": "user",
+                      "quote": "저장소 결정은 PostgreSQL로 변경해",
+                      "replaces": [
+                        "D1-1"
+                      ],
+                      "from": "SQLite",
+                      "to": "PostgreSQL"
+                    }
+                  ],
+                  "checks": [],
+                  "digest": "SQLite 저장소와 CSV 내보내기를 갖춘 할 일 API로 시작했다가, 저장소를 PostgreSQL로 바꾸고 CSV 열 순서를 정한 뒤 구현은 보류함",
+                  "resp": "48:96d7ed16a4"
+                }
+              ],
+              "requests": [
+                {
+                  "summary": "할 일 API 만들기",
+                  "quote": "할 일 API를 만들어줘",
+                  "state": "open",
+                  "agent_quote": "",
+                  "id": "R1",
+                  "from_turn": 1,
+                  "by_turn": 1
+                },
+                {
+                  "summary": "저장소를 SQLite로 하기",
+                  "quote": "저장소는 SQLite로 확정이야",
+                  "state": "superseded",
+                  "agent_quote": "할 일 API에 SQLite를 사용하겠습니다",
+                  "id": "R2",
+                  "from_turn": 1,
+                  "by_turn": 2,
+                  "superseded_by": 2
+                },
+                {
+                  "summary": "CSV 내보내기 추가하기",
+                  "quote": "CSV 내보내기도 추가해줘",
+                  "state": "deferred",
+                  "agent_quote": "구현은 보류했습니다",
+                  "id": "R3",
+                  "from_turn": 1,
+                  "by_turn": 2
+                },
+                {
+                  "summary": "CSV 열 순서를 id, title로 하기",
+                  "quote": "CSV 열 순서는 id, title로 해줘",
+                  "state": "addressed",
+                  "agent_quote": "CSV 열 순서는 id, title이며",
+                  "id": "R4",
+                  "from_turn": 2,
+                  "by_turn": 2
+                },
+                {
+                  "summary": "저장소를 PostgreSQL로 바꾸기",
+                  "quote": "저장소 결정은 PostgreSQL로 변경해",
+                  "state": "addressed",
+                  "agent_quote": "저장소는 PostgreSQL로 변경합니다",
+                  "id": "R5",
+                  "from_turn": 2,
+                  "by_turn": 2
+                },
+                {
+                  "summary": "CSV 구현을 다음 턴까지 보류하기",
+                  "quote": "CSV 구현은 다음 턴까지 보류해줘",
+                  "state": "addressed",
+                  "agent_quote": "구현은 보류했습니다",
+                  "id": "R6",
+                  "from_turn": 2,
+                  "by_turn": 2
+                }
+              ],
+              "asks": [
+                {
+                  "summary": "CSV 열 순서 정하기",
+                  "quote": "CSV 열 순서는 어떻게 할까요?",
+                  "kind": "결정",
+                  "id": "Q1",
+                  "turn": 1,
+                  "last_turn": 1,
+                  "state": "answered",
+                  "answered_at": 2,
+                  "answer_quote": "CSV 열 순서는 id, title로 해줘",
+                  "by_blanket": false
+                }
+              ],
+              "until": 2,
+              "prev": {
+                "version": 3,
+                "first_goal": {
+                  "text": "CSV 내보내기를 갖춘 할 일 API 만들기",
+                  "turn": 1,
+                  "quote": "할 일 API를 만들어줘"
+                },
+                "current_goal": {
+                  "text": "CSV 내보내기를 갖춘 할 일 API 만들기",
+                  "turn": 1,
+                  "quote": "할 일 API를 만들어줘"
+                },
+                "steps": [
+                  {
+                    "index": 1,
+                    "label": "시작",
+                    "summary": "SQLite 저장소로 할 일 API를 만들고 CSV 내보내기를 추가해 달라고 요청",
+                    "quote": "할 일 API를 만들어줘",
+                    "agent_summary": "SQLite를 쓰겠다고 하고 CSV 열 순서를 물음",
+                    "agent_quote": "할 일 API에 SQLite를 사용하겠습니다",
+                    "fp": "할일API를만들어줘.저장소는SQLite로확정이야.CSV내보내기도추가해줘.",
+                    "grounded": true,
+                    "shift": false,
+                    "title": "",
+                    "decisions": [
+                      {
+                        "id": "D1-1",
+                        "text": "할 일 API의 저장소는 SQLite를 쓴다",
+                        "by": "user",
+                        "quote": "저장소는 SQLite로 확정이야",
+                        "replaces": [],
+                        "from": "",
+                        "to": ""
+                      },
+                      {
+                        "id": "D1-2",
+                        "text": "할 일 API에 CSV 내보내기 기능을 둔다",
+                        "by": "user",
+                        "quote": "CSV 내보내기도 추가해줘",
+                        "replaces": [],
+                        "from": "",
+                        "to": ""
+                      }
+                    ],
+                    "checks": [],
+                    "digest": "SQLite 저장소와 CSV 내보내기를 갖춘 할 일 API를 요청했고, 에이전트는 CSV 열 순서를 물음",
+                    "resp": "35:1ae43c90ce"
+                  }
+                ],
+                "requests": [
+                  {
+                    "summary": "할 일 API 만들기",
+                    "quote": "할 일 API를 만들어줘",
+                    "state": "open",
+                    "agent_quote": "",
+                    "id": "R1",
+                    "from_turn": 1,
+                    "by_turn": 1
+                  },
+                  {
+                    "summary": "저장소를 SQLite로 하기",
+                    "quote": "저장소는 SQLite로 확정이야",
+                    "state": "addressed",
+                    "agent_quote": "할 일 API에 SQLite를 사용하겠습니다",
+                    "id": "R2",
+                    "from_turn": 1,
+                    "by_turn": 1
+                  },
+                  {
+                    "summary": "CSV 내보내기 추가하기",
+                    "quote": "CSV 내보내기도 추가해줘",
+                    "state": "open",
+                    "agent_quote": "",
+                    "id": "R3",
+                    "from_turn": 1,
+                    "by_turn": 1
+                  }
+                ],
+                "asks": [
+                  {
+                    "summary": "CSV 열 순서 정하기",
+                    "quote": "CSV 열 순서는 어떻게 할까요?",
+                    "kind": "결정",
+                    "id": "Q1",
+                    "turn": 1,
+                    "last_turn": 1,
+                    "state": "open"
+                  }
+                ],
+                "until": 1
+              }
+            }
+          }
+        },
+        {
+          "turn": 3,
+          "calls": [
+            {
+              "exit": 0,
+              "duration": 12.42,
+              "models": [
+                "claude-opus-5-5"
+              ],
+              "prompt_sha256": "62937b4d1fef675dcdd2fc38df8457db56520e12e9aaa5d8d327a84a14b00704"
+            }
+          ],
+          "analysis": {
+            "flow": {
+              "version": 3,
+              "first_goal": {
+                "text": "CSV 내보내기를 갖춘 할 일 API 만들기",
+                "turn": 1,
+                "quote": "할 일 API를 만들어줘"
+              },
+              "current_goal": {
+                "text": "CSV 내보내기를 갖춘 할 일 API 만들기",
+                "turn": 1,
+                "quote": "CSV 내보내기도 추가해줘"
+              },
+              "steps": [
+                {
+                  "index": 1,
+                  "label": "시작",
+                  "summary": "SQLite 저장소로 할 일 API를 만들고 CSV 내보내기를 추가해 달라고 요청",
+                  "quote": "할 일 API를 만들어줘",
+                  "agent_summary": "SQLite를 쓰겠다고 하고 CSV 열 순서를 물음",
+                  "agent_quote": "할 일 API에 SQLite를 사용하겠습니다",
+                  "fp": "할일API를만들어줘.저장소는SQLite로확정이야.CSV내보내기도추가해줘.",
+                  "grounded": true,
+                  "shift": false,
+                  "title": "",
+                  "decisions": [
+                    {
+                      "id": "D1-1",
+                      "text": "할 일 API의 저장소는 SQLite를 쓴다",
+                      "by": "user",
+                      "quote": "저장소는 SQLite로 확정이야",
+                      "replaces": [],
+                      "from": "",
+                      "to": ""
+                    },
+                    {
+                      "id": "D1-2",
+                      "text": "할 일 API에 CSV 내보내기 기능을 둔다",
+                      "by": "user",
+                      "quote": "CSV 내보내기도 추가해줘",
+                      "replaces": [],
+                      "from": "",
+                      "to": ""
+                    }
+                  ],
+                  "checks": [],
+                  "digest": "SQLite 저장소와 CSV 내보내기를 갖춘 할 일 API를 요청했고, 에이전트는 CSV 열 순서를 물음",
+                  "resp": "35:1ae43c90ce"
+                },
+                {
+                  "index": 2,
+                  "label": "정정",
+                  "summary": "CSV 열 순서를 id, title로 정하고, 저장소를 PostgreSQL로 바꾸고, CSV 구현은 보류해 달라고 요청",
+                  "quote": "저장소 결정은 PostgreSQL로 변경해",
+                  "agent_summary": "저장소를 PostgreSQL로 바꾸고, CSV 열 순서를 id, title로 정한 뒤 구현은 보류했다고 답함",
+                  "agent_quote": "저장소는 PostgreSQL로 변경합니다",
+                  "fp": "CSV열순서는id,title로해줘.저장소결정은PostgreSQL로변경해.",
+                  "grounded": true,
+                  "shift": false,
+                  "title": "",
+                  "decisions": [
+                    {
+                      "id": "D2-1",
+                      "text": "CSV 내보내기의 열 순서는 id, title로 한다",
+                      "by": "user",
+                      "quote": "CSV 열 순서는 id, title로 해줘",
+                      "replaces": [],
+                      "from": "",
+                      "to": ""
+                    },
+                    {
+                      "id": "D2-2",
+                      "text": "할 일 API의 저장소는 PostgreSQL을 쓴다",
+                      "by": "user",
+                      "quote": "저장소 결정은 PostgreSQL로 변경해",
+                      "replaces": [
+                        "D1-1"
+                      ],
+                      "from": "SQLite",
+                      "to": "PostgreSQL"
+                    }
+                  ],
+                  "checks": [],
+                  "digest": "SQLite 저장소와 CSV 내보내기를 갖춘 할 일 API로 시작했다가, 저장소를 PostgreSQL로 바꾸고 CSV 열 순서를 정한 뒤 구현은 보류함",
+                  "resp": "48:96d7ed16a4"
+                },
+                {
+                  "index": 3,
+                  "label": "구체화",
+                  "summary": "보류했던 CSV 내보내기를 마무리하고 결과를 알려 달라고 요청",
+                  "quote": "이제 CSV 내보내기를 마무리하고 결과를 알려줘.",
+                  "agent_summary": "CSV 내보내기를 구현하고 출력 예시를 보였으나, 저장소는 SQLite로 구현했다고 답함",
+                  "agent_quote": "저장소는 SQLite로 구현했습니다.",
+                  "fp": "이제CSV내보내기를마무리하고결과를알려줘.",
+                  "grounded": true,
+                  "shift": false,
+                  "title": "",
+                  "decisions": [],
+                  "checks": [
+                    {
+                      "id": "D2-2",
+                      "kind": "어김",
+                      "what": "저장소를 PostgreSQL 대신 SQLite로 구현",
+                      "quote": "저장소는 SQLite로 구현했습니다."
+                    }
+                  ],
+                  "digest": "할 일 API·CSV 요청 → 저장소 PostgreSQL로 정정·CSV 보류 → CSV 구현했으나 저장소는 SQLite로 구현",
+                  "resp": "59:33110c2e26"
+                }
+              ],
+              "requests": [
+                {
+                  "summary": "할 일 API 만들기",
+                  "quote": "할 일 API를 만들어줘",
+                  "state": "open",
+                  "agent_quote": "",
+                  "id": "R1",
+                  "from_turn": 1,
+                  "by_turn": 1
+                },
+                {
+                  "summary": "저장소를 SQLite로 하기",
+                  "quote": "저장소는 SQLite로 확정이야",
+                  "state": "superseded",
+                  "agent_quote": "할 일 API에 SQLite를 사용하겠습니다",
+                  "id": "R2",
+                  "from_turn": 1,
+                  "by_turn": 2,
+                  "superseded_by": 2
+                },
+                {
+                  "summary": "CSV 내보내기 추가하기",
+                  "quote": "CSV 내보내기도 추가해줘",
+                  "state": "addressed",
+                  "agent_quote": "CSV 내보내기를 구현했습니다.",
+                  "id": "R3",
+                  "from_turn": 1,
+                  "by_turn": 3
+                },
+                {
+                  "summary": "CSV 열 순서를 id, title로 하기",
+                  "quote": "CSV 열 순서는 id, title로 해줘",
+                  "state": "addressed",
+                  "agent_quote": "CSV 열 순서는 id, title이며",
+                  "id": "R4",
+                  "from_turn": 2,
+                  "by_turn": 2
+                },
+                {
+                  "summary": "저장소를 PostgreSQL로 바꾸기",
+                  "quote": "저장소 결정은 PostgreSQL로 변경해",
+                  "state": "addressed",
+                  "agent_quote": "저장소는 PostgreSQL로 변경합니다",
+                  "id": "R5",
+                  "from_turn": 2,
+                  "by_turn": 2
+                },
+                {
+                  "summary": "CSV 구현을 다음 턴까지 보류하기",
+                  "quote": "CSV 구현은 다음 턴까지 보류해줘",
+                  "state": "addressed",
+                  "agent_quote": "구현은 보류했습니다",
+                  "id": "R6",
+                  "from_turn": 2,
+                  "by_turn": 2
+                },
+                {
+                  "summary": "CSV 내보내기 마무리하기",
+                  "quote": "CSV 내보내기를 마무리하고",
+                  "state": "addressed",
+                  "agent_quote": "CSV 내보내기를 구현했습니다.",
+                  "id": "R7",
+                  "from_turn": 3,
+                  "by_turn": 3
+                },
+                {
+                  "summary": "CSV 내보내기 결과 알려 주기",
+                  "quote": "결과를 알려줘",
+                  "state": "addressed",
+                  "agent_quote": "출력 예시는 id,title 다음 줄에 1,장보기입니다",
+                  "id": "R8",
+                  "from_turn": 3,
+                  "by_turn": 3
+                }
+              ],
+              "asks": [
+                {
+                  "summary": "CSV 열 순서 정하기",
+                  "quote": "CSV 열 순서는 어떻게 할까요?",
+                  "kind": "결정",
+                  "id": "Q1",
+                  "turn": 1,
+                  "last_turn": 1,
+                  "state": "answered",
+                  "answered_at": 2,
+                  "answer_quote": "CSV 열 순서는 id, title로 해줘",
+                  "by_blanket": false
+                }
+              ],
+              "until": 3,
+              "prev": {
+                "version": 3,
+                "first_goal": {
+                  "text": "CSV 내보내기를 갖춘 할 일 API 만들기",
+                  "turn": 1,
+                  "quote": "할 일 API를 만들어줘"
+                },
+                "current_goal": {
+                  "text": "CSV 내보내기를 갖춘 할 일 API 만들기",
+                  "turn": 1,
+                  "quote": "할 일 API를 만들어줘"
+                },
+                "steps": [
+                  {
+                    "index": 1,
+                    "label": "시작",
+                    "summary": "SQLite 저장소로 할 일 API를 만들고 CSV 내보내기를 추가해 달라고 요청",
+                    "quote": "할 일 API를 만들어줘",
+                    "agent_summary": "SQLite를 쓰겠다고 하고 CSV 열 순서를 물음",
+                    "agent_quote": "할 일 API에 SQLite를 사용하겠습니다",
+                    "fp": "할일API를만들어줘.저장소는SQLite로확정이야.CSV내보내기도추가해줘.",
+                    "grounded": true,
+                    "shift": false,
+                    "title": "",
+                    "decisions": [
+                      {
+                        "id": "D1-1",
+                        "text": "할 일 API의 저장소는 SQLite를 쓴다",
+                        "by": "user",
+                        "quote": "저장소는 SQLite로 확정이야",
+                        "replaces": [],
+                        "from": "",
+                        "to": ""
+                      },
+                      {
+                        "id": "D1-2",
+                        "text": "할 일 API에 CSV 내보내기 기능을 둔다",
+                        "by": "user",
+                        "quote": "CSV 내보내기도 추가해줘",
+                        "replaces": [],
+                        "from": "",
+                        "to": ""
+                      }
+                    ],
+                    "checks": [],
+                    "digest": "SQLite 저장소와 CSV 내보내기를 갖춘 할 일 API를 요청했고, 에이전트는 CSV 열 순서를 물음",
+                    "resp": "35:1ae43c90ce"
+                  },
+                  {
+                    "index": 2,
+                    "label": "정정",
+                    "summary": "CSV 열 순서를 id, title로 정하고, 저장소를 PostgreSQL로 바꾸고, CSV 구현은 보류해 달라고 요청",
+                    "quote": "저장소 결정은 PostgreSQL로 변경해",
+                    "agent_summary": "저장소를 PostgreSQL로 바꾸고, CSV 열 순서를 id, title로 정한 뒤 구현은 보류했다고 답함",
+                    "agent_quote": "저장소는 PostgreSQL로 변경합니다",
+                    "fp": "CSV열순서는id,title로해줘.저장소결정은PostgreSQL로변경해.",
+                    "grounded": true,
+                    "shift": false,
+                    "title": "",
+                    "decisions": [
+                      {
+                        "id": "D2-1",
+                        "text": "CSV 내보내기의 열 순서는 id, title로 한다",
+                        "by": "user",
+                        "quote": "CSV 열 순서는 id, title로 해줘",
+                        "replaces": [],
+                        "from": "",
+                        "to": ""
+                      },
+                      {
+                        "id": "D2-2",
+                        "text": "할 일 API의 저장소는 PostgreSQL을 쓴다",
+                        "by": "user",
+                        "quote": "저장소 결정은 PostgreSQL로 변경해",
+                        "replaces": [
+                          "D1-1"
+                        ],
+                        "from": "SQLite",
+                        "to": "PostgreSQL"
+                      }
+                    ],
+                    "checks": [],
+                    "digest": "SQLite 저장소와 CSV 내보내기를 갖춘 할 일 API로 시작했다가, 저장소를 PostgreSQL로 바꾸고 CSV 열 순서를 정한 뒤 구현은 보류함",
+                    "resp": "48:96d7ed16a4"
+                  }
+                ],
+                "requests": [
+                  {
+                    "summary": "할 일 API 만들기",
+                    "quote": "할 일 API를 만들어줘",
+                    "state": "open",
+                    "agent_quote": "",
+                    "id": "R1",
+                    "from_turn": 1,
+                    "by_turn": 1
+                  },
+                  {
+                    "summary": "저장소를 SQLite로 하기",
+                    "quote": "저장소는 SQLite로 확정이야",
+                    "state": "superseded",
+                    "agent_quote": "할 일 API에 SQLite를 사용하겠습니다",
+                    "id": "R2",
+                    "from_turn": 1,
+                    "by_turn": 2,
+                    "superseded_by": 2
+                  },
+                  {
+                    "summary": "CSV 내보내기 추가하기",
+                    "quote": "CSV 내보내기도 추가해줘",
+                    "state": "deferred",
+                    "agent_quote": "구현은 보류했습니다",
+                    "id": "R3",
+                    "from_turn": 1,
+                    "by_turn": 2
+                  },
+                  {
+                    "summary": "CSV 열 순서를 id, title로 하기",
+                    "quote": "CSV 열 순서는 id, title로 해줘",
+                    "state": "addressed",
+                    "agent_quote": "CSV 열 순서는 id, title이며",
+                    "id": "R4",
+                    "from_turn": 2,
+                    "by_turn": 2
+                  },
+                  {
+                    "summary": "저장소를 PostgreSQL로 바꾸기",
+                    "quote": "저장소 결정은 PostgreSQL로 변경해",
+                    "state": "addressed",
+                    "agent_quote": "저장소는 PostgreSQL로 변경합니다",
+                    "id": "R5",
+                    "from_turn": 2,
+                    "by_turn": 2
+                  },
+                  {
+                    "summary": "CSV 구현을 다음 턴까지 보류하기",
+                    "quote": "CSV 구현은 다음 턴까지 보류해줘",
+                    "state": "addressed",
+                    "agent_quote": "구현은 보류했습니다",
+                    "id": "R6",
+                    "from_turn": 2,
+                    "by_turn": 2
+                  }
+                ],
+                "asks": [
+                  {
+                    "summary": "CSV 열 순서 정하기",
+                    "quote": "CSV 열 순서는 어떻게 할까요?",
+                    "kind": "결정",
+                    "id": "Q1",
+                    "turn": 1,
+                    "last_turn": 1,
+                    "state": "answered",
+                    "answered_at": 2,
+                    "answer_quote": "CSV 열 순서는 id, title로 해줘",
+                    "by_blanket": false
+                  }
+                ],
+                "until": 2
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "run": 3,
+      "criteria": {
+        "goal": true,
+        "storage": true,
+        "csv": true,
+        "question": true,
+        "violation": true
+      },
+      "observations": [
+        {
+          "turn": 1,
+          "calls": [
+            {
+              "exit": 0,
+              "duration": 13.4,
+              "models": [
+                "claude-opus-5-5"
+              ],
+              "prompt_sha256": "7e496f79660ce217fd03536747ce5fe40851b9e6635c24b177bd59149e7ec48d"
+            }
+          ],
+          "analysis": {
+            "flow": {
+              "version": 3,
+              "first_goal": {
+                "text": "SQLite 저장소를 쓰고 CSV로 내보낼 수 있는 할 일 API 만들기",
+                "turn": 1,
+                "quote": "할 일 API를 만들어줘"
+              },
+              "current_goal": {
+                "text": "SQLite 저장소를 쓰고 CSV로 내보낼 수 있는 할 일 API 만들기",
+                "turn": 1,
+                "quote": "할 일 API를 만들어줘"
+              },
+              "steps": [
+                {
+                  "index": 1,
+                  "label": "시작",
+                  "summary": "SQLite 저장소를 쓰는 할 일 API와 CSV 내보내기 기능을 만들어 달라고 요청",
+                  "quote": "할 일 API를 만들어줘",
+                  "agent_summary": "SQLite를 쓰겠다고 답하고 CSV 열 순서를 물음",
+                  "agent_quote": "CSV 열 순서는 어떻게 할까요?",
+                  "fp": "할일API를만들어줘.저장소는SQLite로확정이야.CSV내보내기도추가해줘.",
+                  "grounded": true,
+                  "shift": false,
+                  "title": "",
+                  "decisions": [
+                    {
+                      "id": "D1-1",
+                      "text": "할 일 API의 저장소는 SQLite를 쓴다",
+                      "by": "user",
+                      "quote": "저장소는 SQLite로 확정이야",
+                      "replaces": [],
+                      "from": "",
+                      "to": ""
+                    },
+                    {
+                      "id": "D1-2",
+                      "text": "할 일 API는 CSV 내보내기 기능을 제공한다",
+                      "by": "user",
+                      "quote": "CSV 내보내기도 추가해줘",
+                      "replaces": [],
+                      "from": "",
+                      "to": ""
+                    }
+                  ],
+                  "checks": [],
+                  "digest": "할 일 API를 SQLite 저장소로 만들고 CSV 내보내기를 더해 달라는 요청에 에이전트가 CSV 열 순서를 물음",
+                  "resp": "35:1ae43c90ce"
+                }
+              ],
+              "requests": [
+                {
+                  "summary": "할 일 API 만들기",
+                  "quote": "할 일 API를 만들어줘",
+                  "state": "open",
+                  "agent_quote": "",
+                  "id": "R1",
+                  "from_turn": 1,
+                  "by_turn": 1
+                },
+                {
+                  "summary": "저장소로 SQLite 쓰기",
+                  "quote": "저장소는 SQLite로 확정이야",
+                  "state": "addressed",
+                  "agent_quote": "할 일 API에 SQLite를 사용하겠습니다",
+                  "id": "R2",
+                  "from_turn": 1,
+                  "by_turn": 1
+                },
+                {
+                  "summary": "CSV 내보내기 추가",
+                  "quote": "CSV 내보내기도 추가해줘",
+                  "state": "open",
+                  "agent_quote": "",
+                  "id": "R3",
+                  "from_turn": 1,
+                  "by_turn": 1
+                }
+              ],
+              "asks": [
+                {
+                  "summary": "CSV 열 순서 정하기",
+                  "quote": "CSV 열 순서는 어떻게 할까요?",
+                  "kind": "결정",
+                  "id": "Q1",
+                  "turn": 1,
+                  "last_turn": 1,
+                  "state": "open"
+                }
+              ],
+              "until": 1,
+              "prev": {
+                "version": 3,
+                "first_goal": {},
+                "current_goal": {},
+                "steps": [],
+                "requests": [],
+                "asks": [],
+                "until": 0
+              }
+            }
+          }
+        },
+        {
+          "turn": 2,
+          "calls": [
+            {
+              "exit": 0,
+              "duration": 18.92,
+              "models": [
+                "claude-opus-5-5"
+              ],
+              "prompt_sha256": "4c9fde86f37a390402eb725e9ce2cbfa9d22e954b99963bd093e80cfef40f5de"
+            }
+          ],
+          "analysis": {
+            "flow": {
+              "version": 3,
+              "first_goal": {
+                "text": "SQLite 저장소를 쓰고 CSV로 내보낼 수 있는 할 일 API 만들기",
+                "turn": 1,
+                "quote": "할 일 API를 만들어줘"
+              },
+              "current_goal": {
+                "text": "PostgreSQL 저장소를 쓰고 CSV로 내보낼 수 있는 할 일 API 만들기",
+                "turn": 1,
+                "quote": "할 일 API를 만들어줘"
+              },
+              "steps": [
+                {
+                  "index": 1,
+                  "label": "시작",
+                  "summary": "SQLite 저장소를 쓰는 할 일 API와 CSV 내보내기 기능을 만들어 달라고 요청",
+                  "quote": "할 일 API를 만들어줘",
+                  "agent_summary": "SQLite를 쓰겠다고 답하고 CSV 열 순서를 물음",
+                  "agent_quote": "CSV 열 순서는 어떻게 할까요?",
+                  "fp": "할일API를만들어줘.저장소는SQLite로확정이야.CSV내보내기도추가해줘.",
+                  "grounded": true,
+                  "shift": false,
+                  "title": "",
+                  "decisions": [
+                    {
+                      "id": "D1-1",
+                      "text": "할 일 API의 저장소는 SQLite를 쓴다",
+                      "by": "user",
+                      "quote": "저장소는 SQLite로 확정이야",
+                      "replaces": [],
+                      "from": "",
+                      "to": ""
+                    },
+                    {
+                      "id": "D1-2",
+                      "text": "할 일 API는 CSV 내보내기 기능을 제공한다",
+                      "by": "user",
+                      "quote": "CSV 내보내기도 추가해줘",
+                      "replaces": [],
+                      "from": "",
+                      "to": ""
+                    }
+                  ],
+                  "checks": [],
+                  "digest": "할 일 API를 SQLite 저장소로 만들고 CSV 내보내기를 더해 달라는 요청에 에이전트가 CSV 열 순서를 물음",
+                  "resp": "35:1ae43c90ce"
+                },
+                {
+                  "index": 2,
+                  "label": "정정",
+                  "summary": "CSV 열 순서를 정하고, 저장소를 PostgreSQL로 바꾸고, CSV 구현은 다음 턴까지 미뤄 달라고 요청",
+                  "quote": "저장소 결정은 PostgreSQL로 변경해",
+                  "agent_summary": "저장소를 PostgreSQL로 바꾸고 CSV 열 순서를 반영했으며 CSV 구현은 미뤘다고 답함",
+                  "agent_quote": "저장소는 PostgreSQL로 변경합니다",
+                  "fp": "CSV열순서는id,title로해줘.저장소결정은PostgreSQL로변경해.",
+                  "grounded": true,
+                  "shift": false,
+                  "title": "",
+                  "decisions": [
+                    {
+                      "id": "D2-1",
+                      "text": "CSV 열 순서는 id, title로 한다",
+                      "by": "user",
+                      "quote": "CSV 열 순서는 id, title로 해줘",
+                      "replaces": [],
+                      "from": "",
+                      "to": ""
+                    },
+                    {
+                      "id": "D2-2",
+                      "text": "할 일 API의 저장소는 PostgreSQL을 쓴다",
+                      "by": "user",
+                      "quote": "저장소 결정은 PostgreSQL로 변경해",
+                      "replaces": [
+                        "D1-1"
+                      ],
+                      "from": "SQLite",
+                      "to": "PostgreSQL"
+                    }
+                  ],
+                  "checks": [],
+                  "digest": "SQLite 할 일 API와 CSV 내보내기를 요청한 뒤, CSV 열 순서를 정하고 저장소를 PostgreSQL로 바꾸며 CSV 구현은 미룸",
+                  "resp": "48:96d7ed16a4"
+                }
+              ],
+              "requests": [
+                {
+                  "summary": "할 일 API 만들기",
+                  "quote": "할 일 API를 만들어줘",
+                  "state": "open",
+                  "agent_quote": "",
+                  "id": "R1",
+                  "from_turn": 1,
+                  "by_turn": 1
+                },
+                {
+                  "summary": "저장소로 SQLite 쓰기",
+                  "quote": "저장소는 SQLite로 확정이야",
+                  "state": "superseded",
+                  "agent_quote": "할 일 API에 SQLite를 사용하겠습니다",
+                  "id": "R2",
+                  "from_turn": 1,
+                  "by_turn": 2,
+                  "superseded_by": 2
+                },
+                {
+                  "summary": "CSV 내보내기 추가",
+                  "quote": "CSV 내보내기도 추가해줘",
+                  "state": "deferred",
+                  "agent_quote": "구현은 보류했습니다",
+                  "id": "R3",
+                  "from_turn": 1,
+                  "by_turn": 2
+                },
+                {
+                  "summary": "CSV 열 순서를 id, title로 하기",
+                  "quote": "CSV 열 순서는 id, title로 해줘",
+                  "state": "addressed",
+                  "agent_quote": "CSV 열 순서는 id, title이며",
+                  "id": "R4",
+                  "from_turn": 2,
+                  "by_turn": 2
+                },
+                {
+                  "summary": "저장소를 PostgreSQL로 바꾸기",
+                  "quote": "저장소 결정은 PostgreSQL로 변경해",
+                  "state": "addressed",
+                  "agent_quote": "저장소는 PostgreSQL로 변경합니다",
+                  "id": "R5",
+                  "from_turn": 2,
+                  "by_turn": 2
+                },
+                {
+                  "summary": "CSV 구현을 다음 턴까지 미루기",
+                  "quote": "CSV 구현은 다음 턴까지 보류해줘",
+                  "state": "addressed",
+                  "agent_quote": "구현은 보류했습니다",
+                  "id": "R6",
+                  "from_turn": 2,
+                  "by_turn": 2
+                }
+              ],
+              "asks": [
+                {
+                  "summary": "CSV 열 순서 정하기",
+                  "quote": "CSV 열 순서는 어떻게 할까요?",
+                  "kind": "결정",
+                  "id": "Q1",
+                  "turn": 1,
+                  "last_turn": 1,
+                  "state": "answered",
+                  "answered_at": 2,
+                  "answer_quote": "CSV 열 순서는 id, title로 해줘",
+                  "by_blanket": false
+                }
+              ],
+              "until": 2,
+              "prev": {
+                "version": 3,
+                "first_goal": {
+                  "text": "SQLite 저장소를 쓰고 CSV로 내보낼 수 있는 할 일 API 만들기",
+                  "turn": 1,
+                  "quote": "할 일 API를 만들어줘"
+                },
+                "current_goal": {
+                  "text": "SQLite 저장소를 쓰고 CSV로 내보낼 수 있는 할 일 API 만들기",
+                  "turn": 1,
+                  "quote": "할 일 API를 만들어줘"
+                },
+                "steps": [
+                  {
+                    "index": 1,
+                    "label": "시작",
+                    "summary": "SQLite 저장소를 쓰는 할 일 API와 CSV 내보내기 기능을 만들어 달라고 요청",
+                    "quote": "할 일 API를 만들어줘",
+                    "agent_summary": "SQLite를 쓰겠다고 답하고 CSV 열 순서를 물음",
+                    "agent_quote": "CSV 열 순서는 어떻게 할까요?",
+                    "fp": "할일API를만들어줘.저장소는SQLite로확정이야.CSV내보내기도추가해줘.",
+                    "grounded": true,
+                    "shift": false,
+                    "title": "",
+                    "decisions": [
+                      {
+                        "id": "D1-1",
+                        "text": "할 일 API의 저장소는 SQLite를 쓴다",
+                        "by": "user",
+                        "quote": "저장소는 SQLite로 확정이야",
+                        "replaces": [],
+                        "from": "",
+                        "to": ""
+                      },
+                      {
+                        "id": "D1-2",
+                        "text": "할 일 API는 CSV 내보내기 기능을 제공한다",
+                        "by": "user",
+                        "quote": "CSV 내보내기도 추가해줘",
+                        "replaces": [],
+                        "from": "",
+                        "to": ""
+                      }
+                    ],
+                    "checks": [],
+                    "digest": "할 일 API를 SQLite 저장소로 만들고 CSV 내보내기를 더해 달라는 요청에 에이전트가 CSV 열 순서를 물음",
+                    "resp": "35:1ae43c90ce"
+                  }
+                ],
+                "requests": [
+                  {
+                    "summary": "할 일 API 만들기",
+                    "quote": "할 일 API를 만들어줘",
+                    "state": "open",
+                    "agent_quote": "",
+                    "id": "R1",
+                    "from_turn": 1,
+                    "by_turn": 1
+                  },
+                  {
+                    "summary": "저장소로 SQLite 쓰기",
+                    "quote": "저장소는 SQLite로 확정이야",
+                    "state": "addressed",
+                    "agent_quote": "할 일 API에 SQLite를 사용하겠습니다",
+                    "id": "R2",
+                    "from_turn": 1,
+                    "by_turn": 1
+                  },
+                  {
+                    "summary": "CSV 내보내기 추가",
+                    "quote": "CSV 내보내기도 추가해줘",
+                    "state": "open",
+                    "agent_quote": "",
+                    "id": "R3",
+                    "from_turn": 1,
+                    "by_turn": 1
+                  }
+                ],
+                "asks": [
+                  {
+                    "summary": "CSV 열 순서 정하기",
+                    "quote": "CSV 열 순서는 어떻게 할까요?",
+                    "kind": "결정",
+                    "id": "Q1",
+                    "turn": 1,
+                    "last_turn": 1,
+                    "state": "open"
+                  }
+                ],
+                "until": 1
+              }
+            }
+          }
+        },
+        {
+          "turn": 3,
+          "calls": [
+            {
+              "exit": 0,
+              "duration": 10.71,
+              "models": [
+                "claude-opus-5-5"
+              ],
+              "prompt_sha256": "8cb2bbe394ec8a62c46060c091e68daa3b5f40d28ab1fa93102dd84e0a41c4c7"
+            }
+          ],
+          "analysis": {
+            "flow": {
+              "version": 3,
+              "first_goal": {
+                "text": "SQLite 저장소를 쓰고 CSV로 내보낼 수 있는 할 일 API 만들기",
+                "turn": 1,
+                "quote": "할 일 API를 만들어줘"
+              },
+              "current_goal": {
+                "text": "PostgreSQL 저장소를 쓰고 CSV로 내보낼 수 있는 할 일 API 만들기",
+                "turn": 1,
+                "quote": "할 일 API를 만들어줘."
+              },
+              "steps": [
+                {
+                  "index": 1,
+                  "label": "시작",
+                  "summary": "SQLite 저장소를 쓰는 할 일 API와 CSV 내보내기 기능을 만들어 달라고 요청",
+                  "quote": "할 일 API를 만들어줘",
+                  "agent_summary": "SQLite를 쓰겠다고 답하고 CSV 열 순서를 물음",
+                  "agent_quote": "CSV 열 순서는 어떻게 할까요?",
+                  "fp": "할일API를만들어줘.저장소는SQLite로확정이야.CSV내보내기도추가해줘.",
+                  "grounded": true,
+                  "shift": false,
+                  "title": "",
+                  "decisions": [
+                    {
+                      "id": "D1-1",
+                      "text": "할 일 API의 저장소는 SQLite를 쓴다",
+                      "by": "user",
+                      "quote": "저장소는 SQLite로 확정이야",
+                      "replaces": [],
+                      "from": "",
+                      "to": ""
+                    },
+                    {
+                      "id": "D1-2",
+                      "text": "할 일 API는 CSV 내보내기 기능을 제공한다",
+                      "by": "user",
+                      "quote": "CSV 내보내기도 추가해줘",
+                      "replaces": [],
+                      "from": "",
+                      "to": ""
+                    }
+                  ],
+                  "checks": [],
+                  "digest": "할 일 API를 SQLite 저장소로 만들고 CSV 내보내기를 더해 달라는 요청에 에이전트가 CSV 열 순서를 물음",
+                  "resp": "35:1ae43c90ce"
+                },
+                {
+                  "index": 2,
+                  "label": "정정",
+                  "summary": "CSV 열 순서를 정하고, 저장소를 PostgreSQL로 바꾸고, CSV 구현은 다음 턴까지 미뤄 달라고 요청",
+                  "quote": "저장소 결정은 PostgreSQL로 변경해",
+                  "agent_summary": "저장소를 PostgreSQL로 바꾸고 CSV 열 순서를 반영했으며 CSV 구현은 미뤘다고 답함",
+                  "agent_quote": "저장소는 PostgreSQL로 변경합니다",
+                  "fp": "CSV열순서는id,title로해줘.저장소결정은PostgreSQL로변경해.",
+                  "grounded": true,
+                  "shift": false,
+                  "title": "",
+                  "decisions": [
+                    {
+                      "id": "D2-1",
+                      "text": "CSV 열 순서는 id, title로 한다",
+                      "by": "user",
+                      "quote": "CSV 열 순서는 id, title로 해줘",
+                      "replaces": [],
+                      "from": "",
+                      "to": ""
+                    },
+                    {
+                      "id": "D2-2",
+                      "text": "할 일 API의 저장소는 PostgreSQL을 쓴다",
+                      "by": "user",
+                      "quote": "저장소 결정은 PostgreSQL로 변경해",
+                      "replaces": [
+                        "D1-1"
+                      ],
+                      "from": "SQLite",
+                      "to": "PostgreSQL"
+                    }
+                  ],
+                  "checks": [],
+                  "digest": "SQLite 할 일 API와 CSV 내보내기를 요청한 뒤, CSV 열 순서를 정하고 저장소를 PostgreSQL로 바꾸며 CSV 구현은 미룸",
+                  "resp": "48:96d7ed16a4"
+                },
+                {
+                  "index": 3,
+                  "label": "구체화",
+                  "summary": "보류했던 CSV 내보내기를 마무리하고 결과를 알려 달라고 요청",
+                  "quote": "이제 CSV 내보내기를 마무리하고 결과를 알려줘.",
+                  "agent_summary": "CSV 내보내기를 구현하고 출력 예시를 보였으나 저장소는 SQLite로 구현했다고 답함",
+                  "agent_quote": "저장소는 SQLite로 구현했습니다.",
+                  "fp": "이제CSV내보내기를마무리하고결과를알려줘.",
+                  "grounded": true,
+                  "shift": false,
+                  "title": "",
+                  "decisions": [],
+                  "checks": [
+                    {
+                      "id": "D2-2",
+                      "kind": "어김",
+                      "what": "저장소를 PostgreSQL 대신 SQLite로 구현",
+                      "quote": "저장소는 SQLite로 구현했습니다."
+                    }
+                  ],
+                  "digest": "SQLite 할 일 API·CSV 요청 → PostgreSQL로 바꾸고 CSV 보류 → CSV 구현했으나 저장소는 SQLite로 답함",
+                  "resp": "59:33110c2e26"
+                }
+              ],
+              "requests": [
+                {
+                  "summary": "할 일 API 만들기",
+                  "quote": "할 일 API를 만들어줘",
+                  "state": "open",
+                  "agent_quote": "",
+                  "id": "R1",
+                  "from_turn": 1,
+                  "by_turn": 1
+                },
+                {
+                  "summary": "저장소로 SQLite 쓰기",
+                  "quote": "저장소는 SQLite로 확정이야",
+                  "state": "superseded",
+                  "agent_quote": "할 일 API에 SQLite를 사용하겠습니다",
+                  "id": "R2",
+                  "from_turn": 1,
+                  "by_turn": 2,
+                  "superseded_by": 2
+                },
+                {
+                  "summary": "CSV 내보내기 추가",
+                  "quote": "CSV 내보내기도 추가해줘",
+                  "state": "addressed",
+                  "agent_quote": "CSV 내보내기를 구현했습니다.",
+                  "id": "R3",
+                  "from_turn": 1,
+                  "by_turn": 3
+                },
+                {
+                  "summary": "CSV 열 순서를 id, title로 하기",
+                  "quote": "CSV 열 순서는 id, title로 해줘",
+                  "state": "addressed",
+                  "agent_quote": "CSV 열 순서는 id, title이며",
+                  "id": "R4",
+                  "from_turn": 2,
+                  "by_turn": 2
+                },
+                {
+                  "summary": "저장소를 PostgreSQL로 바꾸기",
+                  "quote": "저장소 결정은 PostgreSQL로 변경해",
+                  "state": "addressed",
+                  "agent_quote": "저장소는 PostgreSQL로 변경합니다",
+                  "id": "R5",
+                  "from_turn": 2,
+                  "by_turn": 2
+                },
+                {
+                  "summary": "CSV 구현을 다음 턴까지 미루기",
+                  "quote": "CSV 구현은 다음 턴까지 보류해줘",
+                  "state": "addressed",
+                  "agent_quote": "구현은 보류했습니다",
+                  "id": "R6",
+                  "from_turn": 2,
+                  "by_turn": 2
+                },
+                {
+                  "summary": "CSV 내보내기 마무리하기",
+                  "quote": "CSV 내보내기를 마무리하고",
+                  "state": "addressed",
+                  "agent_quote": "CSV 내보내기를 구현했습니다.",
+                  "id": "R7",
+                  "from_turn": 3,
+                  "by_turn": 3
+                },
+                {
+                  "summary": "결과 알려 주기",
+                  "quote": "결과를 알려줘",
+                  "state": "addressed",
+                  "agent_quote": "출력 예시는 id,title 다음 줄에 1,장보기입니다.",
+                  "id": "R8",
+                  "from_turn": 3,
+                  "by_turn": 3
+                }
+              ],
+              "asks": [
+                {
+                  "summary": "CSV 열 순서 정하기",
+                  "quote": "CSV 열 순서는 어떻게 할까요?",
+                  "kind": "결정",
+                  "id": "Q1",
+                  "turn": 1,
+                  "last_turn": 1,
+                  "state": "answered",
+                  "answered_at": 2,
+                  "answer_quote": "CSV 열 순서는 id, title로 해줘",
+                  "by_blanket": false
+                }
+              ],
+              "until": 3,
+              "prev": {
+                "version": 3,
+                "first_goal": {
+                  "text": "SQLite 저장소를 쓰고 CSV로 내보낼 수 있는 할 일 API 만들기",
+                  "turn": 1,
+                  "quote": "할 일 API를 만들어줘"
+                },
+                "current_goal": {
+                  "text": "PostgreSQL 저장소를 쓰고 CSV로 내보낼 수 있는 할 일 API 만들기",
+                  "turn": 1,
+                  "quote": "할 일 API를 만들어줘"
+                },
+                "steps": [
+                  {
+                    "index": 1,
+                    "label": "시작",
+                    "summary": "SQLite 저장소를 쓰는 할 일 API와 CSV 내보내기 기능을 만들어 달라고 요청",
+                    "quote": "할 일 API를 만들어줘",
+                    "agent_summary": "SQLite를 쓰겠다고 답하고 CSV 열 순서를 물음",
+                    "agent_quote": "CSV 열 순서는 어떻게 할까요?",
+                    "fp": "할일API를만들어줘.저장소는SQLite로확정이야.CSV내보내기도추가해줘.",
+                    "grounded": true,
+                    "shift": false,
+                    "title": "",
+                    "decisions": [
+                      {
+                        "id": "D1-1",
+                        "text": "할 일 API의 저장소는 SQLite를 쓴다",
+                        "by": "user",
+                        "quote": "저장소는 SQLite로 확정이야",
+                        "replaces": [],
+                        "from": "",
+                        "to": ""
+                      },
+                      {
+                        "id": "D1-2",
+                        "text": "할 일 API는 CSV 내보내기 기능을 제공한다",
+                        "by": "user",
+                        "quote": "CSV 내보내기도 추가해줘",
+                        "replaces": [],
+                        "from": "",
+                        "to": ""
+                      }
+                    ],
+                    "checks": [],
+                    "digest": "할 일 API를 SQLite 저장소로 만들고 CSV 내보내기를 더해 달라는 요청에 에이전트가 CSV 열 순서를 물음",
+                    "resp": "35:1ae43c90ce"
+                  },
+                  {
+                    "index": 2,
+                    "label": "정정",
+                    "summary": "CSV 열 순서를 정하고, 저장소를 PostgreSQL로 바꾸고, CSV 구현은 다음 턴까지 미뤄 달라고 요청",
+                    "quote": "저장소 결정은 PostgreSQL로 변경해",
+                    "agent_summary": "저장소를 PostgreSQL로 바꾸고 CSV 열 순서를 반영했으며 CSV 구현은 미뤘다고 답함",
+                    "agent_quote": "저장소는 PostgreSQL로 변경합니다",
+                    "fp": "CSV열순서는id,title로해줘.저장소결정은PostgreSQL로변경해.",
+                    "grounded": true,
+                    "shift": false,
+                    "title": "",
+                    "decisions": [
+                      {
+                        "id": "D2-1",
+                        "text": "CSV 열 순서는 id, title로 한다",
+                        "by": "user",
+                        "quote": "CSV 열 순서는 id, title로 해줘",
+                        "replaces": [],
+                        "from": "",
+                        "to": ""
+                      },
+                      {
+                        "id": "D2-2",
+                        "text": "할 일 API의 저장소는 PostgreSQL을 쓴다",
+                        "by": "user",
+                        "quote": "저장소 결정은 PostgreSQL로 변경해",
+                        "replaces": [
+                          "D1-1"
+                        ],
+                        "from": "SQLite",
+                        "to": "PostgreSQL"
+                      }
+                    ],
+                    "checks": [],
+                    "digest": "SQLite 할 일 API와 CSV 내보내기를 요청한 뒤, CSV 열 순서를 정하고 저장소를 PostgreSQL로 바꾸며 CSV 구현은 미룸",
+                    "resp": "48:96d7ed16a4"
+                  }
+                ],
+                "requests": [
+                  {
+                    "summary": "할 일 API 만들기",
+                    "quote": "할 일 API를 만들어줘",
+                    "state": "open",
+                    "agent_quote": "",
+                    "id": "R1",
+                    "from_turn": 1,
+                    "by_turn": 1
+                  },
+                  {
+                    "summary": "저장소로 SQLite 쓰기",
+                    "quote": "저장소는 SQLite로 확정이야",
+                    "state": "superseded",
+                    "agent_quote": "할 일 API에 SQLite를 사용하겠습니다",
+                    "id": "R2",
+                    "from_turn": 1,
+                    "by_turn": 2,
+                    "superseded_by": 2
+                  },
+                  {
+                    "summary": "CSV 내보내기 추가",
+                    "quote": "CSV 내보내기도 추가해줘",
+                    "state": "deferred",
+                    "agent_quote": "구현은 보류했습니다",
+                    "id": "R3",
+                    "from_turn": 1,
+                    "by_turn": 2
+                  },
+                  {
+                    "summary": "CSV 열 순서를 id, title로 하기",
+                    "quote": "CSV 열 순서는 id, title로 해줘",
+                    "state": "addressed",
+                    "agent_quote": "CSV 열 순서는 id, title이며",
+                    "id": "R4",
+                    "from_turn": 2,
+                    "by_turn": 2
+                  },
+                  {
+                    "summary": "저장소를 PostgreSQL로 바꾸기",
+                    "quote": "저장소 결정은 PostgreSQL로 변경해",
+                    "state": "addressed",
+                    "agent_quote": "저장소는 PostgreSQL로 변경합니다",
+                    "id": "R5",
+                    "from_turn": 2,
+                    "by_turn": 2
+                  },
+                  {
+                    "summary": "CSV 구현을 다음 턴까지 미루기",
+                    "quote": "CSV 구현은 다음 턴까지 보류해줘",
+                    "state": "addressed",
+                    "agent_quote": "구현은 보류했습니다",
+                    "id": "R6",
+                    "from_turn": 2,
+                    "by_turn": 2
+                  }
+                ],
+                "asks": [
+                  {
+                    "summary": "CSV 열 순서 정하기",
+                    "quote": "CSV 열 순서는 어떻게 할까요?",
+                    "kind": "결정",
+                    "id": "Q1",
+                    "turn": 1,
+                    "last_turn": 1,
+                    "state": "answered",
+                    "answered_at": 2,
+                    "answer_quote": "CSV 열 순서는 id, title로 해줘",
+                    "by_blanket": false
+                  }
+                ],
+                "until": 2
+              }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

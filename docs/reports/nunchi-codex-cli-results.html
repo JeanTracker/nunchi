@@ -1,0 +1,35 @@
+<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>눈치 × Codex CLI 실행 결과</title><style>*{box-sizing:border-box}body{margin:auto;max-width:1100px;padding:4vw;background:#f7f7f1;color:#1c3433;font:16px/1.65 system-ui}h1{font-size:clamp(2em,4vw,3.4em);margin:.3em 0}h2{margin:1.7em 0 .4em}section{border-top:1px solid #bfc8be;padding:.75em 0}p{margin:.45em 0}figure{margin:0}figcaption{font-size:.9em}.screen{display:grid;grid-template-columns:3fr 2fr;background:#142022;color:#e8f2ed;border-radius:10px;overflow:auto}.screen pre{padding:.85em;overflow:auto;font:13px/1.5 monospace}.screen pre+pre{border-left:1px solid #8aaba4}a{color:#006354}@media(max-width:650px){.screen{grid-template-columns:1fr}.screen pre+pre{border-left:0;border-top:1px solid #8aaba4}}</style><main><small>실행 Sol · 독립 리뷰 Astra 6.2 · 2026.11.21</small><h1>눈치 × Codex CLI</h1><p>Codex CLI 0.169.0 대화와 눈치 엔진을 연결해 같은 터미널 창의 tmux 패널에서 분석 결과를 확인했다. 고정 대본의 의미 품질은 Astra 6.2의 판정에서 Sol 3회 중 2회가 다섯 기준을 모두 충족했다.</p><h2>실제 터미널 출력</h2><figure><div class="screen"><pre>› Synthetic test. The goal is a todo API. Use SQLite. Add CSV export. First, run printf
+  demo-tool then ask me which CSV column order to use. Do not write files.
+
+
+• I’ll run printf demo-tool first.
+
+• Ran printf demo-tool
+  └ demo-tool
+
+• printf demo-tool returned demo-tool. Which column order should I use for the CSV export?</pre><pre>눈치
+#1 응답까지 반영
+
+목표
+· 할 일 API에 CSV 내보내기 제공
+
+결정 사항
+✔ 할 일 API는 CSV 내보내기를 지원한다.  #1-2
+✔ 할 일 API의 저장소로 SQLite를 사용한다.  #1-1
+
+처리 결과 #1
+○ 할 일 API 만들기
+○ SQLite 사용하기
+○ CSV 내보내기 추가하기
+✔ 먼저 printf demo-tool 실행하기
+✔ 명령 실행 뒤 CSV 열 순서 묻기
+○ 파일을 쓰지 않기
+
+에이전트 질문
+· CSV 내보내기에 사용할 열 순서
+
+남은 요청
+○ 할 일 API 만들기
+○ SQLite 사용하기
+○ CSV 내보내기 추가하기
+○ 파일을 쓰지 않기</pre></div><figcaption>왼쪽은 실제 Codex CLI 캡처의 발췌입니다. 오른쪽은 같은 턴의 저장된 분석을 기존 눈치 용어로 맞춘 뷰어에서 다시 표시한 결과입니다.</figcaption></figure><h2>항목별 판정</h2><section><b>실제 입력과 패널 표시 · 통과</b><p>Sol 대화에서 도구 호출과 중간 설명을 거쳐 나온 최종 답변을 사용자 요청과 한 턴으로 연결했다. 저장된 목표, SQLite 결정, CSV 질문을 Astra가 원문부터 패널까지 대조했다.</p></section><section><b>같은 프로젝트의 두 CLI · 통과</b><p>첫 세션은 할 일 API와 SQLite, 두 번째는 재고 API와 Redis로 진행했다. 독립 실행한 두 뷰어가 서로 다른 세션을 표시했다. 두 번째 세션은 제공한 런처로 실행했다.</p></section><section><b>Codex 단독 분석 · 통과</b><p>고정 3턴을 3회 재생했다. 성공한 분석 호출 9회 모두 gpt-6.2-sol이었고 Claude 호출은 0회였다.</p></section><section><b>결정 변경·요청 완료·질문 해소·결정 위반 · 각 3/3</b><p>세 번 모두 SQLite에서 PostgreSQL로 결정을 교체하고 CSV 완료를 기록했다. 답한 열 순서 질문을 닫았고 마지막 응답의 SQLite 사용을 결정 위반으로 감지했다.</p></section><section><b>현재 목표 유지 · 2/3</b><p>기준은 표현이 바뀌어도 현재 목표에서 상위 목적(할 일 API)을 식별할 수 있는지다. 한 회는 마지막 현재 목표에 CSV 내보내기만 남았다. 최초 목표는 세 번 모두 보존됐다.</p></section><section><b>Claude 대조군 · 각 3/3</b><p>동일한 대본을 Claude 원본 입력과 Codex 훅 입력으로 각각 3회씩 claude-opus-5-5에 재생했다. 다섯 기준 모두 통과했다. 한 실행에서는 별도 관찰 항목인 상위 API 요청까지 완료 처리했다. 한 대본에서 얻은 수치다.</p></section><section><b>실패 복구와 화면 갱신 · 통과</b><p>Astra가 분석기 종료 코드 42를 주입했다. 완료 턴 0을 유지하다 실제 Sol 재시도로 1턴이 저장됐다. 독립 뷰어 시험에서 파일 변경 후 표시까지 약 0.5초였다.</p></section><section><b>중단·중복 이벤트 · 통과</b><p>실제 CLI 작업을 중단한 뒤 완료 턴과 분석 호출 수가 유지됐다. 같은 Stop을 다시 전달해도 분석 결과가 중복되지 않았다.</p></section><section><b>CLI 재개 · 통과</b><p>다시 연 Codex가 원래 세션 ID로 연결됐고, 다음 분석을 기다리는 동안 마지막으로 성공한 SQLite 상태가 복원됐다. 재개 후 다음 턴까지 완료해 PostgreSQL로 변경된 결정과 CSV 열 순서를 패널에서 확인했다.</p></section><section><b>검증 범위 · 부분 검증</b><p>실험 환경은 macOS, tmux 3.8, codex-cli 0.169.0이다. 창 너비 155열 및 좁은 80열의 CLI와 패널을 사용했다. 일반 키 입력과 중단은 확인했다. 도구 실행 승인 키를 패널 갱신과 동시에 누르는 경우는 별도 검증하지 않았다.</p></section><h2>검증 기록</h2><p><a href="codex-cli-evidence/codex-replays.json">Sol 3회 분석 기록</a> · <a href="codex-cli-evidence/independent-session-resume.json">두 세션 및 재개</a> · <a href="codex-cli-evidence/resumed-panel-current-labels.txt">재개 후 패널 다시 표시</a> · <a href="codex-cli-evidence/panel-pane.txt">시험 당시 패널 원본</a> · <a href="codex-cli-evidence/independent-live-trace.json">실제 턴 추적</a> · <a href="codex-cli-evidence/second-panel.txt">두 번째 세션의 패널</a> · <a href="codex-cli-evidence/independent-retry.json">실패 후 재시도</a> · <a href="codex-cli-evidence/claude-control.json">Claude 대조군</a> · <a href="codex-cli-evidence/claude-codex-input.json">입력 형식 대조군</a></p><h2>다시 실행하기</h2><p>저장소에서 <code>cargo build --locked</code> 후 <code>scripts/codex-with-panel.sh --print-hooks</code>로 이 빌드에 맞는 훅 설정을 확인합니다. 테스트 프로젝트의 <code>.codex/hooks.json</code>에 세 이벤트를 병합하고 Codex의 <code>/hooks</code>에서 신뢰한 다음, 그 프로젝트에서 이 저장소의 <code>scripts/codex-with-panel.sh</code>를 실행합니다. 런처에는 별도 눈치 저장소와 Sol 분석 모델을 기본 지정했습니다.</p><p><a href="nunchi-codex-cli-test-plan.html">원래 시험 계획</a> · <a href="codex-cli-evidence/dialogue.json">고정 대화 대본</a></p></main>

@@ -1,0 +1,22 @@
+<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>눈치 × Codex CLI 검증 계획</title><style>
+*{box-sizing:border-box}body{font:16px/1.7 system-ui;color:#203238;background:#f6f7f2;max-width:900px;margin:auto;padding:4vw}h1,h2{line-height:1.3}h2{margin-top:2em;color:#17534c}section,figure{background:white;padding:1.3em;margin:1em 0;border:1px solid #ccd6cc;border-radius:12px}figure div{display:grid;grid-template-columns:3fr 2fr;background:#142528;color:#eff9ef}figure pre{white-space:pre-wrap;padding:12px;margin:0;font:14px/1.7 monospace}figure pre+pre{border-left:1px solid #778d87}figcaption,small{font-size:.88em}code{overflow-wrap:anywhere}li{margin:.6em 0}a{color:#146159}
+</style><main><small>2026.11.21 · codex-cli 0.169.0 · 실행 Sol / 리뷰 Astra 6.2</small><h1>Codex CLI에서 눈치가 대화를 따라가는지 검증하기</h1>
+<p>첫 실험은 기존 대화형 Codex를 그대로 실행하고 같은 터미널 창의 tmux 분할 영역에 눈치 결과를 표시한다. 화면 표시, 실제 대화 수집, 분석 품질을 각각 판정한다.</p>
+<figure><div><pre>Codex CLI
+
+› 저장소는 SQLite로 결정하자.
+  CSV 내보내기는 보류해줘.</pre><pre>눈치 · 현재 세션
+결정 사항
+✔ SQLite 사용
+
+남은 요청
+⊘ CSV 내보내기</pre></div><figcaption>목표 화면 예시. 오른쪽은 별도 프로세스가 현재 세션의 analysis.json을 읽는 뷰어다. 실제 캡처는 Sol이 실험 후 첨부한다.</figcaption></figure>
+<p><a href="nunchi-codex-cli-results.html">실제 실행 결과와 터미널 출력 보기</a></p><h2>화면 방식별 판단</h2><ul><li><b>tmux 좌우 분할</b>은 이 기기에 설치되어 있다. 왼쪽은 실제 Codex CLI, 오른쪽은 읽기 전용 눈치 뷰어로 구성한다. 화면이 좁으면 상하 분할이나 필요할 때 여는 tmux 팝업도 시험할 수 있다.</li><li><b>Codex 자체 우측 패널</b>은 현재 확인한 공개 확장 인터페이스에서 Claude의 ui.open에 대응하는 등록 경로를 찾지 못했다. 로컬 기능 목록에서 tui_workspace와 tui_extensions_statusline은 개발 중이며 꺼져 있다. 한 줄 상태 표시의 존재만으로 임의 다중 행 패널 렌더링을 추론할 수 없다.</li><li><b>--no-alt-screen</b>은 스크롤 기록을 보존하는 옵션이다. 눈치 전용 출력 영역을 예약하지 않는다.</li><li><b>앱 서버 기반 자체 TUI</b>는 대화와 패널을 한 프로세스의 레이아웃으로 설계할 수 있다. 이 경우 별도 클라이언트가 대화 입력, 스트리밍, 승인, 중단 및 재개를 담당한다. 기본 CLI 사용성을 보존할 첫 시험은 tmux로 한다.</li></ul>
+<h2>Sol 실행 순서와 합격 조건</h2>
+<section><b>1 · 대조군 고정</b><p>임시 프로젝트와 전용 CONTROL_TUI_HOME을 만든다. 커밋, CLI와 엔진 버전, 실행 모델 ID, 분석 모델 ID를 기록한다. cargo test --workspace --locked를 실행한다. 기존 Claude 경로에서 테스트 대화를 분석해 턴별 결과를 보관한다. 종전 합성 입력에서 기존 파서는 Claude 1턴, Codex 0턴이었다. 같은 입력으로 재현한다.</p></section>
+<section><b>2 · 실제 대화형 CLI 수집</b><p>격리한 프로젝트의 훅을 /hooks에서 확인하고 신뢰한다. 일반 codex를 열어 UserPromptSubmit과 Stop의 실제 필드, 세션 ID 및 턴 ID를 기록한다. Stop에 사용자 원문이 있는 것으로 가정하지 않는다. 같은 턴의 요청과 최종 응답을 공통 Turn으로 변환한다. 기록이 부족하면 해당 세션에 대한 app-server 조회 가능성을 시험하고, 원본 transcript 포맷에 의존하면 지원 버전을 명시한다. CLI 외부에서 생성한 별도 스레드로 대체하지 않는다.</p><p><b>합격</b> 실제 CLI의 요청·최종 응답·순서가 기준 기록과 일치하고, 도구 출력과 중간 설명이 별도 사용자 요청으로 집계되지 않는다.</p></section>
+<section><b>3 · 분석기 교차 비교</b><p>① Claude 입력 → 기존 Claude 분석기, ② 동일 내용의 Codex 입력 → 기존 Claude 분석기, ③ ②와 동일한 정규화 Turn → Codex 분석기를 실행한다. ①과 ②는 입력 변환, ②와 ③은 분석 모델 차이를 검증한다. 모델 비교에는 동일한 초기 상태, 프롬프트, 언어와 재시도 한도를 사용한다.</p><p>현재 worker.rs는 run_claude를 직접 호출한다. Sol은 시험용 runner를 연결해 flow::advance를 그대로 사용하고, codex exec --ephemeral과 결과 파일로 실제 모델 응답을 받는다. 기존 엔진이 기대하는 JSON과 호환되는지 검사한다. 분석용 자식 실행이 수집 훅을 다시 작동시켜도 큐에 재진입하지 않도록 검사한다. ③에서 Claude 호출 횟수는 0이어야 한다.</p></section>
+<section><b>4 · 의미 판정</b><p>고정 대본을 먼저 작성한다. 목표는 할 일 API, 최초 결정은 SQLite, 추가 요청은 CSV 내보내기, 상담 질문은 CSV 열 순서로 한다. 이후 열 순서를 답하고 저장소를 PostgreSQL로 변경한 뒤 CSV 구현 완료 근거를 제공한다. 마지막에 SQLite를 다시 사용했다는 모순 응답을 넣어 결정 누락 감지를 시험한다. 실제 대화에서는 관측된 발화를 기준으로 정답표를 확정한 후 분석 결과를 공개한다.</p><p><b>제안 합격선</b> 동일 대본을 각 분석기로 3회 재생한다. 매회 목표 유지, 최신 결정 반영, 열린 요청의 완료 이동, 답한 질문 해소, 결정 위반 포착을 모두 만족해야 한다. 문구와 항목 순서는 자유다. 결과가 다르면 원문·기대 상태·실제 항목을 나란히 기록한다. 한 대본으로 일반적인 품질 동등성을 주장하지 않는다.</p></section>
+<section><b>5 · 화면과 복구</b><p>런처가 만든 고유 실행 식별자를 훅과 뷰어에 전달하고 SessionStart에서 실제 세션과 연결한다. 두 CLI를 같은 폴더에 열어 각각 다른 결정을 내린다. 오른쪽 패널의 세션과 결과를 대조한다. 창 크기 변경, 턴 중단, Stop 중복 전달, 분석 실패 후 재시도, CLI 재개, 뷰어 재시작을 시험한다.</p><p><b>합격</b> 세션 혼입·중복 반영·실패 턴의 완료 표시가 0건이고, 재개한 화면에 마지막 성공 상태가 복원된다. 정상 갱신은 엔진 파일 저장 후 2초 이내를 제안 기준으로 삼고, 모델 호출 포함 지연은 별도 기록한다. 패널 갱신 도중에도 CLI 입력과 승인 키가 동작해야 한다.</p></section>
+<h2>Astra 6.2 독립 리뷰</h2><p>Sol은 실행 명령, 최소 변경 diff, 익명화한 이벤트와 정규화 Turn, 턴별 기대값과 analysis.json, 호출 모델과 횟수, 화면 캡처 및 지연 기록을 넘긴다. Astra 6.2는 실제 일반 CLI에서 시작한 턴 하나를 훅 → 엔진 → 파일 → 화면까지 대조하고, 결정 변경과 두 세션 혼입 시험을 독립 재현한다. 입력 수집·Codex 단독 분석·의미 품질·CLI 표시를 각각 통과 / 실패 / 미검증으로 기록한다. 인증 실패나 모델 접근 제한은 해당 항목을 미검증으로 남긴다.</p>
+<p><a href="nunchi-codex-compatibility.html">기존 호환성 보고서</a> · <a href="https://learn.chatgpt.com/docs/hooks">공식 훅 문서</a> · <a href="https://learn.chatgpt.com/docs/app-server">앱 서버 프로토콜</a> · <a href="https://developers.openai.com/blog/codex-as-a-platform">Codex 실행 인터페이스 선택</a></p></main>

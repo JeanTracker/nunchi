@@ -1,0 +1,145 @@
+{
+  "events": [
+    "SessionStart",
+    "UserPromptSubmit",
+    "Stop"
+  ],
+  "same_session_and_turn": true,
+  "engine_turns": [
+    {
+      "index": 1,
+      "request": "Synthetic test. The goal is a todo API. Use SQLite. Add CSV export. First, run printf demo-tool then ask me which CSV column order to use. Do not write files.",
+      "response": "`printf demo-tool` returned `demo-tool`. Which column order should I use for the CSV export?",
+      "final_response": "`printf demo-tool` returned `demo-tool`. Which column order should I use for the CSV export?",
+      "added": []
+    }
+  ],
+  "flow": {
+    "version": 3,
+    "first_goal": {
+      "text": "할 일 API에 CSV 내보내기 제공",
+      "turn": 1,
+      "quote": "The goal is a todo API. Use SQLite. Add CSV export."
+    },
+    "current_goal": {
+      "text": "할 일 API에 CSV 내보내기 제공",
+      "turn": 1,
+      "quote": "The goal is a todo API. Use SQLite. Add CSV export."
+    },
+    "steps": [
+      {
+        "index": 1,
+        "label": "시작",
+        "summary": "SQLite 기반 할 일 API에 CSV 내보내기를 추가하고, 파일을 쓰지 않은 채 먼저 명령을 실행한 뒤 CSV 열 순서를 물어 달라고 요청했다.",
+        "quote": "Use SQLite. Add CSV export.",
+        "agent_summary": "명령 실행 결과가 `demo-tool`이었다고 보고하고 CSV 내보내기의 열 순서를 물었다.",
+        "agent_quote": "Which column order should I use",
+        "fp": "Synthetictest.ThegoalisatodoAPI.UseSQLit",
+        "grounded": true,
+        "shift": false,
+        "title": "",
+        "decisions": [
+          {
+            "id": "D1-1",
+            "text": "할 일 API의 저장소로 SQLite를 사용한다.",
+            "by": "user",
+            "quote": "Use SQLite.",
+            "replaces": [],
+            "from": "",
+            "to": ""
+          },
+          {
+            "id": "D1-2",
+            "text": "할 일 API는 CSV 내보내기를 지원한다.",
+            "by": "user",
+            "quote": "Add CSV export.",
+            "replaces": [],
+            "from": "",
+            "to": ""
+          }
+        ],
+        "checks": [],
+        "digest": "할 일 API에 SQLite와 CSV 내보내기를 요청했고, 에이전트는 명령 실행 결과를 알린 뒤 CSV 열 순서를 물었다.",
+        "resp": "79:cfecad8836"
+      }
+    ],
+    "requests": [
+      {
+        "summary": "할 일 API 만들기",
+        "quote": "The goal is a todo API.",
+        "state": "open",
+        "agent_quote": "",
+        "id": "R1",
+        "from_turn": 1,
+        "by_turn": 1
+      },
+      {
+        "summary": "SQLite 사용하기",
+        "quote": "Use SQLite.",
+        "state": "open",
+        "agent_quote": "",
+        "id": "R2",
+        "from_turn": 1,
+        "by_turn": 1
+      },
+      {
+        "summary": "CSV 내보내기 추가하기",
+        "quote": "Add CSV export.",
+        "state": "open",
+        "agent_quote": "",
+        "id": "R3",
+        "from_turn": 1,
+        "by_turn": 1
+      },
+      {
+        "summary": "먼저 printf demo-tool 실행하기",
+        "quote": "First, run printf demo-tool",
+        "state": "addressed",
+        "agent_quote": "`printf demo-tool` returned `demo-tool`",
+        "id": "R4",
+        "from_turn": 1,
+        "by_turn": 1
+      },
+      {
+        "summary": "명령 실행 뒤 CSV 열 순서 묻기",
+        "quote": "ask me which CSV column order to use",
+        "state": "addressed",
+        "agent_quote": "Which column order should I use for the CSV export?",
+        "id": "R5",
+        "from_turn": 1,
+        "by_turn": 1
+      },
+      {
+        "summary": "파일을 쓰지 않기",
+        "quote": "Do not write files.",
+        "state": "open",
+        "agent_quote": "",
+        "id": "R6",
+        "from_turn": 1,
+        "by_turn": 1
+      }
+    ],
+    "asks": [
+      {
+        "summary": "CSV 내보내기에 사용할 열 순서",
+        "quote": "Which column order should I use for the CSV export?",
+        "kind": "결정",
+        "id": "Q1",
+        "turn": 1,
+        "last_turn": 1,
+        "state": "open"
+      }
+    ],
+    "until": 1,
+    "prev": {
+      "version": 3,
+      "first_goal": {},
+      "current_goal": {},
+      "steps": [],
+      "requests": [],
+      "asks": [],
+      "until": 0
+    }
+  },
+  "render": "눈치 · demo-01\n분석 상태  idle\n기준 턴  1\n\n목표\n· 할 일 API에 CSV 내보내기 제공\n\n결정\n· 할 일 API의 저장소로 SQLite를 사용한다.\n· 할 일 API는 CSV 내보내기를 지원한다.\n\n열린 질문\n· CSV 내보내기에 사용할 열 순서\n\n남은 요청\n· 할 일 API 만들기\n· SQLite 사용하기\n· CSV 내보내기 추가하기\n· 파일을 쓰지 않기\n\n처리한 요청\n· 먼저 printf demo-tool 실행하기\n· 명령 실행 뒤 CSV 열 순서 묻기\n"
+}

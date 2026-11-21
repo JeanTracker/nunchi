@@ -1,0 +1,40 @@
+{
+  "sessions": [
+    {
+      "session": "00000001-0000-4000-8000-000000000001",
+      "cwd": "/demo/workspace",
+      "until": 1,
+      "goal": {
+        "text": "할 일 API에 CSV 내보내기 제공",
+        "turn": 1,
+        "quote": "The goal is a todo API. Use SQLite. Add CSV export."
+      },
+      "starts": [
+        "startup",
+        "resume"
+      ],
+      "decisions": [
+        "할 일 API의 저장소로 SQLite를 사용한다.",
+        "할 일 API는 CSV 내보내기를 지원한다."
+      ]
+    },
+    {
+      "session": "00000002-0000-4000-8000-000000000002",
+      "cwd": "/demo/workspace",
+      "until": 1,
+      "goal": {
+        "text": "재고 API의 저장소 확정",
+        "turn": 1,
+        "quote": "재고 API의 저장소는 Redis로 확정합니다."
+      },
+      "starts": [
+        "startup"
+      ],
+      "decisions": [
+        "재고 API의 저장소는 Redis로 한다."
+      ]
+    }
+  ],
+  "resumed_id": "00000001-0000-4000-8000-000000000001",
+  "restored_panel": "눈치 · demo-01\n분석 상태  running\n기준 턴  1\n\n목표\n· 할 일 API에 CSV 내보내기 제공\n\n결정\n· 할 일 API의 저장소로 SQLite를 사용한다.\n· 할 일 API는 CSV 내보내기를 지원한다.\n\n열린 질문\n· CSV 내보내기에 사용할 열 순서\n\n남은 요청\n· 할 일 API 만들기\n· SQLite 사용하기\n· CSV 내보내기 추가하기\n· 파일을 쓰지 않기\n\n처리한 요청\n· 먼저 printf demo-tool 실행하기\n· 명령 실행 뒤 CSV 열 순서 묻기\n"
+}

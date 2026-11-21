@@ -1,0 +1,40 @@
+{
+  "sequence": [
+    [
+      null,
+      null,
+      0
+    ],
+    [
+      "running",
+      null,
+      0
+    ],
+    [
+      "failed",
+      "exit:42",
+      0
+    ],
+    [
+      "running",
+      null,
+      0
+    ],
+    [
+      "idle",
+      null,
+      1
+    ]
+  ],
+  "final_status": "idle",
+  "final_until": 1,
+  "final_goal": {
+    "text": "할 일을 관리하는 API 만들기",
+    "turn": 1,
+    "quote": "Make a todo API"
+  },
+  "calls": [
+    "failed",
+    "real"
+  ]
+}

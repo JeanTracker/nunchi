@@ -1,0 +1,22 @@
+{
+  "actual_Hook_to_Turn": [
+    {
+      "index": 1,
+      "request": "Goal: build a todo API. Use SQLite. Add CSV export. In this synthetic test, do not edit files and ask me which column order I want.",
+      "response": "Which column order would you like for the CSV export? I suggest `id,title,completed`, but you can list the columns in any order you prefer. I haven’t edited any files.",
+      "final_response": "Which column order would you like for the CSV export? I suggest `id,title,completed`, but you can list the columns in any order you prefer. I haven’t edited any files.",
+      "added": []
+    }
+  ],
+  "concurrent_fixture": [
+    {
+      "index": 1,
+      "request": "Use Redis.",
+      "response": "Redis selected.",
+      "final_response": "Redis selected.",
+      "added": []
+    }
+  ],
+  "duplicate_stop_count": 1,
+  "interrupted_turn_omitted": true
+}
