@@ -586,6 +586,21 @@ pub fn apply_requests(requests: Option<&Value>, change: &Value, t: &Turn) -> Val
         }
     }
     for n in list(get(change, "new")) {
+        // 같은 요청을 다시 보냈으면(중단 뒤 다시 보내기 등) 새 줄을 만들지 않고 앞 요청을 이어 쓴다
+        if let Some(i) = same_request(&out, n) {
+            let state = str_or_empty(get(n, "state"));
+            if state != "open" {
+                let r = &mut out[i];
+                r.insert("state".into(), s(&state));
+                r.insert("by_turn".into(), Value::from(t.index));
+                r.insert("agent_quote".into(), get(n, "agent_quote").cloned().unwrap_or_else(|| s("")));
+                match get(n, "pending_quote").filter(|v| truthy(v)) {
+                    Some(pq) => { r.insert("pending_quote".into(), pq.clone()); }
+                    None => { r.shift_remove("pending_quote"); }
+                }
+            }
+            continue;
+        }
         let mut r = n.as_object().cloned().unwrap_or_default();
         r.insert("id".into(), s(&format!("R{}", out.len() + 1)));
         r.insert("from_turn".into(), Value::from(t.index));
@@ -593,6 +608,17 @@ pub fn apply_requests(requests: Option<&Value>, change: &Value, t: &Turn) -> Val
         out.push(r);
     }
     Value::Array(out.into_iter().map(Value::Object).collect())
+}
+
+/// 새 요청과 같은 요청이 이미 있으면 그 자리. 바뀌거나 취소된(superseded) 요청은 보지 않는다
+fn same_request(out: &[Obj], new: &Value) -> Option<usize> {
+    // 기준은 원문 인용: quote는 사용자 글에서 글자 그대로 따온 것이라(parse_requests가 확인) 공백만 빼고
+    // 같으면 같은 말이다. 요약(summary)은 모델이 쓴 글이라 기준으로 쓰지 않는다
+    let q = sq(get(new, "quote"));
+    if py::char_len(&q) < QUOTE_MIN {
+        return None;
+    }
+    out.iter().rposition(|r| r.get("state") != Some(&s("superseded")) && sq(r.get("quote")) == q)
 }
 
 fn fallback(flow: &Value, t: &Turn) -> Value {

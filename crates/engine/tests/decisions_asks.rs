@@ -249,3 +249,28 @@ fn a_replaced_value_in_the_goal_follows_the_new_decision() {
     out["current_goal"] = json!("상태 답을 다섯 줄로 만들기");
     assert_eq!(second_on(&base, out)["current_goal"]["text"], "상태 답을 다섯 줄로 만들기");   // 대조에 실패한 값은 쓰지 않는다
 }
+
+#[test]
+fn a_resent_request_continues_the_earlier_one() {
+    // 1턴: 응답 없이 끊긴 요청 → open. 3턴: 같은 글을 다시 보내 답을 받음
+    let first = flow::apply_requests(None, &json!({"new": [
+        {"summary": "적용 검토", "quote": "이 프로젝트에 적용할 수 있어?", "state": "open", "agent_quote": ""}]}), &turn(1, "", ""));
+    let resent = json!({"new": [
+        {"summary": "적용 가능한지", "quote": "이 프로젝트에  적용할 수 있어?", "state": "addressed", "agent_quote": "적용은 됩니다"},
+        {"summary": "다른 요청", "quote": "패널도 고쳐줘", "state": "open", "agent_quote": ""}]});
+    let got = flow::apply_requests(Some(&first), &resent, &turn(3, "", ""));
+    let rows = got.as_array().unwrap();
+    assert_eq!(rows.len(), 2);                                         // 같은 요청은 새 줄을 만들지 않는다
+    assert_eq!((rows[0]["id"].as_str(), rows[0]["state"].as_str(), rows[0]["by_turn"].as_i64()), (Some("R1"), Some("addressed"), Some(3)));
+    assert_eq!(rows[0]["from_turn"], 1);                               // 처음 말한 턴은 그대로
+    assert_eq!(rows[1]["id"], "R2");
+    // 다시 보냈는데 이번에도 open이면 앞 상태를 바꾸지 않는다 (처리한 요청이 남은 요청으로 돌아가지 않게)
+    let again = flow::apply_requests(Some(&got), &json!({"new": [{"summary": "또", "quote": "이 프로젝트에 적용할 수 있어?", "state": "open"}]}), &turn(4, "", ""));
+    assert_eq!(again.as_array().unwrap().len(), 2);
+    assert_eq!(again[0]["state"], "addressed");
+}
+
+#[test]
+fn the_prompt_says_not_to_repeat_a_known_request() {
+    assert!(flow::HEAD.contains("이미 있는 같은 요청"));
+}
