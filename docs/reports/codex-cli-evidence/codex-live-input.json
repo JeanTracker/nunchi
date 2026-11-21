@@ -1,0 +1,514 @@
+{
+  "cli": "0.169.0",
+  "session_model": "gpt-6.2-sol",
+  "analysis_model": "gpt-6.2-sol",
+  "hooks": [
+    {
+      "hook_event_name": "SessionStart",
+      "model": "gpt-6.2-sol",
+      "permission_mode": "bypassPermissions",
+      "source": "startup",
+      "session_id": "session-a",
+      "cwd": "<isolated project>",
+      "transcript_path": "<session-a rollout>"
+    },
+    {
+      "hook_event_name": "UserPromptSubmit",
+      "model": "gpt-6.2-sol",
+      "permission_mode": "bypassPermissions",
+      "prompt": "Synthetic test. The goal is a todo API. Use SQLite. Add CSV export. First, run printf demo-tool then ask me which CSV column order to use. Do not write files.",
+      "session_id": "session-a",
+      "cwd": "<isolated project>",
+      "transcript_path": "<session-a rollout>",
+      "turn_id": "turn-1"
+    },
+    {
+      "hook_event_name": "Stop",
+      "model": "gpt-6.2-sol",
+      "permission_mode": "bypassPermissions",
+      "stop_hook_active": false,
+      "last_assistant_message": "`printf demo-tool` returned `demo-tool`. Which column order should I use for the CSV export?",
+      "session_id": "session-a",
+      "cwd": "<isolated project>",
+      "transcript_path": "<session-a rollout>",
+      "turn_id": "turn-1"
+    },
+    {
+      "hook_event_name": "UserPromptSubmit",
+      "model": "gpt-6.2-sol",
+      "permission_mode": "bypassPermissions",
+      "prompt": "Synthetic interruption test. Run the harmless shell command sleep 45 before answering. After it returns, say only interruption sentinel. Do not write files.",
+      "session_id": "session-a",
+      "cwd": "<isolated project>",
+      "transcript_path": "<session-a rollout>",
+      "turn_id": "turn-2"
+    },
+    {
+      "hook_event_name": "SessionStart",
+      "model": "gpt-6.2-sol",
+      "permission_mode": "bypassPermissions",
+      "source": "resume",
+      "session_id": "session-a",
+      "cwd": "<isolated project>",
+      "transcript_path": "<session-a rollout>"
+    },
+    {
+      "hook_event_name": "UserPromptSubmit",
+      "model": "gpt-6.2-sol",
+      "permission_mode": "bypassPermissions",
+      "prompt": "For the same synthetic todo API, change the storage decision from SQLite to PostgreSQL. The CSV column order is id, title. Acknowledge both without editing files.",
+      "session_id": "session-a",
+      "cwd": "<isolated project>",
+      "transcript_path": "<session-a rollout>",
+      "turn_id": "turn-3"
+    },
+    {
+      "hook_event_name": "Stop",
+      "model": "gpt-6.2-sol",
+      "permission_mode": "bypassPermissions",
+      "stop_hook_active": false,
+      "last_assistant_message": "The todo API will use PostgreSQL. CSV export will use the column order `id, title`. No files were edited.",
+      "session_id": "session-a",
+      "cwd": "<isolated project>",
+      "transcript_path": "<session-a rollout>",
+      "turn_id": "turn-3"
+    }
+  ],
+  "normalized_turns": [
+    {
+      "index": 1,
+      "time": "2026-11-21T08:28:37.618716Z",
+      "request": "Synthetic test. The goal is a todo API. Use SQLite. Add CSV export. First, run printf demo-tool then ask me which CSV column order to use. Do not write files.",
+      "response": "`printf demo-tool` returned `demo-tool`. Which column order should I use for the CSV export?",
+      "final_response": "`printf demo-tool` returned `demo-tool`. Which column order should I use for the CSV export?",
+      "added": []
+    },
+    {
+      "index": 2,
+      "time": "2026-11-21T08:40:58.061215Z",
+      "request": "For the same synthetic todo API, change the storage decision from SQLite to PostgreSQL. The CSV column order is id, title. Acknowledge both without editing files.",
+      "response": "The todo API will use PostgreSQL. CSV export will use the column order `id, title`. No files were edited.",
+      "final_response": "The todo API will use PostgreSQL. CSV export will use the column order `id, title`. No files were edited.",
+      "added": []
+    }
+  ],
+  "rollout_reference": [
+    {
+      "type": "task_started",
+      "turn_id": "turn-1"
+    },
+    {
+      "type": "assistant",
+      "phase": "commentary",
+      "text": "I’ll run `printf demo-tool` first."
+    },
+    {
+      "type": "custom_tool_call"
+    },
+    {
+      "type": "custom_tool_call_output"
+    },
+    {
+      "type": "assistant",
+      "phase": "final_answer",
+      "text": "`printf demo-tool` returned `demo-tool`. Which column order should I use for the CSV export?"
+    },
+    {
+      "type": "task_complete",
+      "last_agent_message": "`printf demo-tool` returned `demo-tool`. Which column order should I use for the CSV export?",
+      "turn_id": "turn-1"
+    },
+    {
+      "type": "task_started",
+      "turn_id": "turn-2"
+    },
+    {
+      "type": "assistant",
+      "phase": "commentary",
+      "text": "I’ll run `sleep 45`."
+    },
+    {
+      "type": "custom_tool_call"
+    },
+    {
+      "type": "custom_tool_call_output"
+    },
+    {
+      "type": "task_started",
+      "turn_id": "turn-3"
+    },
+    {
+      "type": "assistant",
+      "phase": "final_answer",
+      "text": "The todo API will use PostgreSQL. CSV export will use the column order `id, title`. No files were edited."
+    },
+    {
+      "type": "task_complete",
+      "last_agent_message": "The todo API will use PostgreSQL. CSV export will use the column order `id, title`. No files were edited.",
+      "turn_id": "turn-3"
+    }
+  ],
+  "analysis": {
+    "first_goal": "할 일 API에 CSV 내보내기 제공",
+    "current_goal": "할 일 API의 저장소 구성과 CSV 내보내기 제공",
+    "turns": [],
+    "last_response_summary": "",
+    "ledger": [],
+    "forgotten": [],
+    "flow": {
+      "version": 3,
+      "first_goal": {
+        "text": "할 일 API에 CSV 내보내기 제공",
+        "turn": 1,
+        "quote": "The goal is a todo API. Use SQLite. Add CSV export."
+      },
+      "current_goal": {
+        "text": "할 일 API의 저장소 구성과 CSV 내보내기 제공",
+        "turn": 2,
+        "quote": "change the storage decision from SQLite to PostgreSQL. The CSV column order is i"
+      },
+      "steps": [
+        {
+          "index": 1,
+          "label": "시작",
+          "summary": "SQLite 기반 할 일 API에 CSV 내보내기를 추가하고, 파일을 쓰지 않은 채 먼저 명령을 실행한 뒤 CSV 열 순서를 물어 달라고 요청했다.",
+          "quote": "Use SQLite. Add CSV export.",
+          "agent_summary": "명령 실행 결과가 `demo-tool`이었다고 보고하고 CSV 내보내기의 열 순서를 물었다.",
+          "agent_quote": "Which column order should I use",
+          "fp": "Synthetictest.ThegoalisatodoAPI.UseSQLit",
+          "grounded": true,
+          "shift": false,
+          "title": "",
+          "decisions": [
+            {
+              "id": "D1-1",
+              "text": "할 일 API의 저장소로 SQLite를 사용한다.",
+              "by": "user",
+              "quote": "Use SQLite.",
+              "replaces": [],
+              "from": "",
+              "to": ""
+            },
+            {
+              "id": "D1-2",
+              "text": "할 일 API는 CSV 내보내기를 지원한다.",
+              "by": "user",
+              "quote": "Add CSV export.",
+              "replaces": [],
+              "from": "",
+              "to": ""
+            }
+          ],
+          "checks": [],
+          "digest": "할 일 API에 SQLite와 CSV 내보내기를 요청했고, 에이전트는 명령 실행 결과를 알린 뒤 CSV 열 순서를 물었다.",
+          "resp": "79:cfecad8836"
+        },
+        {
+          "index": 2,
+          "label": "확정",
+          "summary": "할 일 API의 저장소를 PostgreSQL로 바꾸고 CSV 열 순서를 id, title로 정한 뒤, 파일을 수정하지 않고 두 결정을 확인해 달라고 했다.",
+          "quote": "The CSV column order is id, title.",
+          "agent_summary": "저장소로 PostgreSQL을 쓰고 CSV 열 순서를 id, title로 적용하겠다고 확인했으며, 파일을 수정하지 않았다고 답했다.",
+          "agent_quote": "The todo API will use PostgreSQL.",
+          "fp": "ForthesamesynthetictodoAPI,changethestor",
+          "grounded": true,
+          "shift": true,
+          "title": "저장소와 열 순서 확정",
+          "decisions": [
+            {
+              "id": "D2-1",
+              "text": "할 일 API의 저장소로 PostgreSQL을 사용한다.",
+              "by": "user",
+              "quote": "from SQLite to PostgreSQL",
+              "replaces": [
+                "D1-1"
+              ],
+              "from": "SQLite",
+              "to": "PostgreSQL"
+            },
+            {
+              "id": "D2-2",
+              "text": "CSV 내보내기 열을 id, title 순으로 배치한다.",
+              "by": "user",
+              "quote": "The CSV column order is id, title.",
+              "replaces": [],
+              "from": "",
+              "to": ""
+            }
+          ],
+          "checks": [],
+          "direction": "넓힘",
+          "how": "앞 목표 할 일 API에 CSV 내보내기 제공에서 CSV 내보내기와 저장소 구성으로 범위를 넓혔다.",
+          "shift_quote": "change the storage decision",
+          "goal": "할 일 API의 저장소 구성과 CSV 내보내기 제공",
+          "prev_goal": "할 일 API에 CSV 내보내기 제공",
+          "digest": "SQLite 기반 할 일 API의 CSV 내보내기를 요청한 뒤, 저장소를 PostgreSQL로 바꾸고 CSV 열 순서를 id, title로 확정했다.",
+          "resp": "87:66862c1ff2"
+        }
+      ],
+      "requests": [
+        {
+          "summary": "할 일 API 만들기",
+          "quote": "The goal is a todo API.",
+          "state": "open",
+          "agent_quote": "",
+          "id": "R1",
+          "from_turn": 1,
+          "by_turn": 1
+        },
+        {
+          "summary": "SQLite 사용하기",
+          "quote": "Use SQLite.",
+          "state": "superseded",
+          "agent_quote": "The todo API will use PostgreSQL.",
+          "id": "R2",
+          "from_turn": 1,
+          "by_turn": 2,
+          "superseded_by": 2
+        },
+        {
+          "summary": "CSV 내보내기 추가하기",
+          "quote": "Add CSV export.",
+          "state": "open",
+          "agent_quote": "",
+          "id": "R3",
+          "from_turn": 1,
+          "by_turn": 1
+        },
+        {
+          "summary": "먼저 printf demo-tool 실행하기",
+          "quote": "First, run printf demo-tool",
+          "state": "addressed",
+          "agent_quote": "`printf demo-tool` returned `demo-tool`",
+          "id": "R4",
+          "from_turn": 1,
+          "by_turn": 1
+        },
+        {
+          "summary": "명령 실행 뒤 CSV 열 순서 묻기",
+          "quote": "ask me which CSV column order to use",
+          "state": "addressed",
+          "agent_quote": "Which column order should I use for the CSV export?",
+          "id": "R5",
+          "from_turn": 1,
+          "by_turn": 1
+        },
+        {
+          "summary": "파일을 쓰지 않기",
+          "quote": "Do not write files.",
+          "state": "addressed",
+          "agent_quote": "No files were edited.",
+          "id": "R6",
+          "from_turn": 1,
+          "by_turn": 2
+        },
+        {
+          "summary": "저장소를 PostgreSQL로 정하기",
+          "quote": "from SQLite to PostgreSQL",
+          "state": "addressed",
+          "agent_quote": "The todo API will use PostgreSQL.",
+          "id": "R7",
+          "from_turn": 2,
+          "by_turn": 2
+        },
+        {
+          "summary": "CSV 열 순서를 id, title로 정하기",
+          "quote": "The CSV column order is id, title.",
+          "state": "addressed",
+          "agent_quote": "column order `id, title`",
+          "id": "R8",
+          "from_turn": 2,
+          "by_turn": 2
+        },
+        {
+          "summary": "저장소와 CSV 열 순서 결정 확인하기",
+          "quote": "Acknowledge both",
+          "state": "addressed",
+          "agent_quote": "The todo API will use PostgreSQL. CSV export will use the column order `id, titl",
+          "id": "R9",
+          "from_turn": 2,
+          "by_turn": 2
+        },
+        {
+          "summary": "파일을 수정하지 않기",
+          "quote": "without editing files",
+          "state": "addressed",
+          "agent_quote": "No files were edited.",
+          "id": "R10",
+          "from_turn": 2,
+          "by_turn": 2
+        }
+      ],
+      "asks": [
+        {
+          "summary": "CSV 내보내기에 사용할 열 순서",
+          "quote": "Which column order should I use for the CSV export?",
+          "kind": "결정",
+          "id": "Q1",
+          "turn": 1,
+          "last_turn": 1,
+          "state": "answered",
+          "answered_at": 2,
+          "answer_quote": "The CSV column order is id, title.",
+          "by_blanket": false
+        }
+      ],
+      "until": 2,
+      "prev": {
+        "version": 3,
+        "first_goal": {
+          "text": "할 일 API에 CSV 내보내기 제공",
+          "turn": 1,
+          "quote": "The goal is a todo API. Use SQLite. Add CSV export."
+        },
+        "current_goal": {
+          "text": "할 일 API에 CSV 내보내기 제공",
+          "turn": 1,
+          "quote": "The goal is a todo API. Use SQLite. Add CSV export."
+        },
+        "steps": [
+          {
+            "index": 1,
+            "label": "시작",
+            "summary": "SQLite 기반 할 일 API에 CSV 내보내기를 추가하고, 파일을 쓰지 않은 채 먼저 명령을 실행한 뒤 CSV 열 순서를 물어 달라고 요청했다.",
+            "quote": "Use SQLite. Add CSV export.",
+            "agent_summary": "명령 실행 결과가 `demo-tool`이었다고 보고하고 CSV 내보내기의 열 순서를 물었다.",
+            "agent_quote": "Which column order should I use",
+            "fp": "Synthetictest.ThegoalisatodoAPI.UseSQLit",
+            "grounded": true,
+            "shift": false,
+            "title": "",
+            "decisions": [
+              {
+                "id": "D1-1",
+                "text": "할 일 API의 저장소로 SQLite를 사용한다.",
+                "by": "user",
+                "quote": "Use SQLite.",
+                "replaces": [],
+                "from": "",
+                "to": ""
+              },
+              {
+                "id": "D1-2",
+                "text": "할 일 API는 CSV 내보내기를 지원한다.",
+                "by": "user",
+                "quote": "Add CSV export.",
+                "replaces": [],
+                "from": "",
+                "to": ""
+              }
+            ],
+            "checks": [],
+            "digest": "할 일 API에 SQLite와 CSV 내보내기를 요청했고, 에이전트는 명령 실행 결과를 알린 뒤 CSV 열 순서를 물었다.",
+            "resp": "79:cfecad8836"
+          }
+        ],
+        "requests": [
+          {
+            "summary": "할 일 API 만들기",
+            "quote": "The goal is a todo API.",
+            "state": "open",
+            "agent_quote": "",
+            "id": "R1",
+            "from_turn": 1,
+            "by_turn": 1
+          },
+          {
+            "summary": "SQLite 사용하기",
+            "quote": "Use SQLite.",
+            "state": "open",
+            "agent_quote": "",
+            "id": "R2",
+            "from_turn": 1,
+            "by_turn": 1
+          },
+          {
+            "summary": "CSV 내보내기 추가하기",
+            "quote": "Add CSV export.",
+            "state": "open",
+            "agent_quote": "",
+            "id": "R3",
+            "from_turn": 1,
+            "by_turn": 1
+          },
+          {
+            "summary": "먼저 printf demo-tool 실행하기",
+            "quote": "First, run printf demo-tool",
+            "state": "addressed",
+            "agent_quote": "`printf demo-tool` returned `demo-tool`",
+            "id": "R4",
+            "from_turn": 1,
+            "by_turn": 1
+          },
+          {
+            "summary": "명령 실행 뒤 CSV 열 순서 묻기",
+            "quote": "ask me which CSV column order to use",
+            "state": "addressed",
+            "agent_quote": "Which column order should I use for the CSV export?",
+            "id": "R5",
+            "from_turn": 1,
+            "by_turn": 1
+          },
+          {
+            "summary": "파일을 쓰지 않기",
+            "quote": "Do not write files.",
+            "state": "open",
+            "agent_quote": "",
+            "id": "R6",
+            "from_turn": 1,
+            "by_turn": 1
+          }
+        ],
+        "asks": [
+          {
+            "summary": "CSV 내보내기에 사용할 열 순서",
+            "quote": "Which column order should I use for the CSV export?",
+            "kind": "결정",
+            "id": "Q1",
+            "turn": 1,
+            "last_turn": 1,
+            "state": "open"
+          }
+        ],
+        "until": 1
+      }
+    },
+    "format": 2,
+    "source_ts": "2026-11-21T08:41:00.360729Z",
+    "last_turn": 2,
+    "changes": {
+      "missed_before": 4,
+      "missed_after": 2,
+      "new_missed": [],
+      "goal_changed": true,
+      "prev_source_ts": "2026-11-21T08:41:00.360729Z"
+    },
+    "analyzed_at": "2026-11-21T08:41:25.908968Z"
+  },
+  "duplicate_stop": {
+    "log_lines_before": 4,
+    "log_lines_after": 4,
+    "analysis_hash_unchanged": true,
+    "model_calls_before": 1,
+    "model_calls_after": 1,
+    "queue_empty": true
+  },
+  "interruption": "The second submitted prompt was interrupted with Escape while the tool was running. No Stop was delivered and the flow retained the previous completed turn.",
+  "resume": {
+    "session_id_matches": true,
+    "mirrored_on_sessionstart": true
+  },
+  "failure_retry": {
+    "injected_exit_code": 19,
+    "codex_process_attempts": 2,
+    "actual_model_calls": 1,
+    "claude_calls": 0,
+    "flow_before_retry": null,
+    "flow_after_retry": 1,
+    "worker_wall_seconds": 17.18
+  },
+  "notes": [
+    "The rollout was read separately as reference for this test. The adapter uses only lifecycle events.",
+    "This run used approval policy never. Approval key usability was not exercised."
+  ]
+}

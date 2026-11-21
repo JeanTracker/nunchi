@@ -62,7 +62,7 @@ fn want_state(path: &Path) -> Option<bool> {
 }
 
 /// 응답이 끝나면 분석 대상 세션의 분석을 대기열에 넣고 분석기를 깨운다 (요구 이력 52·53·62)
-fn request_analysis(rec: &Map<String, Value>) -> std::io::Result<()> {
+pub(crate) fn request_analysis(rec: &Map<String, Value>) -> std::io::Result<()> {
     if rec.get("event") != Some(&Value::from("Stop")) || std::env::var("CONTROL_TUI_ANALYZE").as_deref() == Ok("0") {
         return Ok(());
     }
