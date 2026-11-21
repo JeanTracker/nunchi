@@ -11,7 +11,7 @@ use serde_json::{json, Map, Value};
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{Read, Write};
-use std::os::unix::fs::OpenOptionsExt;
+use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::os::unix::io::AsRawFd;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
@@ -268,6 +268,37 @@ fn run_claude(prompt: &str, model: &str, lang: &str, shared: &Shared) -> Result<
     // 세션의 분석 언어로 Claude Code 언어 설정을 덮어쓴다: 덮어쓰지 않으면 사용자의 language를 물려받는다 (SCREEN §8 2026-11-17 언어)
     cmd.arg("--settings").arg(json!({"language": flow::settings_language(lang)}).to_string());
     cmd.args(["--", prompt]).env("CONTROL_TUI_ANALYZER", "1");
+    let stdout = run_child(cmd, shared)?;
+    let v: Value = serde_json::from_slice(&stdout).map_err(|_| "output".to_string())?;
+    match v.as_object() {
+        Some(o) => Ok(o.get("result").map(py::str_of).unwrap_or_default()),
+        None => Err("output".into()),
+    }
+}
+
+struct CodexOutput(PathBuf);
+
+impl Drop for CodexOutput {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+fn run_codex(prompt: &str, model: &str, shared: &Shared) -> Result<String, String> {
+    let path = std::env::temp_dir().join(format!("nunchi-codex-{}-{}", std::process::id(), clock::now_us()));
+    std::fs::DirBuilder::new().mode(0o700).create(&path).map_err(|_| "io".to_string())?;
+    let output = CodexOutput(path);
+    let message = output.0.join("message.json");
+    let mut cmd = Command::new("codex");
+    cmd.args(["exec", "--ephemeral", "--ignore-user-config", "--ignore-rules",
+              "--skip-git-repo-check", "--disable", "hooks", "--disable", "shell_tool",
+              "--sandbox", "read-only", "--model", model, "--output-last-message"])
+        .arg(&message).args(["--", prompt]).current_dir(&output.0).env("CONTROL_TUI_ANALYZER", "1");
+    run_child(cmd, shared)?;
+    std::fs::read_to_string(&message).map_err(|_| "output".into())
+}
+
+fn run_child(mut cmd: Command, shared: &Shared) -> Result<Vec<u8>, String> {
     cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
     detach(&mut cmd);
     let mut child = cmd.spawn().map_err(|_| "spawn".to_string())?;
@@ -306,11 +337,7 @@ fn run_claude(prompt: &str, model: &str, lang: &str, shared: &Shared) -> Result<
         });
         return Err(format!("exit:{code}"));
     }
-    let v: Value = serde_json::from_slice(&stdout).map_err(|_| "output".to_string())?;
-    match v.as_object() {
-        Some(o) => Ok(o.get("result").map(py::str_of).unwrap_or_default()),
-        None => Err("output".into()),
-    }
+    Ok(stdout)
 }
 
 // ---------- 분석기 (스레드 하나가 한 건씩) ----------
@@ -554,9 +581,9 @@ fn analyze(sh: &Shared, job: &Job) -> Result<(), String> {
     let mut extra = vec![("since", Value::from(since)), ("source_ts", Value::from(job.ts.as_str()))];
     extra.extend(rebuild_mark(&job.dir));
     write_status(&job.dir, "running", last.index, &extra);
-    let r = advance_flow(sh, &job.dir, &turns);
+    advance_flow(sh, &job.dir, &turns)?;
     write_status(&job.dir, "idle", 0, &[]);
-    r
+    Ok(())
 }
 
 /// 목표 흐름을 새 턴만큼 이어 적는다. 한 턴마다 저장해 화면이 따라오게 한다
@@ -674,7 +701,7 @@ pub fn build_main(args: &[String]) -> i32 {
 
 /// 마지막 응답 시각: 기록의 마지막 Stop, 없으면 지난 분석의 기준 시각
 fn last_answer_ts(dir: &Path) -> Option<String> {
-    let last_stop = std::fs::read_to_string(dir.join("events.jsonl")).unwrap_or_default().lines()
+    let last_stop = std::fs::read_to_string(event_path(dir)).unwrap_or_default().lines()
         .filter_map(|l| serde_json::from_str::<Value>(l).ok())
         .filter(|v| py::get(v, "event") == Some(&Value::from("Stop")))
         .filter_map(|v| py::get(&v, "ts").map(py::str_of)).last();
@@ -716,6 +743,7 @@ fn advance_flow(sh: &Shared, dir: &Path, turns: &[Turn]) -> Result<(), String> {
         kept = Some(f.clone());
         f = flow::rewind(&f);
     }
+    let codex_model = crate::codex::analysis_model(dir)?;
     let until = py::int_or(py::get(&f, "until"), 0).unwrap_or(0);
     let todo: Vec<&Turn> = turns.iter().filter(|t| t.index > until).take(FLOW_STEPS_PER_JOB).collect();
     let since = sh.m.lock().unwrap().since.clone();
@@ -727,8 +755,16 @@ fn advance_flow(sh: &Shared, dir: &Path, turns: &[Turn]) -> Result<(), String> {
         extra.extend(rebuild_mark(dir));
         write_status(dir, "running", t.index, &extra);
         let lang = flow::lang_of(&f);
-        let mut runner = |p: &str| run_claude(p, &sh.model, &lang, sh);
+        let mut runner = |p: &str| match &codex_model {
+            Some(model) => run_codex(p, model, sh),
+            None => run_claude(p, &sh.model, &lang, sh),
+        };
         f = flow::advance(&f, turns, t, &mut runner, 2)?;
+        if codex_model.is_some() && f["steps"].as_array().and_then(|steps| steps.last())
+            .is_some_and(|step| step["fallback"] == true)
+        {
+            return Err("output".into());
+        }
         if let Some(k) = kept.take() {
             let fell_back = py::list(py::get(&f, "steps")).last().map(|s| py::opt_truthy(py::get(s, "fallback"))).unwrap_or(false);
             if py::eq_int(py::get(&k, "until"), t.index) && fell_back {
@@ -765,8 +801,13 @@ fn advance_flow(sh: &Shared, dir: &Path, turns: &[Turn]) -> Result<(), String> {
 
 // ---------- 분석기 본체 ----------
 
+fn event_path(dir: &Path) -> PathBuf {
+    let codex = dir.join(crate::codex::EVENTS);
+    if codex.exists() { codex } else { dir.join("events.jsonl") }
+}
+
 fn events_field(dir: &Path, key: &str) -> Option<String> {
-    let text = std::fs::read_to_string(dir.join("events.jsonl")).ok()?;
+    let text = std::fs::read_to_string(event_path(dir)).ok()?;
     let mut out = String::new();
     for line in text.lines() {
         if let Ok(v) = serde_json::from_str::<Value>(line) {
