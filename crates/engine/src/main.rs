@@ -4,7 +4,7 @@
 //!   nunchi-engine worker --home D   대기열이 빌 때까지 분석하고 끝난다
 
 
-use nunchi_engine::{clock, hook, store, worker};
+use nunchi_engine::{clock, codex, hook, store, worker};
 use std::io::Write;
 use std::path::PathBuf;
 
@@ -45,6 +45,10 @@ fn main() {
             on_panic(0, "emit");
             hook::main()
         }
+        Some("codex-hook") => {
+            on_panic(0, "codex-hook");
+            codex::main()
+        }
         Some("worker") => {
             on_panic(1, "worker");
             worker_main(&args[1..])
@@ -64,7 +68,7 @@ fn main() {
         #[cfg(feature = "dev")]
         Some("dev") => nunchi_engine::dev::main(&args[1..]),
         _ => {
-            eprintln!("usage: nunchi-engine hook | worker --home DIR | rebuild SESSION LANG | build SESSION LANG [--count]");
+            eprintln!("usage: nunchi-engine hook | codex-hook | worker --home DIR | rebuild SESSION LANG | build SESSION LANG [--count]");
             2
         }
     };

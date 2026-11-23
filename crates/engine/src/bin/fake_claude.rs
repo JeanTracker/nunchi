@@ -4,6 +4,7 @@
 //!   ok, shift, progress(진행 중), ask(묻기), blanket(앞 물음 통째 승인), garbage(JSON 아님),
 //!   fail(종료 코드 1), fail_once(그 턴 첫 호출만 1), garbage_once, slow(3초 뒤 ok)
 //! FAKE_CLAUDE_STATE: 호출 기록 폴더. log에 '턴 모드 프롬프트해시'를 한 줄씩 남긴다.
+//! `codex`라는 이름으로 불리면 `codex exec`처럼 답 글을 `--output-last-message` 파일에 쓰고 표준 출력은 비운다.
 
 use serde_json::{json, Value};
 use std::io::Write;
@@ -93,5 +94,12 @@ fn main() {
         out = json!("설명만 있고 JSON이 아닌 답");
     }
     let text = if out.is_string() { out.as_str().unwrap().to_string() } else { out.to_string() };
+    let called = std::path::Path::new(&args[0]).file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+    if called == "codex" {
+        let at = args.iter().position(|a| a == "--output-last-message").and_then(|i| args.get(i + 1));
+        let Some(at) = at else { std::process::exit(2) };
+        let _ = std::fs::write(at, text);
+        return;
+    }
     println!("{}", json!({"type": "result", "result": text}));
 }

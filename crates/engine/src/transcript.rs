@@ -183,6 +183,9 @@ pub fn parse_turns(path: &Path, until_ts: &str) -> Result<Vec<Turn>, String> {
     }
     let bytes = std::fs::read(path).map_err(|_| "io".to_string())?;
     let text = String::from_utf8(bytes).map_err(|_| "not-utf8".to_string())?;   // 실패 이유는 코드 (요구 이력 76)
+    if path.file_name().and_then(|n| n.to_str()) == Some(crate::codex::EVENTS) {
+        return Ok(crate::codex::turns(&text, until_ts));
+    }
     let limit = if until_ts.is_empty() { 0.0 } else { ts_value(until_ts) };
     let mut turns: Vec<Turn> = Vec::new();
     let mut segments: Vec<Vec<(Kind, String)>> = Vec::new(); // turns와 같은 순서

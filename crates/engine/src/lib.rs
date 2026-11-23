@@ -2,6 +2,7 @@
 //! 실행 파일은 main.rs. 모듈은 시험(tests/)에서도 쓰도록 라이브러리로 둔다.
 
 pub mod clock;
+pub mod codex;
 pub mod flow;
 pub mod glossary;
 pub mod hook;
