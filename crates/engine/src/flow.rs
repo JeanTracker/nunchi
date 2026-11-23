@@ -593,25 +593,21 @@ pub fn apply_requests(requests: Option<&Value>, change: &Value, t: &Turn, steps:
     for u in list(get(change, "updates")) {
         let Some(i) = find_last(&out, &u["id"]) else { continue };
         set_request(&mut out[i], u, t);
-        if i < known {
-            updated[i] = true;
-        }
+        updated[i] = true;   // updates는 이번 응답 전부터 있던 id만 가리킨다 (parse_requests가 거른다)
     }
     let fp = fingerprint(t);
     for n in list(get(change, "new")) {
         // 같은 요청을 다시 보냈으면(중단 뒤 다시 보내기 등) 새 줄을 만들지 않고 앞 요청을 이어 쓴다 (요구 이력 96)
-        if let Some(i) = resent_of(&out[..known], &was, steps, n, &fp) {
+        // 이미 합친 앞 줄은 다시 고르지 않는다: 한 턴에서 나눈 요청을 다시 보내면 나눈 줄마다 하나씩 맞춘다
+        if let Some(i) = resent_of(&out[..known], &was, &merged, steps, n, &fp) {
             if updated[i] {
                 continue;                                                     // 같은 응답의 갱신이 우선한다
             }
-            if !merged[i] {
-                merged[i] = true;
-                if str_or_empty(get(n, "state")) != "open" {
-                    set_request(&mut out[i], n, t);
-                }
-                continue;
+            merged[i] = true;
+            if str_or_empty(get(n, "state")) != "open" {
+                set_request(&mut out[i], n, t);
             }
-            // 한 응답에서 같은 앞 줄에 두 번 맞으면 둘째는 나눈 요청이다: 새 줄
+            continue;
         }
         let mut r = n.as_object().cloned().unwrap_or_default();
         r.insert("id".into(), s(&format!("R{}", out.len() + 1)));
@@ -625,7 +621,7 @@ pub fn apply_requests(requests: Option<&Value>, change: &Value, t: &Turn, steps:
 /// 새 요청이 앞 요청을 다시 보낸 것이면 그 자리 (요구 이력 96). 네 조건을 모두 만족해야 한다:
 /// 이번 응답 전부터 있던 줄(known), 갱신 전 상태가 open·in_progress, 앞 줄이 나온 턴과 이번 턴의
 /// 발화 첫머리(fp)가 같음, 원문 인용(quote)이 공백 빼고 같음. 잘못 합치면 요청이 조용히 사라지므로 좁게 잡는다
-fn resent_of(known: &[Obj], was: &[String], steps: Option<&Value>, new: &Value, fp: &str) -> Option<usize> {
+fn resent_of(known: &[Obj], was: &[String], merged: &[bool], steps: Option<&Value>, new: &Value, fp: &str) -> Option<usize> {
     // quote는 사용자 글에서 글자 그대로 따온 것이라(parse_requests가 확인) 공백만 빼고 같으면 같은 말이다.
     // 요약(summary)은 모델이 쓴 글이라 기준으로 쓰지 않는다
     let q = sq(get(new, "quote"));
@@ -638,7 +634,8 @@ fn resent_of(known: &[Obj], was: &[String], steps: Option<&Value>, new: &Value, 
             .map(|st| str_or_empty(get(st, "fp")))
     };
     known.iter().enumerate().rev().find(|(i, r)| {
-        matches!(was[*i].as_str(), "open" | "in_progress")
+        !merged[*i]
+            && matches!(was[*i].as_str(), "open" | "in_progress")
             && sq(r.get("quote")) == q
             && fp_of(r.get("from_turn")).is_some_and(|f| !f.is_empty() && f == fp)
     }).map(|(i, _)| i)

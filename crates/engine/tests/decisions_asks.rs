@@ -297,6 +297,20 @@ fn two_requests_split_in_one_turn_stay_two() {
 }
 
 #[test]
+fn resending_requests_split_in_one_turn_continues_each_row() {
+    // 앞 턴에 한 발화를 둘로 나눈 요청이 둘 다 진행 중이고, 같은 글을 다시 보내 둘 다 다뤄짐
+    let t1 = turn(1, "기획 및 GUI 반영해줘", "");
+    let t2 = turn(2, "기획 및 GUI 반영해줘", "둘 다 반영했습니다");
+    let first = flow::apply_requests(None, &json!({"new": [
+        {"summary": "기획 반영", "quote": "기획 및 GUI 반영해줘", "state": "in_progress"},
+        {"summary": "GUI 반영", "quote": "기획 및 GUI 반영해줘", "state": "in_progress"}]}), &t1, None);
+    let got = flow::apply_requests(Some(&first), &json!({"new": [
+        {"summary": "기획 반영", "quote": "기획 및 GUI 반영해줘", "state": "addressed", "agent_quote": "둘 다 반영했습니다"},
+        {"summary": "GUI 반영", "quote": "기획 및 GUI 반영해줘", "state": "addressed", "agent_quote": "둘 다 반영했습니다"}]}), &t2, Some(&steps_of(&[t1])));
+    assert_eq!(rows(&got), vec![("R1".into(), "addressed".into(), 2), ("R2".into(), "addressed".into(), 2)]);
+}
+
+#[test]
 fn the_same_short_request_on_another_topic_is_a_new_row() {
     // 실제 사례: 같은 짧은 말로 다른 대상을 시킴. 앞 줄이 열려 있어도 발화 첫머리가 다르면 새 줄
     let t1 = turn(28, "로그인 고쳤어. advisor 리뷰해줘.", "");
@@ -340,5 +354,6 @@ fn merging_a_resent_request_clears_tool_failed() {
 
 #[test]
 fn the_prompt_says_not_to_repeat_a_known_request() {
-    assert!(flow::HEAD.contains("이미 있는 같은 요청"));
+    assert!(flow::HEAD.contains("아직 다루지 않았거나 진행 중인 같은 요청을 다시 보낸 것"));
+    assert!(flow::HEAD.contains("이미 다룬 요청을 사용자가 다시 시키면 새 요청으로 넣는다"));
 }
