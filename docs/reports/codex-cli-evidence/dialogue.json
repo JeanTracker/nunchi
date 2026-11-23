@@ -1,5 +1,0 @@
-[
-  {"user":"할 일 API를 만들어줘. 저장소는 SQLite로 확정이야. CSV 내보내기도 추가해줘.","assistant":"할 일 API에 SQLite를 사용하겠습니다. CSV 열 순서는 어떻게 할까요?"},
-  {"user":"CSV 열 순서는 id, title로 해줘. 저장소 결정은 PostgreSQL로 변경해. CSV 구현은 다음 턴까지 보류해줘.","assistant":"저장소는 PostgreSQL로 변경합니다. CSV 열 순서는 id, title이며 구현은 보류했습니다."},
-  {"user":"이제 CSV 내보내기를 마무리하고 결과를 알려줘.","assistant":"CSV 내보내기를 구현했습니다. 출력 예시는 id,title 다음 줄에 1,장보기입니다. 저장소는 SQLite로 구현했습니다."}
-]

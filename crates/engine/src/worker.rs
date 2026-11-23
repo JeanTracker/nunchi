@@ -760,16 +760,17 @@ fn advance_flow(sh: &Shared, dir: &Path, turns: &[Turn]) -> Result<(), String> {
             None => run_claude(p, &sh.model, &lang, sh),
         };
         f = flow::advance(&f, turns, t, &mut runner, 2)?;
-        if codex_model.is_some() && f["steps"].as_array().and_then(|steps| steps.last())
-            .is_some_and(|step| step["fallback"] == true)
-        {
-            return Err("output".into());
-        }
+        let fell_back = py::list(py::get(&f, "steps")).last().map(|s| py::opt_truthy(py::get(s, "fallback"))).unwrap_or(false);
+        let mut restored = false;
         if let Some(k) = kept.take() {
-            let fell_back = py::list(py::get(&f, "steps")).last().map(|s| py::opt_truthy(py::get(s, "fallback"))).unwrap_or(false);
             if py::eq_int(py::get(&k, "until"), t.index) && fell_back {
                 f = k; // 다시 적기가 대체 단계로 끝났으면 앞서 적은 것을 둔다
+                restored = true;
             }
+        }
+        // Codex 분석은 대체 단계를 적지 않고 실패로 돌려 다시 시도하게 한다. 앞서 적은 것을 되살렸으면 실패가 아니다
+        if codex_model.is_some() && fell_back && !restored {
+            return Err("output".into());
         }
         if let Some(d) = read_analysis(dir) {
             data = d;
