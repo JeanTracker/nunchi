@@ -250,24 +250,92 @@ fn a_replaced_value_in_the_goal_follows_the_new_decision() {
     assert_eq!(second_on(&base, out)["current_goal"]["text"], "상태 답을 다섯 줄로 만들기");   // 대조에 실패한 값은 쓰지 않는다
 }
 
+/// 앞 턴들의 단계: 각 턴의 fp만 있으면 된다 (다시 보냄 판정, 요구 이력 96)
+fn steps_of(ts: &[Turn]) -> Value {
+    Value::Array(ts.iter().map(|t| json!({"index": t.index, "fp": flow::fingerprint(t)})).collect())
+}
+
+fn rows(v: &Value) -> Vec<(String, String, i64)> {
+    v.as_array().unwrap().iter()
+        .map(|r| (r["id"].as_str().unwrap().to_string(), r["state"].as_str().unwrap_or("").to_string(), r["by_turn"].as_i64().unwrap_or(0)))
+        .collect()
+}
+
 #[test]
 fn a_resent_request_continues_the_earlier_one() {
-    // 1턴: 응답 없이 끊긴 요청 → open. 3턴: 같은 글을 다시 보내 답을 받음
+    // 1턴: 응답 없이 끊긴 요청 → open. 2턴: 같은 글을 다시 보내 답을 받음
+    let t1 = turn(1, "이 프로젝트에 적용할 수 있어?", "");
+    let t2 = turn(2, "이 프로젝트에  적용할 수 있어?", "적용은 됩니다");
     let first = flow::apply_requests(None, &json!({"new": [
-        {"summary": "적용 검토", "quote": "이 프로젝트에 적용할 수 있어?", "state": "open", "agent_quote": ""}]}), &turn(1, "", ""));
+        {"summary": "적용 검토", "quote": "이 프로젝트에 적용할 수 있어?", "state": "open", "agent_quote": ""}]}), &t1, None);
     let resent = json!({"new": [
         {"summary": "적용 가능한지", "quote": "이 프로젝트에  적용할 수 있어?", "state": "addressed", "agent_quote": "적용은 됩니다"},
         {"summary": "다른 요청", "quote": "패널도 고쳐줘", "state": "open", "agent_quote": ""}]});
-    let got = flow::apply_requests(Some(&first), &resent, &turn(3, "", ""));
-    let rows = got.as_array().unwrap();
-    assert_eq!(rows.len(), 2);                                         // 같은 요청은 새 줄을 만들지 않는다
-    assert_eq!((rows[0]["id"].as_str(), rows[0]["state"].as_str(), rows[0]["by_turn"].as_i64()), (Some("R1"), Some("addressed"), Some(3)));
-    assert_eq!(rows[0]["from_turn"], 1);                               // 처음 말한 턴은 그대로
-    assert_eq!(rows[1]["id"], "R2");
-    // 다시 보냈는데 이번에도 open이면 앞 상태를 바꾸지 않는다 (처리한 요청이 남은 요청으로 돌아가지 않게)
-    let again = flow::apply_requests(Some(&got), &json!({"new": [{"summary": "또", "quote": "이 프로젝트에 적용할 수 있어?", "state": "open"}]}), &turn(4, "", ""));
-    assert_eq!(again.as_array().unwrap().len(), 2);
-    assert_eq!(again[0]["state"], "addressed");
+    let got = flow::apply_requests(Some(&first), &resent, &t2, Some(&steps_of(&[t1])));
+    assert_eq!(rows(&got), vec![("R1".into(), "addressed".into(), 2), ("R2".into(), "open".into(), 2)]);   // 같은 요청은 새 줄을 만들지 않는다
+    assert_eq!(got[0]["from_turn"], 1);                                // 처음 말한 턴은 그대로
+    assert_eq!(got[0]["agent_quote"], "적용은 됩니다");
+}
+
+#[test]
+fn a_resent_request_that_is_still_open_keeps_one_row() {
+    let t1 = turn(1, "로그 정리해줘", "");
+    let t2 = turn(2, "로그 정리해줘", "");
+    let first = flow::apply_requests(None, &json!({"new": [{"summary": "로그 정리", "quote": "로그 정리해줘", "state": "open"}]}), &t1, None);
+    let got = flow::apply_requests(Some(&first), &json!({"new": [{"summary": "로그", "quote": "로그 정리해줘", "state": "open"}]}), &t2, Some(&steps_of(&[t1])));
+    assert_eq!(rows(&got), vec![("R1".into(), "open".into(), 1)]);
+}
+
+#[test]
+fn two_requests_split_in_one_turn_stay_two() {
+    // 실제 사례: 한 발화를 둘로 나눈 요청이 같은 구절을 쓴다. 같은 배치끼리는 합치지 않는다
+    let t = turn(11, "1,2번부터 확인해줘.", "1번은 확인했고 2번은 원인을 못 찾았습니다");
+    let got = flow::apply_requests(None, &json!({"new": [
+        {"summary": "명령 즉시 실행 확인", "quote": "1,2번부터 확인해줘.", "state": "addressed", "agent_quote": "1번은 확인했고"},
+        {"summary": "흔들리는 시험 원인 찾기", "quote": "1,2번부터 확인해줘.", "state": "no_result", "agent_quote": "2번은 원인을 못 찾았습니다"}]}), &t, None);
+    assert_eq!(rows(&got), vec![("R1".into(), "addressed".into(), 11), ("R2".into(), "no_result".into(), 11)]);
+}
+
+#[test]
+fn the_same_short_request_on_another_topic_is_a_new_row() {
+    // 실제 사례: 같은 짧은 말로 다른 대상을 시킴. 앞 줄이 열려 있어도 발화 첫머리가 다르면 새 줄
+    let t1 = turn(28, "로그인 고쳤어. advisor 리뷰해줘.", "");
+    let t2 = turn(30, "결제 화면 고쳤어. advisor 리뷰해줘.", "");
+    let first = flow::apply_requests(None, &json!({"new": [{"summary": "로그인 리뷰", "quote": "advisor 리뷰해줘.", "state": "in_progress"}]}), &t1, None);
+    let got = flow::apply_requests(Some(&first), &json!({"new": [{"summary": "결제 리뷰", "quote": "advisor 리뷰해줘.", "state": "open"}]}), &t2, Some(&steps_of(&[t1])));
+    assert_eq!(rows(&got), vec![("R1".into(), "in_progress".into(), 28), ("R2".into(), "open".into(), 30)]);
+}
+
+#[test]
+fn a_request_asked_again_after_it_was_done_is_a_new_row() {
+    // 실제 사례: 다룬 명령을 20턴 뒤에 일부러 다시 시킴. 발화가 같아도 앞 줄이 끝났으면 새 줄
+    let t1 = turn(39, "플러그인 업데이트 해줘", "업데이트했습니다");
+    let t2 = turn(59, "플러그인 업데이트 해줘", "");
+    let first = flow::apply_requests(None, &json!({"new": [{"summary": "업데이트", "quote": "플러그인 업데이트 해줘", "state": "addressed"}]}), &t1, None);
+    let got = flow::apply_requests(Some(&first), &json!({"new": [{"summary": "다시 업데이트", "quote": "플러그인 업데이트 해줘", "state": "open"}]}), &t2, Some(&steps_of(&[t1])));
+    assert_eq!(rows(&got), vec![("R1".into(), "addressed".into(), 39), ("R2".into(), "open".into(), 59)]);
+}
+
+#[test]
+fn an_update_in_the_same_turn_wins_over_a_resent_copy() {
+    let t1 = turn(1, "테스트 고쳐줘", "");
+    let t2 = turn(2, "테스트 고쳐줘", "고쳤습니다");
+    let first = flow::apply_requests(None, &json!({"new": [{"summary": "테스트", "quote": "테스트 고쳐줘", "state": "open"}]}), &t1, None);
+    let got = flow::apply_requests(Some(&first), &json!({
+        "updates": [{"id": "R1", "state": "addressed", "agent_quote": "고쳤습니다"}],
+        "new": [{"summary": "테스트", "quote": "테스트 고쳐줘", "state": "in_progress", "agent_quote": "고치는 중"}]}), &t2, Some(&steps_of(&[t1])));
+    assert_eq!(rows(&got), vec![("R1".into(), "addressed".into(), 2)]);
+    assert_eq!(got[0]["agent_quote"], "고쳤습니다");
+}
+
+#[test]
+fn merging_a_resent_request_clears_tool_failed() {
+    let t1 = turn(1, "빌드 돌려줘", "");
+    let t2 = turn(2, "빌드 돌려줘", "빌드했습니다");
+    let first = json!([{"id": "R1", "summary": "빌드", "quote": "빌드 돌려줘", "state": "open", "from_turn": 1, "by_turn": 1, "tool_failed": true}]);
+    let got = flow::apply_requests(Some(&first), &json!({"new": [{"summary": "빌드", "quote": "빌드 돌려줘", "state": "addressed", "agent_quote": "빌드했습니다"}]}), &t2, Some(&steps_of(&[t1])));
+    assert_eq!(rows(&got), vec![("R1".into(), "addressed".into(), 2)]);
+    assert!(got[0].get("tool_failed").is_none());
 }
 
 #[test]
