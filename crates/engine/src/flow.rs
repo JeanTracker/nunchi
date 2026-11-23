@@ -564,28 +564,51 @@ pub fn apply_asks(asks: Option<&Value>, change: &Value, t: &Turn) -> Value {
     Value::Array(out.into_iter().map(Value::Object).collect())
 }
 
-pub fn apply_requests(requests: Option<&Value>, change: &Value, t: &Turn) -> Value {
+/// 요청 하나의 상태를 바꾼다: 갱신(updates)과 다시 보낸 요청 합치기가 같은 규칙을 쓴다
+fn set_request(r: &mut Obj, u: &Value, t: &Turn) {
+    let state = str_or_empty(get(u, "state"));
+    r.insert("state".into(), s(&state));
+    r.insert("by_turn".into(), Value::from(t.index));
+    if opt_truthy(get(u, "agent_quote")) {
+        r.insert("agent_quote".into(), u["agent_quote"].clone());
+    }
+    if opt_truthy(get(u, "pending_quote")) {
+        r.insert("pending_quote".into(), u["pending_quote"].clone());
+    } else if state != "in_progress" {
+        r.shift_remove("pending_quote");
+    }
+    r.shift_remove("tool_failed");
+    if state == "superseded" {
+        r.insert("superseded_by".into(), get(u, "superseded_by").cloned().unwrap_or(Value::Null));
+    }
+}
+
+/// steps: 이번 턴 전까지의 단계 (다시 보낸 요청인지 볼 때 앞 턴의 발화 첫머리 fp를 쓴다)
+pub fn apply_requests(requests: Option<&Value>, change: &Value, t: &Turn, steps: Option<&Value>) -> Value {
     let mut out = obj_list(requests);
+    let known = out.len();                                                    // 이번 응답 전부터 있던 줄
+    let was: Vec<String> = out.iter().map(|r| str_or_empty(r.get("state"))).collect();   // 갱신 전 상태
+    let mut updated = vec![false; known];
+    let mut merged = vec![false; known];
     for u in list(get(change, "updates")) {
         let Some(i) = find_last(&out, &u["id"]) else { continue };
-        let r = &mut out[i];
-        let state = u["state"].as_str().unwrap_or("").to_string();
-        r.insert("state".into(), s(&state));
-        r.insert("by_turn".into(), Value::from(t.index));
-        if opt_truthy(get(u, "agent_quote")) {
-            r.insert("agent_quote".into(), u["agent_quote"].clone());
-        }
-        if opt_truthy(get(u, "pending_quote")) {
-            r.insert("pending_quote".into(), u["pending_quote"].clone());
-        } else if state != "in_progress" {
-            r.shift_remove("pending_quote");
-        }
-        r.shift_remove("tool_failed");
-        if state == "superseded" {
-            r.insert("superseded_by".into(), u["superseded_by"].clone());
-        }
+        set_request(&mut out[i], u, t);
+        updated[i] = true;   // updates는 이번 응답 전부터 있던 id만 가리킨다 (parse_requests가 거른다)
     }
+    let fp = fingerprint(t);
     for n in list(get(change, "new")) {
+        // 같은 요청을 다시 보냈으면(중단 뒤 다시 보내기 등) 새 줄을 만들지 않고 앞 요청을 이어 쓴다 (요구 이력 96)
+        // 이미 합친 앞 줄은 다시 고르지 않는다: 한 턴에서 나눈 요청을 다시 보내면 나눈 줄마다 하나씩 맞춘다
+        if let Some(i) = resent_of(&out[..known], &was, &merged, steps, n, &fp) {
+            if updated[i] {
+                continue;                                                     // 같은 응답의 갱신이 우선한다
+            }
+            merged[i] = true;
+            if str_or_empty(get(n, "state")) != "open" {
+                set_request(&mut out[i], n, t);
+            }
+            continue;
+        }
         let mut r = n.as_object().cloned().unwrap_or_default();
         r.insert("id".into(), s(&format!("R{}", out.len() + 1)));
         r.insert("from_turn".into(), Value::from(t.index));
@@ -593,6 +616,29 @@ pub fn apply_requests(requests: Option<&Value>, change: &Value, t: &Turn) -> Val
         out.push(r);
     }
     Value::Array(out.into_iter().map(Value::Object).collect())
+}
+
+/// 새 요청이 앞 요청을 다시 보낸 것이면 그 자리 (요구 이력 96). 네 조건을 모두 만족해야 한다:
+/// 이번 응답 전부터 있던 줄(known), 갱신 전 상태가 open·in_progress, 앞 줄이 나온 턴과 이번 턴의
+/// 발화 첫머리(fp)가 같음, 원문 인용(quote)이 공백 빼고 같음. 잘못 합치면 요청이 조용히 사라지므로 좁게 잡는다
+fn resent_of(known: &[Obj], was: &[String], merged: &[bool], steps: Option<&Value>, new: &Value, fp: &str) -> Option<usize> {
+    // quote는 사용자 글에서 글자 그대로 따온 것이라(parse_requests가 확인) 공백만 빼고 같으면 같은 말이다.
+    // 요약(summary)은 모델이 쓴 글이라 기준으로 쓰지 않는다
+    let q = sq(get(new, "quote"));
+    if py::char_len(&q) < QUOTE_MIN {
+        return None;
+    }
+    let fp_of = |turn: Option<&Value>| -> Option<String> {
+        let k = turn.and_then(|v| v.as_i64())?;
+        list(steps).iter().rev().find(|st| get(st, "index").and_then(|v| v.as_i64()) == Some(k))
+            .map(|st| str_or_empty(get(st, "fp")))
+    };
+    known.iter().enumerate().rev().find(|(i, r)| {
+        !merged[*i]
+            && matches!(was[*i].as_str(), "open" | "in_progress")
+            && sq(r.get("quote")) == q
+            && fp_of(r.get("from_turn")).is_some_and(|f| !f.is_empty() && f == fp)
+    }).map(|(i, _)| i)
 }
 
 fn fallback(flow: &Value, t: &Turn) -> Value {
@@ -737,7 +783,7 @@ pub fn advance<E>(flow: &Value, turns: &[Turn], t: &Turn, runner: &mut dyn FnMut
     steps.push(got["step"].clone());
     new.insert("steps".into(), Value::Array(steps));
     let reqs_change = get(&got, "requests").filter(|v| truthy(v)).unwrap_or(&empty_obj);
-    new.insert("requests".into(), apply_requests(get(&base, "requests"), reqs_change, t));
+    new.insert("requests".into(), apply_requests(get(&base, "requests"), reqs_change, t, get(&base, "steps")));
     let asks_change = get(&got, "asks").filter(|v| truthy(v)).unwrap_or(&empty_obj);
     new.insert("asks".into(), apply_asks(get(&base, "asks"), asks_change, t));
     new.insert("until".into(), Value::from(t.index));
