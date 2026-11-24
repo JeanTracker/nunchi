@@ -358,6 +358,22 @@ fn a_resent_copy_of_a_request_superseded_in_the_same_turn_is_a_new_row() {
 }
 
 #[test]
+fn a_superseded_split_row_takes_only_one_resent_copy() {
+    // 한 턴에서 나눈 두 줄 중 뒤 줄이 superseded가 되면, 그 줄은 새 요청 하나만 대신하고
+    // 다음 새 요청은 앞 줄을 이어 쓴다 (앞 줄이 superseded일 때와 같은 결과)
+    let t1 = turn(1, "로그 정리하고 정리해줘", "");
+    let t2 = turn(2, "로그 정리하고 정리해줘", "했습니다");
+    let first = json!([
+        {"id": "R1", "summary": "로그 1", "quote": "로그 정리하고", "state": "in_progress", "from_turn": 1, "by_turn": 1},
+        {"id": "R2", "summary": "로그 2", "quote": "로그 정리하고", "state": "in_progress", "from_turn": 1, "by_turn": 1}]);
+    let got = flow::apply_requests(Some(&first), &json!({
+        "updates": [{"id": "R2", "state": "superseded", "superseded_by": 2}],
+        "new": [{"summary": "로그", "quote": "로그 정리하고", "state": "addressed", "agent_quote": "했습니다"},
+                {"summary": "로그", "quote": "로그 정리하고", "state": "addressed", "agent_quote": "했습니다"}]}), &t2, Some(&steps_of(&[t1])));
+    assert_eq!(rows(&got), vec![("R1".into(), "addressed".into(), 2), ("R2".into(), "superseded".into(), 2), ("R3".into(), "addressed".into(), 2)]);
+}
+
+#[test]
 fn merging_a_resent_request_clears_tool_failed() {
     let t1 = turn(1, "빌드 돌려줘", "");
     let t2 = turn(2, "빌드 돌려줘", "빌드했습니다");
