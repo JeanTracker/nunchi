@@ -1758,3 +1758,31 @@ test('when the start record comes late, the next refresh still keeps it on (요�
   expect(JSON.parse(written[HOME_S + 'new/want'] ?? 'null')?.on).toBe(true)
   await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()
 })
+
+test('a new session that already has an on/off mark is left as it is (요구 이력 98)', async ($, on) => {
+  const off = JSON.stringify({ at: 'x', by: 'nunchi', on: false, lang: 'ko' }) + '\n'
+  const files: Record<string, string> = { [HOME_S + 'old/want']: ON('ko'), [HOME_S + 'new/want']: off }, written: Record<string, string> = {}
+  const s = clearing(on, { files, written })
+  await tick($)
+  s.id = 'new'; s.now += 1000
+  files[HOME_S + 'new/events.jsonl'] = startRec('new', 'clear', s.now - 400)
+  await tick($)
+  expect(written[HOME_S + 'new/want']).toBeUndefined()
+  expect(JSON.parse(files[HOME_S + 'new/want']).on).toBe(false)
+  await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()
+})
+
+test('a start record that comes after 30 seconds no longer turns the session on (요구 이력 98)', async ($, on) => {
+  const files: Record<string, string> = { [HOME_S + 'old/want']: ON('ko') }, written: Record<string, string> = {}
+  const s = clearing(on, { files, written })
+  await tick($)
+  s.id = 'new'; s.now += 1000
+  await tick($)                                              // 바뀜을 봤지만 시작 기록이 없다
+  s.now += 31_000
+  await tick($)                                              // 30초가 지나 기다리기를 그만둔다
+  files[HOME_S + 'new/events.jsonl'] = startRec('new', 'clear', s.now)
+  s.now += 1000
+  await tick($)
+  expect(written[HOME_S + 'new/want']).toBeUndefined()
+  await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()
+})
