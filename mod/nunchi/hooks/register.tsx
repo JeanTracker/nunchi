@@ -739,7 +739,8 @@ export const register: Register = on => {
     const v = await read($, view)
     const m = { ...NO_MORE, ...(await read($, more)) }
     const openSet = await read($, textOpened)
-    const T = TEXT[v.ui]
+    const fresh = v.tick === 0   // 이 세션의 패널 상태를 아직 한 번도 만들지 않았다(/clear 직후 등): 켜짐·꺼짐도 언어도 모른다 (요구 이력 99)
+    const T = TEXT[fresh ? shownUi : v.ui]
     const cols = Math.max(20, e.props.bodyColumns ?? 50)
     const toControl = async () => {
       const problem = await goControl($)
@@ -767,8 +768,9 @@ export const register: Register = on => {
     const progress = v.rebuilding ? T.rebuilding(v.latest, v.total || v.latest) : v.basis <= 1 ? T.rebuilding(v.latest, v.total) : T.catching(v.latest, v.total)
     if (!v.goal && v.basis === 0) {   // 아직 분석 결과가 없다 (SCREEN §11)
       row(sp(T.title, { b: 1 }))
-      if (v.noHook) row(sp(T.noHook, { c: 'red' }))   // 고칠 일이 앞선다 (요구 이력 62·84)
-      row(v.rebuilding && busy ? sp(progress + ' ' + dots(v.tick, v.state, v.ui).replace(/^[^.]*/, ''), { c: 'yellow' })
+      // 첫 갱신(1초 안)까지는 제목만 둔다. 기본값(꺼짐)을 그리면 켜 둔 세션에서도 "꺼짐"이 비친다 (요구 이력 99)
+      if (!fresh && v.noHook) row(sp(T.noHook, { c: 'red' }))   // 고칠 일이 앞선다 (요구 이력 62·84)
+      if (!fresh) row(v.rebuilding && busy ? sp(progress + ' ' + dots(v.tick, v.state, v.ui).replace(/^[^.]*/, ''), { c: 'yellow' })
         : v.state === 'running' || v.state === 'queued' ? sp(dots(v.tick, v.state, v.ui), { c: 'yellow' })
         : v.state === 'failed' ? sp(T.failed + v.error, { c: 'red' })
         : v.on ? sp(T.onWaiting, { d: 1 })

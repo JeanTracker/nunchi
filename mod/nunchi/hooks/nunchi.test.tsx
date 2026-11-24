@@ -1,4 +1,4 @@
-import { expect, test } from 'claude-code/testing'
+import { expect, test, mock } from 'claude-code/testing'
 import { answersAfter, answerEnded, promptSent, humanPrompt, paneClosed, paneAsked, mayAutoOpen, pieces as piecesOf } from './register.js'
 import { pick, norm, failText } from './lang.js'
 
@@ -1649,4 +1649,108 @@ for (const [setting, want] of [['한국어', '남은 요청 없음'], ['English'
   expect(all).toContain(want)
   expect(all.some(t => /none of mine|없음 내 요청 중/.test(t))).toBe(false)
   await ui.unmount()
+})
+// /clear는 새 세션 ID를 만든다(요구 이력 100: 새 세션은 꺼진 채 시작). 세션 ID를 바꿔 가며 시험하는 준비
+const HOME_S = '/home/me/.claude-control/sessions/'
+function clearing(on: any, o: { setting?: string; files: Record<string, string>; written: Record<string, string> }) {
+  const s = { id: 'old', now: 100_000 }
+  on('command.register', () => ({ value: { command: 'nunchi' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('session.start', (_: unknown, e: any) => ({ cwd: e.cwd }))
+  on('session.id', () => ({ value: s.id }))
+  on('settings.read', () => ({ value: { language: o.setting ?? '한국어' } }))
+  on('env.get', (_: unknown, e: any) => ({ value: e.name === 'HOME' ? '/home/me' : undefined }))
+  on('clock.every', () => ({ value: null }))
+  on('clock.now', () => ({ value: s.now }))
+  on('fs.write', (_: unknown, e: any) => { o.files[String(e.path)] = String(e.text ?? e.content ?? e.data ?? ''); o.written[String(e.path)] = o.files[String(e.path)]; return { value: null } })
+  on('fs.read', (_: unknown, e: any) => {
+    const p = String(e.path ?? e)
+    if (p in o.files) return { value: o.files[p] }
+    if (p.endsWith('/mod.json')) return { value: '{"noticed":true}' }
+    throw new Error('missing ' + p)
+  })
+  return s
+}
+const ON = (lang = 'en') => JSON.stringify({ at: 'x', by: 'nunchi', on: true, lang }) + '\n'
+
+// 요구 이력 99: 새 세션의 패널 상태를 아직 한 번도 만들지 않았으면(첫 갱신 전, /clear 직후 등) 켜짐·꺼짐을 모르니 제목만 그린다.
+// 세션을 시작하면 1초 갱신이 패널보다 먼저 돌아 그 순간을 잡을 수 없어, 시작 없이 패널만 붙인다
+test('before the first refresh the pane shows only the title, not off (요구 이력 99)', async ($, on) => {
+  const files: Record<string, string> = { [HOME_S + 'fresh-ko/want']: ON('ko') }, written: Record<string, string> = {}
+  const s = clearing(on, { files, written })
+  s.id = 'fresh-ko'
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
+  const all = (await ui.findAll({ type: 'Text' })).map((x: any) => String(x.text ?? '')).filter(t => t.trim())
+  expect(all).toContain('눈치')
+  expect(all.some(t => /꺼짐|켜짐/.test(t))).toBe(false)
+  await ui.unmount()
+})
+
+test('before the first refresh an English screen shows the English title only, with no Hangul (요구 이력 99)', async ($, on) => {
+  const files: Record<string, string> = { [HOME_S + 'fresh-en/want']: ON('en') }, written: Record<string, string> = {}
+  const s = clearing(on, { setting: 'English', files, written })
+  s.id = 'fresh-en'
+  await $.command.run({ command: 'nunchi', args: 'nope' } as any)   // 화면 언어만 정한다 (갱신하지 않는 답)
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
+  const all = (await ui.findAll({ type: 'Text' })).map((x: any) => String(x.text ?? '')).filter(t => t.trim())
+  expect(all).toContain('Nunchi')
+  expect(all.some(t => /Nunchi (on|off)/.test(t))).toBe(false)
+  for (const t of all) expect(t).not.toMatch(/[가-힣]/)
+  await ui.unmount()
+})
+// 패널 상태를 세션 ID마다 따로 두고(실제 Claude Code처럼) 1초 갱신을 가짜 시계로 붙잡는다
+function clearHeld(on: any, o: { setting?: string; files: Record<string, string> }) {
+  const s = { id: 'old' }
+  const clock = mock.clock(on, { now: 100_000 })
+  const owner: Record<string, string> = {}
+  on('state.get', async (_: unknown, e: any, next: any) => {
+    const r = await next(e)
+    return owner[e.key] === undefined || owner[e.key] === s.id ? r : { value: { version: r.value.version } }   // 다른 세션이 쓴 값은 없는 것으로
+  })
+  on('state.set', async (_: unknown, e: any, next: any) => { owner[e.key] = s.id; return next(e) })
+  on('command.register', () => ({ value: { command: 'nunchi' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('session.start', (_: unknown, e: any) => ({ cwd: e.cwd }))
+  on('session.id', () => ({ value: s.id }))
+  on('settings.read', () => ({ value: { language: o.setting ?? '한국어' } }))
+  on('env.get', (_: unknown, e: any) => ({ value: e.name === 'HOME' ? '/home/me' : undefined }))
+  on('fs.write', (_: unknown, e: any) => { o.files[String(e.path)] = String(e.text ?? e.content ?? e.data ?? ''); return { value: null } })
+  on('fs.read', (_: unknown, e: any) => {
+    const p = String(e.path ?? e)
+    if (p in o.files) return { value: o.files[p] }
+    if (p.endsWith('/mod.json')) return { value: '{"noticed":true}' }
+    throw new Error('missing ' + p)
+  })
+  return { s, clock }
+}
+const start = ($: any) => $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+const shown = async ($: any) => {
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
+  const all = (await ui.findAll({ type: 'Text' })).map((x: any) => String(x.text ?? '')).filter((t: string) => t.trim())
+  await ui.unmount()
+  return [...new Set(all)]
+}
+test('a session refreshed in English and then cleared draws the English title before its first refresh, with no Hangul (요구 이력 99)', async ($, on) => {
+  const files: Record<string, string> = { [HOME_S + 'old/want']: ON('en') }
+  const { s } = clearHeld(on, { setting: 'English', files })
+  await start($)                                               // 이전 세션을 영어 화면으로 한 번 갱신했다
+  expect(await shown($)).toContain('Nunchi on · analyzes after the next answer')
+  s.id = 'new'                                                 // /clear: ID가 바뀌고 새 세션의 패널 상태는 아직 없다. 시계를 움직이지 않아 갱신은 돌지 않는다
+  const all = await shown($)
+  expect(all).toEqual(['Nunchi'])
+  for (const t of all) expect(t).not.toMatch(/[가-힣]/)
+})
+const startRec = (id: string, source: string, ms: number) =>
+  JSON.stringify({ ts: new Date(ms).toISOString(), session_id: id, event: 'SessionStart', data: { source } }) + '\n'
+for (const [setting, want] of [['한국어', '눈치 꺼짐 · /nunchi로 켜면 이 세션을 분석합니다'], ['English', 'Nunchi off · /nunchi to analyze this session']] as const)
+test(`after /clear in a turned-on session the new session starts off and says how to turn it on, ${setting} (요구 이력 100)`, async ($, on) => {
+  const files: Record<string, string> = { [HOME_S + 'old/want']: ON('en'), [HOME_S + 'new/events.jsonl']: startRec('new', 'clear', 101_000) }
+  const { s, clock } = clearHeld(on, { setting, files })
+  await start($)
+  s.id = 'new'
+  await clock.advance(1000)
+  const all = await shown($)
+  expect(all).toContain(want)
+  if (setting === 'English') for (const t of all) expect(t).not.toMatch(/[가-힣]/)
+  expect(files[HOME_S + 'new/want']).toBeUndefined()
 })

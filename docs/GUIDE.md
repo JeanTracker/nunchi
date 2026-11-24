@@ -66,6 +66,9 @@ the session. Responses from before you turned it on are analyzed together, from 
 start, when the next response ends. To have them analyzed right away instead, run
 `/nunchi build`.
 
+`/clear` starts a new session, which starts off; type `/nunchi` again to analyze it. The
+previous session stays on and resumes analysis if you go back to it with `/resume`.
+
 The panel does not open on its own in sessions you have not turned on.
 
 ## Commands
