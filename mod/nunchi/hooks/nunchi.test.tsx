@@ -1650,3 +1650,111 @@ for (const [setting, want] of [['한국어', '남은 요청 없음'], ['English'
   expect(all.some(t => /none of mine|없음 내 요청 중/.test(t))).toBe(false)
   await ui.unmount()
 })
+
+// 요구 이력 98: 켜 둔 대화에서 /clear를 하면 새 세션 ID가 생긴다. 패널이 바뀐 것을 보고 새 세션도 켜 준다
+const HOME_S = '/home/me/.claude-control/sessions/'
+function clearing(on: any, o: { setting?: string; files: Record<string, string>; written: Record<string, string> }) {
+  const s = { id: 'old', now: 100_000 }
+  on('command.register', () => ({ value: { command: 'nunchi' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('session.start', (_: unknown, e: any) => ({ cwd: e.cwd }))
+  on('session.id', () => ({ value: s.id }))
+  on('settings.read', () => ({ value: { language: o.setting ?? '한국어' } }))
+  on('env.get', (_: unknown, e: any) => ({ value: e.name === 'HOME' ? '/home/me' : undefined }))
+  on('clock.every', () => ({ value: null }))
+  on('clock.now', () => ({ value: s.now }))
+  on('fs.write', (_: unknown, e: any) => { o.files[String(e.path)] = String(e.text ?? e.content ?? e.data ?? ''); o.written[String(e.path)] = o.files[String(e.path)]; return { value: null } })
+  on('fs.read', (_: unknown, e: any) => {
+    const p = String(e.path ?? e)
+    if (p in o.files) return { value: o.files[p] }
+    if (p.endsWith('/mod.json')) return { value: '{"noticed":true}' }
+    throw new Error('missing ' + p)
+  })
+  return s
+}
+const startRec = (id: string, source: string, ms: number) =>
+  JSON.stringify({ ts: new Date(ms).toISOString(), session_id: id, event: 'SessionStart', data: { source } }) + '\n'
+const ON = (lang = 'en') => JSON.stringify({ at: 'x', by: 'nunchi', on: true, lang }) + '\n'
+const tick = ($: any) => $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })   // 1초 갱신 대신 다시 그리게 한다
+
+test('/clear in a turned-on session keeps the new session on (요구 이력 98)', async ($, on) => {
+  const files: Record<string, string> = { [HOME_S + 'old/want']: ON('en') }, written: Record<string, string> = {}
+  const s = clearing(on, { files, written })
+  await tick($)
+  s.id = 'new'; s.now += 1000
+  files[HOME_S + 'new/events.jsonl'] = startRec('new', 'clear', s.now - 400)
+  await tick($)
+  const w = JSON.parse(written[HOME_S + 'new/want'] ?? 'null')
+  expect(w?.on).toBe(true)
+  expect(w?.lang).toBe('en')                                   // 분석 언어는 이전 세션 것
+  expect(JSON.parse(files[HOME_S + 'old/want']).on).toBe(true)  // 이전 세션은 그대로
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /눈치 켜짐 · 다음 응답이 끝나면 분석합니다/ }))).toBeTruthy()
+  expect((await ui.find({ type: 'Text', text: /눈치 꺼짐/ }))).toBeFalsy()
+  expect((await ui.find({ type: 'Text', text: /이어 켰/ }))).toBeFalsy()   // 안내 줄은 두지 않는다
+  await ui.unmount()
+})
+
+test('/clear keeps nunchi on with an English screen, with no Hangul (요구 이력 98)', async ($, on) => {
+  const files: Record<string, string> = { [HOME_S + 'old/want']: ON('en') }, written: Record<string, string> = {}
+  const s = clearing(on, { setting: 'English', files, written })
+  await tick($)
+  s.id = 'new'; s.now += 1000
+  files[HOME_S + 'new/events.jsonl'] = startRec('new', 'clear', s.now - 400)
+  await tick($)
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
+  const all = (await ui.findAll({ type: 'Text' })).map((x: any) => String(x.text ?? '')).filter(t => t.trim())
+  expect(all).toContain('Nunchi on · analyzes after the next answer')
+  for (const t of all) expect(t).not.toMatch(/[가-힣]/)
+  await ui.unmount()
+})
+
+const staysOff = (before: string | null) => async ($: any, on: any) => {
+  const files: Record<string, string> = before ? { [HOME_S + 'old/want']: before } : {}, written: Record<string, string> = {}
+  const s = clearing(on, { files, written })
+  await tick($)
+  s.id = 'new'; s.now += 1000
+  files[HOME_S + 'new/events.jsonl'] = startRec('new', 'clear', s.now - 400)
+  await tick($)
+  expect(written[HOME_S + 'new/want']).toBeUndefined()
+  await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()   // 남은 그리기를 마치고 끝낸다
+}
+test('/clear in a session turned off stays off (요구 이력 98)', staysOff(JSON.stringify({ at: 'x', by: 'nunchi', on: false, lang: 'ko' })))
+test('/clear in a session never turned on stays off (요구 이력 98)', staysOff(null))
+
+test('moving to another session with /resume does not turn it on (요구 이력 98)', async ($, on) => {
+  const files: Record<string, string> = { [HOME_S + 'old/want']: ON('ko') }, written: Record<string, string> = {}
+  const s = clearing(on, { files, written })
+  await tick($)
+  s.id = 'other'; s.now += 1000
+  // 예전에 /clear로 시작한 세션을 이어 연 경우: 옛 clear 기록 뒤에 방금 resume 기록
+  files[HOME_S + 'other/events.jsonl'] = startRec('other', 'clear', s.now - 86_400_000) + startRec('other', 'resume', s.now - 300)
+  await tick($)
+  expect(written[HOME_S + 'other/want']).toBeUndefined()
+  await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()   // 남은 그리기를 마치고 끝낸다
+})
+
+test('a resumed session whose resume record is not written yet is not turned on by its old clear record (요구 이력 98)', async ($, on) => {
+  const files: Record<string, string> = { [HOME_S + 'old/want']: ON('ko') }, written: Record<string, string> = {}
+  const s = clearing(on, { files, written })
+  await tick($)
+  s.id = 'other'; s.now += 1000
+  files[HOME_S + 'other/events.jsonl'] = startRec('other', 'clear', s.now - 86_400_000)
+  await tick($)
+  expect(written[HOME_S + 'other/want']).toBeUndefined()
+  await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()   // 남은 그리기를 마치고 끝낸다
+})
+
+test('when the start record comes late, the next refresh still keeps it on (요구 이력 98)', async ($, on) => {
+  const files: Record<string, string> = { [HOME_S + 'old/want']: ON('ko') }, written: Record<string, string> = {}
+  const s = clearing(on, { files, written })
+  await tick($)
+  s.id = 'new'; s.now += 1000
+  await tick($)                                              // 훅 기록이 아직 없다
+  expect(written[HOME_S + 'new/want']).toBeUndefined()
+  s.now += 1000
+  files[HOME_S + 'new/events.jsonl'] = startRec('new', 'clear', s.now - 1500)
+  await tick($)
+  expect(JSON.parse(written[HOME_S + 'new/want'] ?? 'null')?.on).toBe(true)
+  await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()
+})

@@ -163,6 +163,53 @@ export function wantOf(want: any): 'none' | 'on' | 'off' {
   return want?.on === false ? 'off' : 'on'
 }
 
+// /clear 뒤 켜짐 이어주기 (요구 이력 98). /clear는 새 세션 ID를 만들고 켜짐 표시는 이전 ID 폴더에만 있다.
+// 훅의 SessionStart에는 이전 ID가 없으므로, Claude Code 안에서 계속 도는 mod가 ID가 바뀐 것을 보고 짝을 짓는다
+let lastSession = ''     // 지난 갱신 때 본 세션 ID
+let carry: { from: string; lang: string; at: number } | null = null   // 이어 켤지 아직 정하지 못한 바뀜
+const CARRY_WAIT_MS = 30_000   // 새 세션의 시작 기록이 늦게 와도 이만큼 다시 본다
+const START_SLACK_MS = 5_000   // 시작 기록 시각(초 단위)이 바뀜을 본 때보다 앞설 수 있는 폭
+
+/** 바뀐 때 무렵의 마지막 SessionStart 원인. 아직 없으면 null */
+async function startSource($: EngineInterface, dir: string, since: number): Promise<string | null> {
+  let text = ''
+  try { text = String(await $.fs.read(dir + '/events.jsonl')) } catch { return null }
+  let source: string | null = null
+  for (const line of text.split('\n')) {
+    if (!line.includes('"SessionStart"')) continue
+    try {
+      const r = JSON.parse(line)
+      if (r.event === 'SessionStart' && Date.parse(r.ts) >= since - START_SLACK_MS) source = String(r.data?.source ?? '')
+    } catch { /* 깨진 줄은 건너뛴다 */ }
+  }
+  return source
+}
+
+async function keepOnAfterClear($: EngineInterface): Promise<void> {
+  if (await $.env.get('NUNCHI_MOD_SESSION')) return   // 다른 세션을 보는 시험 모드
+  const id = await $.session.id()
+  const home = await controlHome($)
+  const now = await $.clock.now()
+  if (lastSession && id !== lastSession) {
+    const before = await readJson($, home + '/sessions/' + lastSession + '/want')
+    carry = wantOf(before) === 'on' ? { from: lastSession, lang: String(before?.lang ?? ''), at: now } : null
+  }
+  lastSession = id
+  if (!carry) return
+  const dir = home + '/sessions/' + id
+  if (wantOf(await readJson($, dir + '/want')) !== 'none') { carry = null; return }   // 이미 켜거나 끈 세션은 그대로
+  const source = await startSource($, dir, carry.at)
+  if (source === null) {
+    if (now - carry.at > CARRY_WAIT_MS) carry = null
+    return
+  }
+  if (source === 'clear') {
+    const lang = carry.lang || (await language($)).analysis
+    await $.fs.write(dir + '/want', JSON.stringify({ at: new Date(now).toISOString(), by: 'nunchi', on: true, lang, carried_from: carry.from }) + '\n')
+  }
+  carry = null
+}
+
 /** 이 세션의 발화나 응답 끝을 본 뒤 HOOK_GRACE_MS가 지나도 훅 기록이 없는지. 파일이 없다는 것만으로는 알리지 않는다:
  *  세션 도중 설치하면 첫 발화 전에는 기록이 없어도 훅이 돈다 (요구 이력 84). exists가 실패하면 모름(알리지 않음) */
 async function hookMissing($: EngineInterface, dir: string): Promise<boolean> {
@@ -506,6 +553,7 @@ export async function answersAfter($: EngineInterface, dir: string, since: strin
 }
 
 async function refresh($: EngineInterface) {
+  try { await keepOnAfterClear($) } catch { /* 이어 켜기를 못 해도 그리기는 그대로 (요구 이력 98) */ }
   const dir = await sessionDir($)
   const home = await controlHome($)
   const [analysis, status, config, gloss, want, ctl, saved] = await Promise.all([
