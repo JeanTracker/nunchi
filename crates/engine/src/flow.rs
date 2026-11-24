@@ -599,7 +599,32 @@ pub fn apply_requests(requests: Option<&Value>, change: &Value, t: &Turn, steps:
     for n in list(get(change, "new")) {
         // 같은 요청을 다시 보냈으면(중단 뒤 다시 보내기 등) 새 줄을 만들지 않고 앞 요청을 이어 쓴다 (요구 이력 96)
         // 이미 합친 앞 줄은 다시 고르지 않는다: 한 턴에서 나눈 요청을 다시 보내면 나눈 줄마다 하나씩 맞춘다
-        if let Some(i) = resent_of(&out[..known], &was, &merged, steps, n, &fp) {
+        if let Some(mut i) = resent_of(&out[..known], &was, &merged, steps, n, &fp) {
+            // 고른 줄이 같은 응답에서 보통으로 갱신됐으면, 같은 글의 줄 중 이번 응답에서 superseded가 된 줄을 대신 고른다:
+            // 갱신이 우선해 새 요청을 버리면 그 superseded 줄을 대신할 줄이 없어 요청이 사라진다
+            if updated[i] && str_or_empty(out[i].get("state")) != "superseded" {
+                let mut rest = merged.clone();
+                rest[i] = true;
+                while let Some(j) = resent_of(&out[..known], &was, &rest, steps, n, &fp) {
+                    if updated[j] && str_or_empty(out[j].get("state")) == "superseded" {
+                        i = j;
+                        break;
+                    }
+                    rest[j] = true;
+                }
+            }
+            // 같은 응답에서 앞 줄이 superseded로 바뀌었으면 새 요청이 그 대신하는 요청이라 새 줄로 넣는다:
+            // 버리면 앞 줄은 숨겨지고 새 줄은 없어 요청이 사라진다. 그 줄은 맞춘 것으로 표시해
+            // 다음 새 요청이 한 턴에서 나눈 다른 줄과 맞춰지게 한다
+            if updated[i] && str_or_empty(out[i].get("state")) == "superseded" {
+                merged[i] = true;
+                let mut r = n.as_object().cloned().unwrap_or_default();
+                r.insert("id".into(), s(&format!("R{}", out.len() + 1)));
+                r.insert("from_turn".into(), Value::from(t.index));
+                r.insert("by_turn".into(), Value::from(t.index));
+                out.push(r);
+                continue;
+            }
             if updated[i] {
                 continue;                                                     // 같은 응답의 갱신이 우선한다
             }
