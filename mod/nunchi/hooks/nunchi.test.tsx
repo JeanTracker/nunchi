@@ -1786,3 +1786,29 @@ test('a start record that comes after 30 seconds no longer turns the session on 
   expect(written[HOME_S + 'new/want']).toBeUndefined()
   await (await mountPane($, { ...PANE, surface: 'terminal' })).unmount()
 })
+
+// 요구 이력 99: 새 세션의 패널 상태를 아직 한 번도 만들지 않았으면(첫 갱신 전, /clear 직후 등) 켜짐·꺼짐을 모르니 제목만 그린다.
+// 세션을 시작하면 1초 갱신이 패널보다 먼저 돌아 그 순간을 잡을 수 없어, 시작 없이 패널만 붙인다
+test('before the first refresh the pane shows only the title, not off (요구 이력 99)', async ($, on) => {
+  const files: Record<string, string> = { [HOME_S + 'fresh-ko/want']: ON('ko') }, written: Record<string, string> = {}
+  const s = clearing(on, { files, written })
+  s.id = 'fresh-ko'
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
+  const all = (await ui.findAll({ type: 'Text' })).map((x: any) => String(x.text ?? '')).filter(t => t.trim())
+  expect(all).toContain('눈치')
+  expect(all.some(t => /꺼짐|켜짐/.test(t))).toBe(false)
+  await ui.unmount()
+})
+
+test('before the first refresh an English screen shows the English title only, with no Hangul (요구 이력 99)', async ($, on) => {
+  const files: Record<string, string> = { [HOME_S + 'fresh-en/want']: ON('en') }, written: Record<string, string> = {}
+  const s = clearing(on, { setting: 'English', files, written })
+  s.id = 'fresh-en'
+  await $.command.run({ command: 'nunchi', args: 'nope' } as any)   // 화면 언어만 정한다 (갱신하지 않는 답)
+  const ui = await mountPane($, { ...PANE, surface: 'terminal' })
+  const all = (await ui.findAll({ type: 'Text' })).map((x: any) => String(x.text ?? '')).filter(t => t.trim())
+  expect(all).toContain('Nunchi')
+  expect(all.some(t => /Nunchi (on|off)/.test(t))).toBe(false)
+  for (const t of all) expect(t).not.toMatch(/[가-힣]/)
+  await ui.unmount()
+})
