@@ -599,7 +599,10 @@ pub fn apply_requests(requests: Option<&Value>, change: &Value, t: &Turn, steps:
     for n in list(get(change, "new")) {
         // 같은 요청을 다시 보냈으면(중단 뒤 다시 보내기 등) 새 줄을 만들지 않고 앞 요청을 이어 쓴다 (요구 이력 96)
         // 이미 합친 앞 줄은 다시 고르지 않는다: 한 턴에서 나눈 요청을 다시 보내면 나눈 줄마다 하나씩 맞춘다
-        if let Some(i) = resent_of(&out[..known], &was, &merged, steps, n, &fp) {
+        // 같은 응답에서 앞 줄이 superseded로 바뀌었으면 새 요청이 그 대신하는 요청이라 새 줄로 넣는다:
+        // 버리면 앞 줄은 숨겨지고 새 줄은 없어 요청이 사라진다
+        let replaced = |i: usize| updated[i] && str_or_empty(out[i].get("state")) == "superseded";
+        if let Some(i) = resent_of(&out[..known], &was, &merged, steps, n, &fp).filter(|&i| !replaced(i)) {
             if updated[i] {
                 continue;                                                     // 같은 응답의 갱신이 우선한다
             }

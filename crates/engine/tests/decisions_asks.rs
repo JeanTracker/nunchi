@@ -343,6 +343,21 @@ fn an_update_in_the_same_turn_wins_over_a_resent_copy() {
 }
 
 #[test]
+fn a_resent_copy_of_a_request_superseded_in_the_same_turn_is_a_new_row() {
+    // 같은 응답에서 앞 줄을 superseded로 바꾸고 같은 글의 새 요청을 적으면, 새 요청이 그 대신하는 요청이다.
+    // 버리면 앞 줄은 숨겨지고 새 줄은 없어 요청이 화면 어디에도 남지 않는다
+    let t1 = turn(1, "로그 정리해줘", "");
+    let t2 = turn(2, "로그 정리해줘", "정리하는 중입니다");
+    let first = flow::apply_requests(None, &json!({"new": [{"summary": "로그 정리", "quote": "로그 정리해줘", "state": "open"}]}), &t1, None);
+    let got = flow::apply_requests(Some(&first), &json!({
+        "updates": [{"id": "R1", "state": "superseded", "superseded_by": 2}],
+        "new": [{"summary": "로그 정리", "quote": "로그 정리해줘", "state": "in_progress", "agent_quote": "정리하는 중입니다"}]}), &t2, Some(&steps_of(&[t1])));
+    assert_eq!(rows(&got), vec![("R1".into(), "superseded".into(), 2), ("R2".into(), "in_progress".into(), 2)]);
+    assert_eq!(got[0]["superseded_by"], 2);
+    assert_eq!(got[1]["from_turn"], 2);
+}
+
+#[test]
 fn merging_a_resent_request_clears_tool_failed() {
     let t1 = turn(1, "빌드 돌려줘", "");
     let t2 = turn(2, "빌드 돌려줘", "빌드했습니다");
