@@ -374,6 +374,39 @@ fn a_superseded_split_row_takes_only_one_resent_copy() {
 }
 
 #[test]
+fn a_resent_copy_goes_to_the_split_row_superseded_in_the_same_turn() {
+    // 한 턴에서 나눈 두 줄 중 앞 줄은 superseded, 뒤 줄은 addressed로 갱신되고 다시 보낸 요청이 하나 오면,
+    // 그 요청은 superseded된 앞 줄을 대신하는 새 줄이다. 갱신된 뒤 줄에 맞춰 버리면 앞 줄은 숨겨지고 대신할 줄이 없다
+    let t1 = turn(1, "로그 정리하고 정리해줘", "");
+    let t2 = turn(2, "로그 정리하고 정리해줘", "했습니다");
+    let first = json!([
+        {"id": "R1", "summary": "로그 1", "quote": "로그 정리하고", "state": "in_progress", "from_turn": 1, "by_turn": 1},
+        {"id": "R2", "summary": "로그 2", "quote": "로그 정리하고", "state": "in_progress", "from_turn": 1, "by_turn": 1}]);
+    let got = flow::apply_requests(Some(&first), &json!({
+        "updates": [{"id": "R1", "state": "superseded", "superseded_by": 2},
+                    {"id": "R2", "state": "addressed", "agent_quote": "했습니다"}],
+        "new": [{"summary": "로그", "quote": "로그 정리하고", "state": "in_progress", "agent_quote": "했습니다"}]}), &t2, Some(&steps_of(&[t1])));
+    assert_eq!(rows(&got), vec![("R1".into(), "superseded".into(), 2), ("R2".into(), "addressed".into(), 2), ("R3".into(), "in_progress".into(), 2)]);
+    assert_eq!(got[2]["from_turn"], 2);
+}
+
+#[test]
+fn an_earlier_superseded_split_row_takes_only_one_of_two_resent_copies() {
+    // 한 턴에서 나눈 두 줄 중 앞 줄이 superseded가 되고 다시 보낸 요청이 둘 오면,
+    // 하나는 뒤 줄을 이어 쓰고 하나는 앞 줄을 대신하는 새 줄이 된다 (뒤 줄이 superseded일 때와 같은 결과)
+    let t1 = turn(1, "로그 정리하고 정리해줘", "");
+    let t2 = turn(2, "로그 정리하고 정리해줘", "했습니다");
+    let first = json!([
+        {"id": "R1", "summary": "로그 1", "quote": "로그 정리하고", "state": "in_progress", "from_turn": 1, "by_turn": 1},
+        {"id": "R2", "summary": "로그 2", "quote": "로그 정리하고", "state": "in_progress", "from_turn": 1, "by_turn": 1}]);
+    let got = flow::apply_requests(Some(&first), &json!({
+        "updates": [{"id": "R1", "state": "superseded", "superseded_by": 2}],
+        "new": [{"summary": "로그", "quote": "로그 정리하고", "state": "addressed", "agent_quote": "했습니다"},
+                {"summary": "로그", "quote": "로그 정리하고", "state": "addressed", "agent_quote": "했습니다"}]}), &t2, Some(&steps_of(&[t1])));
+    assert_eq!(rows(&got), vec![("R1".into(), "superseded".into(), 2), ("R2".into(), "addressed".into(), 2), ("R3".into(), "addressed".into(), 2)]);
+}
+
+#[test]
 fn merging_a_resent_request_clears_tool_failed() {
     let t1 = turn(1, "빌드 돌려줘", "");
     let t2 = turn(2, "빌드 돌려줘", "빌드했습니다");
