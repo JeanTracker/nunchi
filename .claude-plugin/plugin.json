@@ -1,0 +1,12 @@
+{
+  "name": "nunchi",
+  "version": "0.7.0",
+  "description": "Side panel beside a Claude Code session (what the agent is asking, the goal so far, your open requests), plus the hooks and background analyzer that fill it. No Python needed.",
+  "author": {
+    "name": "JeanTracker"
+  },
+  "homepage": "https://github.com/JeanTracker/nunchi",
+  "repository": "https://github.com/JeanTracker/nunchi",
+  "license": "MIT",
+  "types": "./mod/nunchi/types/index.d.ts"
+}
