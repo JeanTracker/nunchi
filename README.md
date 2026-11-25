@@ -98,17 +98,19 @@ test failure under Known issues, and flagged nothing in the unrelated last turn.
 one run, and the omission check can be wrong (see above).
 
 nunchi does not keep its own copy of the conversation, so this holds only while Claude
-Code keeps the session's conversation file. `/clear` starts a new session.
+Code keeps the session's conversation file. `/clear` starts a new session, which starts
+off; type `/nunchi` again to analyze it.
 
 ## Cost
 
 Analysis runs in the background with `claude -p`, on your account's quota and outside
 your conversation, so it adds nothing to the session's context. By default only sessions
-you turned on are analyzed, at one call per answer (more if a call fails and is
-retried). `/nunchi build` costs one call for each answer it analyzes. The engine exits
-when there is nothing to do, and `/nunchi off` stops analysis for that session. Analysis
-uses Claude Code's default model unless you set `analyze_model` in
-`~/.claude-control/config.json`; see the guide, section
+you turned on are analyzed, at one call per answer. `/nunchi build` costs one call for
+each answer it analyzes. The engine is a short-lived background process: the hooks start
+it when an answer is ready to analyze, it exits when there is nothing left, and the next
+answer starts it again, so there is nothing for you to restart. `/nunchi off` stops
+analysis for that session. Analysis uses Claude Code's default model unless you set
+`analyze_model` in `~/.claude-control/config.json`; see the guide, section
 [Analysis cost](docs/GUIDE.md#analysis-cost).
 
 ## Update and remove

@@ -104,6 +104,32 @@ fn live_claim_is_left_alone_and_dead_claim_is_taken_over() {
     assert!(!w.home().join("queue/s1.claim").exists());
 }
 
+// 분석 도중 분석기가 죽으면 (kill -9) 요청과 맡기 표시가 남는다. 다음 분석기가 죽은 맡기를 걷어 내고 끝까지 분석한다
+#[test]
+fn a_worker_killed_mid_analysis_leaves_work_that_the_next_worker_finishes() {
+    let w = W::new("killed");
+    w.queue();
+    std::fs::write(w.dir.join("slow.json"), r#"{"default": "slow"}"#).unwrap();
+    let mut child = w.cmd().env("FAKE_CLAUDE_SCRIPT", w.dir.join("slow.json")).args(["worker", "--home"]).arg(w.home()).spawn().unwrap();
+    let claim = w.home().join("queue/s1.claim");
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !(w.calls() > 0 && claim.exists()) {
+        assert!(Instant::now() < deadline, "분석기가 분석을 시작하지 못함");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    child.kill().unwrap(); // SIGKILL: 맡기 표시를 걷을 틈이 없다
+    child.wait().unwrap(); // 거둬야 pid가 죽은 것으로 보인다
+    // 분석기는 묻기 전에 빈 결과를 먼저 적으므로 파일이 있는지가 아니라 흐름이 어디까지 왔는지 본다
+    assert!(flow(&w)["until"].as_i64().unwrap_or(0) < 1, "죽기 전에 분석이 끝나지 않았다");
+    assert!(w.home().join("queue/s1.json").exists());
+    assert_eq!(std::fs::read_to_string(&claim).unwrap(), child.id().to_string());
+    let before = w.calls();
+    w.worker();
+    assert!(w.calls() > before);
+    assert_eq!(flow(&w)["until"], 1);
+    assert!(!w.home().join("queue/s1.json").exists() && !claim.exists());
+}
+
 #[test]
 fn stop_hook_wakes_a_detached_worker_that_finishes_and_exits() {
     let w = W::new("wake");

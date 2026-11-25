@@ -17,7 +17,7 @@ new turn in the background with `claude -p`.
   The plugin ships a native engine for each of these and picks the one for your machine,
   so installing is the same everywhere and no Python is needed. On Linux the engine
   passes its tests in CI, but it has not yet been tried in a live session.
-- Claude Code. Tested with 2.1.322 to 2.1.325.
+- Claude Code 2.1.322 or later.
 - The `claude` command on the PATH of the shell you start Claude Code from. The analyzer
   calls `claude -p` once per new turn on your account's quota (see "Analysis cost").
 
@@ -171,7 +171,8 @@ the agent's answer to it. Next to it you may see:
   message or an answer in this session, but the hooks wrote nothing for it, so nothing
   gets analyzed
 
-Before the first result the panel shows `Nunchi on · analyzes after the next answer`.
+Before the first result the panel shows `Nunchi on · analyzes after the next answer`,
+or `Nunchi off · /nunchi to analyze this session` in a session that is not turned on.
 
 **Goal.** What the conversation is working on now, and from which turn (`since #10`). It
 names the subject and the outcome you want, not a step or a decided value, so it does not
@@ -299,10 +300,10 @@ panel labels; on a Korean screen the same symbols appear with Korean labels.
 
 ## Analysis cost
 
-Each new turn of a turned-on session costs one `claude -p` call (more if a call fails and
-is retried), run by the engine outside your session; it does not add to the session's
-context. `/nunchi build` costs one call for each answer it analyzes, and tells you the
-count before it starts. Settings live in `~/.claude-control/config.json`:
+Each new turn of a turned-on session costs one `claude -p` call, run by the engine outside
+your session; it does not add to the session's context. `/nunchi build` costs one call for
+each answer it analyzes, and tells you the count before it starts. Settings live in
+`~/.claude-control/config.json`:
 
 ```json
 {
@@ -320,8 +321,9 @@ count before it starts. Settings live in `~/.claude-control/config.json`:
   account's quota.
 - `mod_width_ratio`: panel width as a share of the window (0.2 to 0.45).
 
-When several sessions finish at once, the most recent responses go first. The engine
-starts only when there is work and exits when the queue is empty.
+When several sessions finish at once, the most recent responses go first. The hooks start
+the engine when an answer is ready to analyze, and it exits when the queue is empty; the
+next answer starts it again, so you never need to restart it.
 
 ## When something is off
 
@@ -357,14 +359,14 @@ scripts/build-engine.sh
 claude --plugin-dir ~/src/nunchi
 ```
 
-With the plugin installed, the folder you pass replaces it for that session; only one copy
-loads (checked with Claude Code 2.1.325). On macOS the script builds all three engines
-(macOS universal, Linux x86_64 and arm64; the Linux ones are static musl builds linked
-with `rust-lld`). On Linux it builds only the one for that CPU and needs only its musl
-target. `cargo test` runs the engine tests. Releases are cut by pushing a tag `v<version>` that matches
-`.claude-plugin/plugin.json`: a workflow builds the engines on macOS, tests them on Linux (arm64 through
-qemu), and replaces the `dist` branch, which the marketplace entry points at. Pushing a
-`ci/**` branch runs the same build and tests without publishing.
+With the plugin installed, the folder you pass replaces it for that session; only one
+copy loads. On macOS the script builds all three engines (macOS universal, Linux x86_64
+and arm64; the Linux ones are static musl builds linked with `rust-lld`). On Linux it
+builds only the one for that CPU and needs only its musl target. `cargo test` runs the
+engine tests. Releases are cut by pushing a tag `v<version>` that matches
+`.claude-plugin/plugin.json`: a workflow builds the engines on macOS, tests them on Linux
+(arm64 through qemu), and replaces the `dist` branch, which the marketplace entry points
+at. Pushing a `ci/**` branch runs the same build and tests without publishing.
 
 ## Upgrading from the control screen
 
