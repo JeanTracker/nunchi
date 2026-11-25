@@ -171,7 +171,8 @@ the agent's answer to it. Next to it you may see:
   message or an answer in this session, but the hooks wrote nothing for it, so nothing
   gets analyzed
 
-Before the first result the panel shows `Nunchi on · analyzes after the next answer`.
+Before the first result the panel shows `Nunchi on · analyzes after the next answer`,
+or `Nunchi off · /nunchi to analyze this session` in a session that is not turned on.
 
 **Goal.** What the conversation is working on now, and from which turn (`since #10`). It
 names the subject and the outcome you want, not a step or a decided value, so it does not
@@ -299,10 +300,10 @@ panel labels; on a Korean screen the same symbols appear with Korean labels.
 
 ## Analysis cost
 
-Each new turn of a turned-on session costs one `claude -p` call (more if a call fails and
-is retried), run by the engine outside your session; it does not add to the session's
-context. `/nunchi build` costs one call for each answer it analyzes, and tells you the
-count before it starts. Settings live in `~/.claude-control/config.json`:
+Each new turn of a turned-on session costs one `claude -p` call, run by the engine outside
+your session; it does not add to the session's context. `/nunchi build` costs one call for
+each answer it analyzes, and tells you the count before it starts. Settings live in
+`~/.claude-control/config.json`:
 
 ```json
 {
@@ -320,8 +321,9 @@ count before it starts. Settings live in `~/.claude-control/config.json`:
   account's quota.
 - `mod_width_ratio`: panel width as a share of the window (0.2 to 0.45).
 
-When several sessions finish at once, the most recent responses go first. The engine
-starts only when there is work and exits when the queue is empty.
+When several sessions finish at once, the most recent responses go first. The hooks start
+the engine when an answer is ready to analyze, and it exits when the queue is empty; the
+next answer starts it again, so you never need to restart it.
 
 ## When something is off
 
