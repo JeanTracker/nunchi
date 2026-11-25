@@ -222,6 +222,30 @@ fn meta_before_the_reply_does_not_cut_the_turn() {
     let _ = std::fs::remove_dir_all(&d);
 }
 
+fn task_note(ts: &str) -> Value {
+    json!({"type": "user", "timestamp": ts, "origin": {"kind": "task-notification", "producer": "session-task"},
+        "message": {"role": "user", "content": "<task-notification>\n<task-id>b1</task-id>\n<status>completed</status>\n</task-notification>"}})
+}
+
+#[test]
+fn answer_after_a_task_notification_stays_in_the_turn() {
+    let d = tmp("task-note");
+    let tr = d.join("t.jsonl");
+    write_lines(&tr, &[
+        user("테스트 돌려서 결과 알려줘", "2026-11-10T00:00:00.000Z"),
+        tool("2026-11-10T00:00:01.000Z"),
+        answer("백그라운드로 돌렸습니다. 끝나면 알려드릴게요", "2026-11-10T00:00:02.000Z"),
+        task_note("2026-11-10T00:01:00.000Z"),
+        answer("테스트 94개 모두 통과했습니다", "2026-11-10T00:01:05.000Z"),
+        user("고마워", "2026-11-10T00:02:00.000Z"),
+    ]);
+    let turns = transcript::parse_turns(&tr, "").unwrap();
+    assert_eq!(turns.iter().map(|t| t.request.as_str()).collect::<Vec<_>>(), vec!["테스트 돌려서 결과 알려줘", "고마워"]);
+    assert_eq!(turns[0].final_response, "백그라운드로 돌렸습니다. 끝나면 알려드릴게요\n\n테스트 94개 모두 통과했습니다");
+    assert!(turns[0].added.is_empty());   // 알림은 사람이 더 한 말이 아니다
+    let _ = std::fs::remove_dir_all(&d);
+}
+
 #[test]
 fn skill_expansion_in_the_middle_of_a_reply_does_not_cut_the_turn() {
     let d = tmp("cmd-skill");
