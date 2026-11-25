@@ -205,3 +205,28 @@ fn item(w: &W, ts: &str, force: bool, q: &str) -> String {
 fn flow(w: &W) -> serde_json::Value {
     serde_json::from_str::<serde_json::Value>(&std::fs::read_to_string(w.home().join("sessions/s1/analysis.json")).unwrap()).unwrap()["flow"].clone()
 }
+
+// 백그라운드 작업 알림 뒤에 온 답 (요구 이력 101, #6): 알림은 턴을 닫지 않으므로 뒤의 답이 마지막 턴의 응답을 늘리고,
+// 다음 Stop 요청 때 그 턴을 다시 분석한다 (요구 이력 64). 예전에는 답이 버려져 다시 분석하지 않았다
+#[test]
+fn an_answer_after_a_task_notification_gets_the_last_turn_analyzed_again() {
+    let w = W::new("tasknote");
+    let first = concat!(
+        r#"{"type": "user", "message": {"role": "user", "content": "테스트 돌려서 결과 알려줘"}, "timestamp": "2026-01-01T00:00:10.000Z"}"#, "\n",
+        r#"{"type": "assistant", "message": {"role": "assistant", "content": [{"type": "text", "text": "백그라운드로 돌렸습니다. 끝나면 알려드릴게요"}]}, "timestamp": "2026-01-01T00:00:20.000Z"}"#, "\n");
+    std::fs::write(w.dir.join("s1.jsonl"), first).unwrap();
+    std::fs::write(w.home().join("queue/s1.json"), item(&w, "2026-01-01T00:00:20.000Z", false, "2026-06-01T00:00:01.000000Z")).unwrap();
+    w.worker();
+    assert_eq!(flow(&w)["until"], 1);
+    let before = w.calls();
+    let resp = |w: &W| flow(w)["steps"][0]["resp"].clone();
+    let resp_before = resp(&w);
+    std::fs::write(w.dir.join("s1.jsonl"), format!("{first}{}", concat!(
+        r#"{"type": "user", "origin": {"kind": "task-notification", "producer": "session-task"}, "message": {"role": "user", "content": "<task-notification>\n<task-id>b1</task-id>\n<status>completed</status>\n</task-notification>"}, "timestamp": "2026-01-01T00:01:00.000Z"}"#, "\n",
+        r#"{"type": "assistant", "message": {"role": "assistant", "content": [{"type": "text", "text": "테스트 94개 모두 통과했습니다"}]}, "timestamp": "2026-01-01T00:01:05.000Z"}"#, "\n"))).unwrap();
+    std::fs::write(w.home().join("queue/s1.json"), item(&w, "2026-01-01T00:01:05.000Z", false, "2026-06-01T00:00:02.000000Z")).unwrap();
+    w.worker();
+    assert!(w.calls() > before, "늘어난 마지막 턴을 다시 분석한다");
+    assert_eq!(flow(&w)["until"], 1, "알림은 새 턴이 아니다");
+    assert_ne!(resp(&w), resp_before, "다시 분석한 단계는 늘어난 응답을 본 것으로 적힌다");
+}
