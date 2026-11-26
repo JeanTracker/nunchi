@@ -442,7 +442,7 @@ fn dropped_item(what: &str, id: Option<&Value>, why: &str, quote: Option<&Value>
     let mut d = Obj::new();
     d.insert("what".into(), s(what));
     if let Some(id) = id.filter(|v| v.is_string()) {
-        d.insert("id".into(), id.clone());
+        d.insert("id".into(), s(&one(Some(id), 40)));
     }
     d.insert("why".into(), s(why));
     let q = one(quote, 80);
@@ -526,7 +526,8 @@ pub fn parse_asks(o: &Value, flow: &Value, t: &Turn) -> Value {
             };
             new.push(json!({"summary": one(get(n, "summary"), cuts(&lang_of(flow)).2), "quote": one(get(n, "quote"), 80), "kind": kind}));
         } else {
-            dropped.push(dropped_item("ask_new", None, "quote_not_in_answer", get(n, "quote")));
+            let why = if n.is_object() { "quote_not_in_answer" } else { "not_object" };
+            dropped.push(dropped_item("ask_new", None, why, get(n, "quote")));
         }
     }
     for i in iter_items(get(o, "asks_reask")) {
@@ -536,16 +537,23 @@ pub fn parse_asks(o: &Value, flow: &Value, t: &Turn) -> Value {
         }
     }
     for u in iter_items(get(o, "asks_update")) {
-        if u.is_object()
-            && known_id(known, get(u, "id")).is_some()
-            && in_list(get(u, "state"), &["answered", "partial", "closed"])
-            // 답은 사용자 말에서, 지나감(closed)은 사용자 말이나 응답에서 근거를 찾는다 (요구 이력 86)
-            && (contains(get(u, "quote"), &t.said()) || (get(u, "state") == Some(&s("closed")) && contains(get(u, "quote"), &t.response)))
-        {
+        let why = if !u.is_object() {
+            "not_object"
+        } else if known_id(known, get(u, "id")).is_none() {
+            "unknown_id"
+        } else if !in_list(get(u, "state"), &["answered", "partial", "closed"]) {
+            "bad_state"
+        // 답은 사용자 말에서, 지나감(closed)은 사용자 말이나 응답에서 근거를 찾는다 (요구 이력 86)
+        } else if !(contains(get(u, "quote"), &t.said()) || (get(u, "state") == Some(&s("closed")) && contains(get(u, "quote"), &t.response))) {
+            "quote_not_found"
+        } else {
+            ""
+        };
+        if why.is_empty() {
             updates.push(json!({"id": u["id"], "state": u["state"], "quote": one(get(u, "quote"), 80),
                                 "blanket": opt_truthy(get(u, "blanket"))}));
         } else {
-            dropped.push(dropped_item("ask_update", get(u, "id"), "rejected", get(u, "quote")));
+            dropped.push(dropped_item("ask_update", get(u, "id"), why, get(u, "quote")));
         }
     }
     json!({"new": new, "reask": reask, "updates": updates, "dropped": dropped})
@@ -831,10 +839,14 @@ pub fn advance<E>(flow: &Value, turns: &[Turn], t: &Turn, runner: &mut dyn FnMut
     };
     got["step"]["resp"] = s(&response_mark(t));
     // 버린 항목은 그 턴의 단계에 남긴다 (요구 이력 102)
-    let dropped: Vec<Value> = ["requests", "asks"].iter()
+    // 상한을 넘으면 버린 총수를 함께 적는다
+    let mut dropped: Vec<Value> = ["requests", "asks"].iter()
         .flat_map(|k| list(get(&got, k).and_then(|c| get(c, "dropped"))).to_vec())
-        .take(DROPPED_KEPT)
         .collect();
+    if dropped.len() > DROPPED_KEPT {
+        got["step"]["dropped_total"] = Value::from(dropped.len());
+        dropped.truncate(DROPPED_KEPT);
+    }
     if !dropped.is_empty() {
         got["step"]["dropped"] = Value::Array(dropped);
     }

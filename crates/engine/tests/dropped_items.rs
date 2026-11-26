@@ -96,24 +96,41 @@ fn dropped_question_items_are_recorded_too() {
     assert_eq!(step2(&f)["dropped"], json!([
         {"what": "ask_new", "why": "quote_not_in_answer", "quote": "어느 쪽으로 할까요?"},
         {"what": "ask_reask", "id": "Q9", "why": "unknown_or_closed"},
-        {"what": "ask_update", "id": "Q1", "why": "rejected", "quote": "하나만 만들어"}]));
+        {"what": "ask_update", "id": "Q1", "why": "quote_not_found", "quote": "하나만 만들어"}]));
+}
+
+#[test]
+fn question_updates_say_which_check_failed() {
+    let f = second(json!({
+        "asks_new": ["어느 쪽으로 할까요?"],
+        "asks_update": [{"id": "Q9", "state": "answered", "quote": "둘 다 만들어줘"},
+                        {"id": "Q1", "state": "maybe", "quote": "둘 다 만들어줘"},
+                        "Q1"]}));
+    assert_eq!(step2(&f)["dropped"], json!([
+        {"what": "ask_new", "why": "not_object"},
+        {"what": "ask_update", "id": "Q9", "why": "unknown_id", "quote": "둘 다 만들어줘"},
+        {"what": "ask_update", "id": "Q1", "why": "bad_state", "quote": "둘 다 만들어줘"},
+        {"what": "ask_update", "why": "not_object"}]));
 }
 
 #[test]
 fn a_turn_with_nothing_dropped_has_no_dropped_field() {
     let f = second(json!({"requests_update": [{"id": "R1", "state": "addressed", "agent_quote": "끄기와 상태를 모두 만들었습니다"}]}));
     assert_eq!(request(&f, "R1")["state"], "addressed");
-    assert!(step2(&f).get("dropped").is_none());
+    assert!(step2(&f).get("dropped").is_none() && step2(&f).get("dropped_total").is_none());
     assert!(after_first()["steps"][0].get("dropped").is_none());
 }
 
 #[test]
-fn at_most_twenty_dropped_items_are_kept_and_quotes_are_cut() {
+fn at_most_twenty_dropped_items_are_kept_and_quotes_and_ids_are_cut() {
     let long = "가".repeat(120);
+    let f = second(json!({"asks_reask": ["Q".repeat(100)]}));
+    assert_eq!(step2(&f)["dropped"][0]["id"].as_str().unwrap().chars().count(), 40);
     let many: Vec<Value> = (0..25).map(|i| json!({"id": format!("R{}", 100 + i), "state": "addressed", "agent_quote": long})).collect();
     let f = second(json!({"requests_update": many}));
     let d = step2(&f)["dropped"].as_array().unwrap().clone();
     assert_eq!(d.len(), 20);
+    assert_eq!(step2(&f)["dropped_total"], 25);   // 상한을 넘으면 총수를 함께 남긴다
     assert_eq!(d[0]["id"], "R100");
     assert_eq!(d[0]["quote"].as_str().unwrap().chars().count(), 80);
 }
