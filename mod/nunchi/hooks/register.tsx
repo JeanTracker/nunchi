@@ -11,6 +11,8 @@ import { drawRows, type Row, type Span } from './rows'
 import { TEXT, pick, norm, langName, failText, columns, ASK_LANG, OPT_KO, OPT_EN, OPT_FOLLOW, ASK_REBUILD, OPT_KEEP, OPT_REBUILD, ASK_BUILD, OPT_BUILD_CANCEL, OPT_BUILD_GO, type Ui } from './lang'
 
 const PANE = 'nunchi'
+// 진행 중 요청을 흐리게 보이는 턴 수: 늦게 닫힌 요청 163개 중 95%가 8턴 안에 닫힘 (요구 이력 103)
+const STALE_TURNS = 10
 const EMPTY: View = {
   basis: 0, total: 0, latest: 0, state: 'none', asks: [], askCount: 0,
   digest: '', digestTurn: 0, goal: '', goalTurn: 0, firstGoal: '', firstTurn: 0, direction: '', decisions: [], decisionCount: 0, recent: '', left: [], leftCount: 0, known: [], handled: [], handledTurn: 0, openWarn: 0, openSince: 0, past: [], pastCount: 0, ratio: 0.4, tick: 0,
@@ -247,7 +249,12 @@ export function buildView(analysis: any, status: any, tick: number, ratio: numbe
     if (r.state === 'open') left.push({ mark: '○', summary: one(r.summary), note: '', turn: r.from_turn ?? 0, quote: '' })
     // ⊘는 에이전트가 못 했다·미뤘다고 한 원문을 붙인다. 원문이 없을 때만 고정 문구 (요구 이력 86)
     else if (r.state === 'deferred') left.push({ mark: '⊘', summary: one(r.summary), note: quote ? '' : T.deferred, turn: r.from_turn ?? 0, quote })
-    else if (r.state === 'in_progress') left.push({ mark: '◐', summary: one(r.summary), note: T.inProgress, turn: r.by_turn ?? r.from_turn ?? 0, quote: '' })   // 요구 이력 66
+    else if (r.state === 'in_progress') {   // 요구 이력 66
+      const turn = r.by_turn ?? r.from_turn ?? 0
+      // 진행 중으로 바뀐 뒤 STALE_TURNS턴 넘게 그대로면 흐리게, 목록 아래로 (요구 이력 103). 상태와 수는 그대로
+      const stale = basis - turn >= STALE_TURNS
+      left.push({ mark: '◐', summary: one(r.summary), note: stale ? T.inProgressStale : T.inProgress, turn, quote: '', ...(stale ? { stale } : {}) })
+    }
     // 조사는 했으나 결과 없음: 남은 요청이 아니라 알려진 문제 (요구 이력 86)
     else if (r.state === 'no_result') known.push({ mark: '◇', summary: one(r.summary), note: '', turn: r.by_turn ?? r.from_turn ?? 0, quote })
     // 처리 결과 (요구 이력 87·88): 마지막 분석 턴(basis)에 생겼거나 상태가 바뀐 내 요청. 바뀜 줄과 같은 구절의 요청은 그 줄이 대신한다 (요구 이력 89)
@@ -255,6 +262,7 @@ export function buildView(analysis: any, status: any, tick: number, ratio: numbe
     const fixAsk = fixTurn && !!one(r.quote) && pastedFrom.some(t => t.includes(one(r.quote)))   // 프롬프트 복사로 보낸 고침 요청은 '결정 고침' 줄이 대신한다 (요구 이력 90)
     if (mark && basis && ((r.from_turn ?? 0) === basis || (r.by_turn ?? 0) === basis) && !changeQuotes.has(one(r.quote)) && !fixAsk) handled.push({ mark, summary: one(r.summary), note: '', turn: basis, quote: '' })
   }
+  left.sort((a, b) => Number(!!a.stale) - Number(!!b.stale))   // 흐린 줄은 아래로, 나머지 차례는 그대로 (요구 이력 103)
   // 도구 실패(△)는 보이지 않는다: 도구 사용은 모으지도 보이지도 않는다 (요구 이력 48)
   // 의사결정 (요구 이력 71·86·87): 그 턴에 정해진 설계 요건. 관계가 확정인지와 상관없다(작업 순서 승인은 분석기가 넣지 않는다).
   // 분석기의 요약이라 원문 대조가 없으므로 정한 턴을 함께 보인다. 최근 것부터 놓아 펼친 것이 아래로 이어진다 (요구 이력 74).
@@ -903,7 +911,7 @@ export const register: Register = on => {
         const tail = ` #${x.turn}`
         const room = cols - 4
         const { lines, inline, tailLines } = fitTail('left', x.summary + (x.note ? ' — ' + x.note : ''), room, 2, tail)
-        lines.forEach((line, k) => row(k ? sp('   ') : sp(` ${x.mark} `, { c: 'yellow' }), ...parts(line),
+        lines.forEach((line, k) => row(k ? sp('   ') : sp(` ${x.mark} `, x.stale ? { d: 1 } : { c: 'yellow' }), ...parts(line, x.stale ? { d: 1 } : {}),
           k === lines.length - 1 && inline ? sp(tail, { d: 1 }) : sp('')))
         for (const line of tailLines) row(sp('   '), ...parts(line, { d: 1 }))
         quoteRows('left', x.quote)   // ⊘의 에이전트 원문 (요구 이력 86)

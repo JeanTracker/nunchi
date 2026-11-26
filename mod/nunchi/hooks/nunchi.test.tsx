@@ -1754,3 +1754,36 @@ test(`after /clear in a turned-on session the new session starts off and says ho
   if (setting === 'English') for (const t of all) expect(t).not.toMatch(/[가-힣]/)
   expect(files[HOME_S + 'new/want']).toBeUndefined()
 })
+// 오래된 진행 중 (요구 이력 103): 진행 중으로 바뀐 뒤 10턴 넘게 그대로인 요청은 흐리게, 꼬리를 바꿔, 목록 아래로
+const STALE_REQS = [
+  { id: 'R1', from_turn: 2, by_turn: 10, summary: '오래된 일', state: 'in_progress' },      // 꼭 10턴 그대로
+  { id: 'R2', from_turn: 3, by_turn: 3, summary: '미룬 일', state: 'deferred', agent_quote: '' },
+  { id: 'R3', from_turn: 11, by_turn: 11, summary: '최근 일', state: 'in_progress' },     // 9턴: 아직 흐리지 않음
+]
+async function staleLines($: any, on: any, setting: string) {
+  offWorld(on, { want: { at: 'x', on: true }, analysis: { ...SESSION, last_turn: 20, flow: { ...SESSION.flow, until: 20, requests: STALE_REQS } }, setting })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await mountPane($, { ...PANE, props: { ...PANE.props, bodyColumns: 80, scroll: { offset: 0, bodyRows: 60 } }, surface: 'terminal' })
+  const nodes = await ui.findAll({ type: 'Text' })
+  return { ui, nodes, all: nodes.map((x: any) => String(x.text ?? '')) }
+}
+test('a request in progress for 10 turns or more is dimmed, says so, and goes below the others (요구 이력 103)', async ($, on) => {
+  const { ui, nodes, all } = await staleLines($, on, '한국어')
+  const at = (re: RegExp) => all.findIndex(t => re.test(t))
+  expect(at(/◐ 오래된 일 — 진행 중 · 10턴 넘게 그대로 #10/)).toBeGreaterThan(-1)
+  expect(at(/◐ 최근 일 — 진행 중 #11$/)).toBeGreaterThan(-1)                         // 9턴은 그대로
+  expect(at(/⊘ 미룬 일/)).toBeLessThan(at(/◐ 오래된 일/))                              // 흐린 줄은 아래로
+  expect(at(/◐ 최근 일/)).toBeLessThan(at(/◐ 오래된 일/))
+  expect(all.some(t => /남은 요청 3/.test(t))).toBe(true)                                // 수는 그대로
+  const dim = nodes.filter((x: any) => x.props?.dimColor).map((x: any) => String(x.text ?? ''))
+  expect(dim.some(t => t.includes('오래된 일'))).toBe(true)
+  expect(dim.some(t => t.includes('최근 일') || t.includes('미룬 일'))).toBe(false)
+  await ui.unmount()
+})
+test('the stale tail is in English on an English screen (요구 이력 103)', async ($, on) => {
+  const { ui, all } = await staleLines($, on, 'English')
+  const row = all.find(t => /◐ 오래된 일/.test(t)) ?? ''
+  expect(row).toMatch(/— in progress · unchanged for 10\+ turns #10/)
+  expect(row.replace('오래된 일', '')).not.toMatch(/[가-힣]/)   // 요약은 분석 언어 그대로라 뺀다
+  await ui.unmount()
+})
