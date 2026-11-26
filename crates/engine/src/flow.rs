@@ -437,12 +437,30 @@ fn iter_items(v: Option<&Value>) -> &[Value] {
     list(v)
 }
 
+/// 버린 항목 한 줄: 무엇을, 어느 번호를, 왜, 모델이 든 근거 구절 (요구 이력 102)
+fn dropped_item(what: &str, id: Option<&Value>, why: &str, quote: Option<&Value>) -> Value {
+    let mut d = Obj::new();
+    d.insert("what".into(), s(what));
+    if let Some(id) = id.filter(|v| v.is_string()) {
+        d.insert("id".into(), s(&one(Some(id), 40)));
+    }
+    d.insert("why".into(), s(why));
+    let q = one(quote, 80);
+    if !q.is_empty() {
+        d.insert("quote".into(), s(&q));
+    }
+    Value::Object(d)
+}
+
+/// 한 턴에 남기는 버린 항목의 수
+const DROPPED_KEPT: usize = 20;
+
 pub fn parse_requests(o: &Value, flow: &Value, t: &Turn) -> Value {
     let known = list(get(flow, "requests"));
-    let (mut new, mut updates, mut dropped) = (vec![], vec![], 0);
+    let (mut new, mut updates, mut dropped) = (vec![], vec![], vec![]);
     for item in iter_items(get(o, "requests_new")) {
         if !item.is_object() {
-            dropped += 1;
+            dropped.push(dropped_item("request_new", None, "not_object", None));
             continue;
         }
         let state = match get(item, "state") {
@@ -450,8 +468,12 @@ pub fn parse_requests(o: &Value, flow: &Value, t: &Turn) -> Value {
             _ => "open".to_string(),
         };
         let aq = get(item, "agent_quote").filter(|v| truthy(v));
-        if !contains(get(item, "quote"), &t.said()) || (state != "open" && aq.is_some() && !contains(aq, &t.response)) {
-            dropped += 1;
+        if !contains(get(item, "quote"), &t.said()) {
+            dropped.push(dropped_item("request_new", None, "quote_not_in_user_text", get(item, "quote")));
+            continue;
+        }
+        if state != "open" && aq.is_some() && !contains(aq, &t.response) {
+            dropped.push(dropped_item("request_new", None, "agent_quote_not_in_answer", aq));
             continue;
         }
         let mut rec = Obj::new();
@@ -467,14 +489,23 @@ pub fn parse_requests(o: &Value, flow: &Value, t: &Turn) -> Value {
     }
     for item in iter_items(get(o, "requests_update")) {
         let state = get(item, "state");
-        if !item.is_object() || known_id(known, get(item, "id")).is_none() || !in_list(state, &STATES) {
-            dropped += 1;
+        let aq = get(item, "agent_quote").filter(|v| truthy(v));
+        let why = if !item.is_object() {
+            "not_object"
+        } else if known_id(known, get(item, "id")).is_none() {
+            "unknown_id"
+        } else if !in_list(state, &STATES) {
+            "bad_state"
+        } else {
+            ""
+        };
+        if !why.is_empty() {
+            dropped.push(dropped_item("request_update", get(item, "id"), why, aq));
             continue;
         }
         let state = state.and_then(Value::as_str).unwrap().to_string();
-        let aq = get(item, "agent_quote").filter(|v| truthy(v));
         if ["addressed", "deferred", "in_progress", "no_result"].contains(&state.as_str()) && aq.is_some() && !contains(aq, &t.response) {
-            dropped += 1;
+            dropped.push(dropped_item("request_update", get(item, "id"), "agent_quote_not_in_answer", aq));
             continue;
         }
         updates.push(json!({"id": item["id"], "state": state, "agent_quote": one(aq, 80),
@@ -486,7 +517,7 @@ pub fn parse_requests(o: &Value, flow: &Value, t: &Turn) -> Value {
 
 pub fn parse_asks(o: &Value, flow: &Value, t: &Turn) -> Value {
     let known = list(get(flow, "asks"));
-    let (mut new, mut reask, mut updates, mut dropped) = (vec![], vec![], vec![], 0);
+    let (mut new, mut reask, mut updates, mut dropped) = (vec![], vec![], vec![], vec![]);
     for n in iter_items(get(o, "asks_new")) {
         if n.is_object() && contains(get(n, "quote"), &t.response) {
             let kind = match get(n, "kind") {
@@ -495,26 +526,34 @@ pub fn parse_asks(o: &Value, flow: &Value, t: &Turn) -> Value {
             };
             new.push(json!({"summary": one(get(n, "summary"), cuts(&lang_of(flow)).2), "quote": one(get(n, "quote"), 80), "kind": kind}));
         } else {
-            dropped += 1;
+            let why = if n.is_object() { "quote_not_in_answer" } else { "not_object" };
+            dropped.push(dropped_item("ask_new", None, why, get(n, "quote")));
         }
     }
     for i in iter_items(get(o, "asks_reask")) {
         match known_id(known, Some(i)) {
             Some(a) if !closed_ask(a) => reask.push(i.clone()),
-            _ => dropped += 1,
+            _ => dropped.push(dropped_item("ask_reask", Some(i), "unknown_or_closed", None)),
         }
     }
     for u in iter_items(get(o, "asks_update")) {
-        if u.is_object()
-            && known_id(known, get(u, "id")).is_some()
-            && in_list(get(u, "state"), &["answered", "partial", "closed"])
-            // 답은 사용자 말에서, 지나감(closed)은 사용자 말이나 응답에서 근거를 찾는다 (요구 이력 86)
-            && (contains(get(u, "quote"), &t.said()) || (get(u, "state") == Some(&s("closed")) && contains(get(u, "quote"), &t.response)))
-        {
+        let why = if !u.is_object() {
+            "not_object"
+        } else if known_id(known, get(u, "id")).is_none() {
+            "unknown_id"
+        } else if !in_list(get(u, "state"), &["answered", "partial", "closed"]) {
+            "bad_state"
+        // 답은 사용자 말에서, 지나감(closed)은 사용자 말이나 응답에서 근거를 찾는다 (요구 이력 86)
+        } else if !(contains(get(u, "quote"), &t.said()) || (get(u, "state") == Some(&s("closed")) && contains(get(u, "quote"), &t.response))) {
+            "quote_not_found"
+        } else {
+            ""
+        };
+        if why.is_empty() {
             updates.push(json!({"id": u["id"], "state": u["state"], "quote": one(get(u, "quote"), 80),
                                 "blanket": opt_truthy(get(u, "blanket"))}));
         } else {
-            dropped += 1;
+            dropped.push(dropped_item("ask_update", get(u, "id"), why, get(u, "quote")));
         }
     }
     json!({"new": new, "reask": reask, "updates": updates, "dropped": dropped})
@@ -799,6 +838,18 @@ pub fn advance<E>(flow: &Value, turns: &[Turn], t: &Turn, runner: &mut dyn FnMut
         }
     };
     got["step"]["resp"] = s(&response_mark(t));
+    // 버린 항목은 그 턴의 단계에 남긴다 (요구 이력 102)
+    // 상한을 넘으면 버린 총수를 함께 적는다
+    let mut dropped: Vec<Value> = ["requests", "asks"].iter()
+        .flat_map(|k| list(get(&got, k).and_then(|c| get(c, "dropped"))).to_vec())
+        .collect();
+    if dropped.len() > DROPPED_KEPT {
+        got["step"]["dropped_total"] = Value::from(dropped.len());
+        dropped.truncate(DROPPED_KEPT);
+    }
+    if !dropped.is_empty() {
+        got["step"]["dropped"] = Value::Array(dropped);
+    }
     let empty_obj = json!({});
     let mut new = Obj::new();
     new.insert("version".into(), Value::from(VERSION));
