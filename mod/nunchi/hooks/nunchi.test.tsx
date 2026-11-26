@@ -1754,3 +1754,84 @@ test(`after /clear in a turned-on session the new session starts off and says ho
   if (setting === 'English') for (const t of all) expect(t).not.toMatch(/[가-힣]/)
   expect(files[HOME_S + 'new/want']).toBeUndefined()
 })
+// 오래된 진행 중 (요구 이력 103): 진행 중으로 바뀐 뒤 10턴 넘게 그대로인 요청은 흐리게, 꼬리를 바꿔, 목록 아래로
+const STALE_REQS = [
+  { id: 'R1', from_turn: 2, by_turn: 10, summary: '오래된 일', state: 'in_progress' },      // 꼭 10턴 그대로
+  { id: 'R2', from_turn: 3, by_turn: 3, summary: '미룬 일', state: 'deferred', agent_quote: '' },
+  { id: 'R3', from_turn: 11, by_turn: 11, summary: '최근 일', state: 'in_progress' },     // 9턴: 아직 흐리지 않음
+]
+async function staleLines($: any, on: any, setting: string) {
+  offWorld(on, { want: { at: 'x', on: true }, analysis: { ...SESSION, last_turn: 20, flow: { ...SESSION.flow, until: 20, requests: STALE_REQS } }, setting })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await mountPane($, { ...PANE, props: { ...PANE.props, bodyColumns: 80, scroll: { offset: 0, bodyRows: 60 } }, surface: 'terminal' })
+  const nodes = await ui.findAll({ type: 'Text' })
+  return { ui, nodes, all: nodes.map((x: any) => String(x.text ?? '')) }
+}
+test('a request in progress for 10 turns or more is dimmed, says so, and goes below the others (요구 이력 103)', async ($, on) => {
+  const { ui, nodes, all } = await staleLines($, on, '한국어')
+  const at = (re: RegExp) => all.findIndex(t => re.test(t))
+  expect(at(/◐ 오래된 일 — 진행 중 · 10턴\+ #10/)).toBeGreaterThan(-1)
+  expect(at(/◐ 최근 일 — 진행 중 #11$/)).toBeGreaterThan(-1)                         // 9턴은 그대로
+  expect(at(/⊘ 미룬 일/)).toBeLessThan(at(/◐ 오래된 일/))                              // 흐린 줄은 아래로
+  expect(at(/◐ 최근 일/)).toBeLessThan(at(/◐ 오래된 일/))
+  expect(all.some(t => /남은 요청 3/.test(t))).toBe(true)                                // 수는 그대로
+  const dim = nodes.filter((x: any) => x.props?.dimColor).map((x: any) => String(x.text ?? ''))
+  expect(dim.some(t => t.includes('오래된 일'))).toBe(true)
+  expect(dim.some(t => t.includes('최근 일') || t.includes('미룬 일'))).toBe(false)
+  await ui.unmount()
+})
+test('the stale tail is in English on an English screen (요구 이력 103)', async ($, on) => {
+  const { ui, all } = await staleLines($, on, 'English')
+  const row = all.find(t => /◐ 오래된 일/.test(t)) ?? ''
+  expect(row).toMatch(/— in progress · 10\+ turns #10/)
+  expect(row.replace('오래된 일', '')).not.toMatch(/[가-힣]/)   // 요약은 분석 언어 그대로라 뺀다
+  await ui.unmount()
+})
+// 좁은 폭에서도 흐린 줄의 꼬리와 턴이 끝까지 보인다 (요구 이력 103, advisor 리뷰: 긴 문구는 34칸에서 잘렸음)
+// 34칸은 두 줄 안에 요약부터 넘치므로(앞서부터) 짧은 요약으로 본다
+for (const [setting, cols, summary, tail] of [['한국어', 46, '앱을 먼저 만들어 앱에서 진행하고 앱을 고쳐 나가기', '— 진행 중 · 10턴+ #5'], ['한국어', 34, '로그인 팝업 고치기', '— 진행 중 · 10턴+ #5'], ['English', 46, '앱을 먼저 만들어 앱에서 진행하고 앱을 고쳐 나가기', '— in progress · 10+ turns #5'], ['English', 34, '로그인 팝업 고치기', '— in progress · 10+ turns #5']] as const) test(`the stale tail is not cut at ${cols} columns (${setting}, 요구 이력 103)`, async ($, on) => {
+  const reqs = [{ id: 'R1', from_turn: 2, by_turn: 5, summary, state: 'in_progress' }]
+  offWorld(on, { want: { at: 'x', on: true }, analysis: { ...SESSION, last_turn: 20, flow: { ...SESSION.flow, until: 20, requests: reqs } }, setting })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await mountPane($, { ...PANE, props: { ...PANE.props, bodyColumns: cols, scroll: { offset: 0, bodyRows: 60 } }, surface: 'terminal' })
+  const all = (await ui.findAll({ type: 'Text' })).map((x: any) => String(x.text ?? ''))
+  const i = all.findIndex(t => /^ ◐ /.test(t))   // 줄은 바깥 Text 다음에 조각 Text가 온다: 바깥 줄만 모은다
+  const outer = all.slice(i).filter(t => /^ ◐ \S|^   \S/.test(t)).slice(0, 2)
+  const flat = outer.join(' ').replace(/\s+/g, ' ').trim()   // 두 줄로 감싸여도 이어 읽으면 꼬리가 다 있다
+  expect(flat.endsWith(tail)).toBe(true)
+  expect(all.some(t => /…/.test(t) && /나가기|고치기|10턴|10\+/.test(t))).toBe(false)    // 요약도 꼬리도 잘리지 않는다
+  await ui.unmount()
+})
+// 기준은 마지막으로 바뀐 턴(by_turn)과 분석 기준 턴(flow.until): 오래전에 생겼어도 최근에 바뀌었으면 흐리지 않는다
+test('staleness counts from the last change to the analyzed turn, and only in-progress rows are dimmed (요구 이력 103)', async ($, on) => {
+  const reqs = [
+    { id: 'R1', from_turn: 1, by_turn: 15, summary: '오래전 생겨 최근 바뀐 일', state: 'in_progress' },
+    { id: 'R2', from_turn: 2, by_turn: 2, summary: '오래 다루지 않은 일', state: 'open' },
+    { id: 'R3', from_turn: 3, by_turn: 9, summary: '흐린 일', state: 'in_progress' },
+    { id: 'R4', from_turn: 4, by_turn: 4, summary: '미룬 일', state: 'deferred', agent_quote: '' },
+    { id: 'R5', from_turn: 16, by_turn: 16, summary: '새 일', state: 'in_progress' },
+  ]
+  // 기록의 last_turn(30)이 아니라 흐름이 반영한 턴(until 20)을 기준으로 센다
+  offWorld(on, { want: { at: 'x', on: true }, analysis: { ...SESSION, last_turn: 30, flow: { ...SESSION.flow, until: 20, requests: reqs } }, setting: '한국어' })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await mountPane($, { ...PANE, props: { ...PANE.props, bodyColumns: 80, scroll: { offset: 0, bodyRows: 60 } }, surface: 'terminal' })
+  // 줄 하나는 표시·글·턴 조각이 안쪽 Text로 나뉜다(턴 조각은 늘 흐림): 요약 글이 든 조각이 흐린지로 본다
+  const names = ['오래전 생겨 최근 바뀐 일', '오래 다루지 않은 일', '흐린 일', '미룬 일', '새 일']
+  const rows = async () => {
+    const nodes = await ui.findAll({ type: 'Text' })
+    const dimmed = nodes.filter((x: any) => x.props?.dimColor).map((x: any) => String(x.text ?? ''))
+    return nodes.map((x: any) => String(x.text ?? '')).filter((t: string) => /^ [○◐⊘] \S/.test(t))
+      .map((t: string) => { const n = names.find(n => t.includes(n)) ?? ''; return [t, !!n && dimmed.some((d: string) => d.includes(n) && !/^ [○◐⊘] /.test(d))] as const })
+  }
+  const collapsed = await rows()
+  expect(collapsed.map(([t]) => t.slice(0, 6))).toEqual([' ◐ 오래전', ' ○ 오래 ', ' ⊘ 미룬 '])   // 접힌 3줄에는 흐린 줄이 없다
+  expect(collapsed.some(([, d]) => d)).toBe(false)
+  await ui.press({ key: 'more-left' })
+  const open = await rows()
+  expect(open.map(([t]) => t.slice(0, 6))).toEqual([' ◐ 오래전', ' ○ 오래 ', ' ⊘ 미룬 ', ' ◐ 새 일', ' ◐ 흐린 '])
+  expect(open.filter(([, d]) => d).map(([t]) => t.slice(0, 6))).toEqual([' ◐ 흐린 '])
+  expect(open.find(([t]) => t.startsWith(' ◐ 흐린'))?.[0]).toMatch(/— 진행 중 · 10턴\+ #9$/)   // 20 − 9 = 11턴
+  expect(open.find(([t]) => t.startsWith(' ◐ 오래전'))?.[0]).toMatch(/— 진행 중 #15$/)        // 20 − 15 = 5턴
+  expect((await ui.findAll({ type: 'Text' })).some((x: any) => /남은 요청 5/.test(String(x.text ?? '')))).toBe(true)
+  await ui.unmount()
+})

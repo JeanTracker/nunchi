@@ -4,7 +4,7 @@ export type Ask = { n: number; summary: string; turn: number; first: number; quo
 
 export type Term = { id: string; means: string[] }   // 번호 풀이 (요구 이력 51)
 
-export type Left = { mark: string; summary: string; note: string; turn: number; quote: string }   // quote: 에이전트 원문 (⊘·알려진 문제, 요구 이력 86)
+export type Left = { mark: string; summary: string; note: string; turn: number; quote: string; stale?: boolean }   // quote: 에이전트 원문 (⊘·알려진 문제, 요구 이력 86), stale: 10턴 이상 그대로인 진행 중 (요구 이력 103)
 
 export type View = {
   basis: number          // 어느 턴까지 분석했나

@@ -220,7 +220,9 @@ it. In a short panel this section may sit below the visible area; scroll the pan
 
 **Open requests.** Your requests that are not done yet: ○ not handled, ◐ in progress (for
 example a merge request waiting for review), ⊘ not done or deferred, with the agent's
-words in quotes. Each shows the turn it came from. A request the agent looked into
+words in quotes. Each shows the turn it came from. A request that has stayed in progress
+for 10 turns or more is dimmed, ends with `— in progress · 10+ turns` and
+moves to the bottom of the list; it may already be done, so check it. A request the agent looked into
 without finding a cause or answer is not listed here; it moves to **Known issues** with
 the agent's words.
 
@@ -254,7 +256,7 @@ panel labels; on a Korean screen the same symbols appear with Korean labels.
 | Symbol | Meaning |
 | --- | --- |
 | ✔ (green) | Done: the agent says it did it. |
-| ◐ | In progress, or waiting on you. In Open requests it ends with `— in progress`. |
+| ◐ | In progress, or waiting on you. In Open requests it ends with `— in progress`, or is dimmed with `— in progress · 10+ turns` after 10 turns without a change. |
 | ○ | Asked for, but the answer did not deal with it. |
 | ⊘ | Not done or deferred: the agent said it could not or would do it later. Its words follow in quotes. |
 | ◇ | Looked into without finding a cause or answer. Listed under Known issues, not Open requests, with the agent's words. |

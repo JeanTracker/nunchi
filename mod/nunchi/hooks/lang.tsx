@@ -80,7 +80,7 @@ const KO_T = {
     return `앞서 정한 결정 ${xs.length}개가 지켜지지 않았어. 결정대로 고쳐 줘.\n` + xs.map((x, k) => `${k + 1}) 결정: "${x.text}" / ${x.kind === '빠뜨림' ? '빠진 점' : '어긋난 점'}: ${x.what}${said(x.quote)}`).join('\n')
   },
   left: '남은 요청 ', mine: ' 내 요청 중',
-  deferred: '못 했거나 미룸', inProgress: '진행 중',
+  deferred: '못 했거나 미룸', inProgress: '진행 중', inProgressStale: '진행 중 · 10턴+',
   terms: '번호 풀이', termsNote: '  이번 응답 · 문서 원문', noDoc: '문서에 없음',
   more: (n: number) => `… ${n}개 더`, collapse: '접기',
   control: '관제로', controlOr: '  또는 ⌘숫자',
@@ -154,7 +154,7 @@ const EN_T: T = {
     return `${xs.length} earlier decisions were not followed. Please fix them to match the decisions.\n` + xs.map((x, k) => `${k + 1}) Decision: "${x.text}" / ${x.kind === '빠뜨림' ? 'Missed' : 'Broken'}: ${x.what}${said(x.quote)}`).join('\n')
   },
   left: 'Open requests ', mine: ' of mine',
-  deferred: 'deferred', inProgress: 'in progress',
+  deferred: 'deferred', inProgress: 'in progress', inProgressStale: 'in progress · 10+ turns',
   terms: 'Numbers', termsNote: '  this answer · source text', noDoc: 'not in the docs',
   more: (n: number) => `… ${n} more`, collapse: 'Collapse',
   control: 'To control', controlOr: '  or ⌘number',
